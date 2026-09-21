@@ -1,0 +1,51 @@
+# Segredos
+.env
+.env.*
+!.env.example
+
+# Dados sensíveis da pesquisa — nunca versionar
+**/data/audio/
+**/storage/
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.flac
+
+# Modelos (ficam em artigos selecionados/experimentos, referenciados por hash)
+*.safetensors
+*.onnx
+*.bin
+*.pt
+*.pth
+*.pkl
+*.joblib
+*.gguf
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+coverage/
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.apk
+*.aab
+.idea/
+*.iml
+
+# SO
+.DS_Store
+Thumbs.db
+desktop.ini
