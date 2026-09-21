@@ -1,0 +1,309 @@
+{
+  "rules_version": "1.0.0",
+  "instrument": {
+    "name": "QTI-24 (Questionnaire on Teacher Interaction) — versão preliminar PT-BR",
+    "version": "VIL-24 jan. 2013",
+    "stem": "Este(a) professor(a)…",
+    "likert": {
+      "min": 1,
+      "max": 5,
+      "min_label": "(Quase) nunca",
+      "max_label": "(Quase) sempre"
+    },
+    "weights": {
+      "a": 0.92388,
+      "b": 0.382683
+    },
+    "min_responses": 10,
+    "min_responses_note": "engineering_decision herdada de avalie-seu-professor (MIN_RESPONSES_FOR_PUBLIC_RESULT)",
+    "license_note": "Instrumento de Wubbels e colegas (Universidade de Utrecht); uso não comercial; autorização formal pendente.",
+    "sources": [
+      {
+        "path": "avalie-seu-professor/src/domain/qti/qtiItems.ts",
+        "sha256": "5d0105f3b1a355be1c4112a1d1f538566a7e380ee46ef78fceef187b2c56bcb6"
+      },
+      {
+        "path": "avalie-seu-professor/src/domain/qti/QtiOctant.ts",
+        "sha256": "e8e85bf5c39f453096fa73ff20b07d5560016f8dc9085013acc8bd5d31bed258"
+      },
+      {
+        "path": "avalie-seu-professor/src/domain/qti/qtiWeights.ts",
+        "sha256": "abfcdb8349358b20d8e3814381d690af758c90a2b33e2a03c7fba4b2d476ab3d"
+      },
+      {
+        "path": "avalie-seu-professor/src/domain/qti/likertScale.ts",
+        "sha256": "353bb86fa320e42de9b1f4c2782e0657df37cfad9af13bbf42e22f01764b5f9c"
+      }
+    ],
+    "source_reference": "avalie-seu-professor/src/domain/qti/* ; README.md §Cálculo do QTI-24 (fiel ao manual VIL-24, jan. 2013)",
+    "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+  },
+  "octants": [
+    {
+      "code": "oc1",
+      "label_pt_br": "Liderança",
+      "label_en": "Directing",
+      "agency_weight": 0.92388,
+      "communion_weight": 0.382683,
+      "source_reference": "avalie-seu-professor/src/domain/qti/QtiOctant.ts; qtiWeights.ts (manual VIL-24, jan. 2013)",
+      "validation_status": "validated"
+    },
+    {
+      "code": "oc2",
+      "label_pt_br": "Amigável",
+      "label_en": "Helpful",
+      "agency_weight": 0.382683,
+      "communion_weight": 0.92388,
+      "source_reference": "avalie-seu-professor/src/domain/qti/QtiOctant.ts; qtiWeights.ts (manual VIL-24, jan. 2013)",
+      "validation_status": "validated"
+    },
+    {
+      "code": "oc3",
+      "label_pt_br": "Compreensivo",
+      "label_en": "Understanding",
+      "agency_weight": -0.382683,
+      "communion_weight": 0.92388,
+      "source_reference": "avalie-seu-professor/src/domain/qti/QtiOctant.ts; qtiWeights.ts (manual VIL-24, jan. 2013)",
+      "validation_status": "validated"
+    },
+    {
+      "code": "oc4",
+      "label_pt_br": "Dá Liberdade",
+      "label_en": "Compliant",
+      "agency_weight": -0.92388,
+      "communion_weight": 0.382683,
+      "source_reference": "avalie-seu-professor/src/domain/qti/QtiOctant.ts; qtiWeights.ts (manual VIL-24, jan. 2013)",
+      "validation_status": "validated"
+    },
+    {
+      "code": "oc5",
+      "label_pt_br": "Inseguro",
+      "label_en": "Uncertain",
+      "agency_weight": -0.92388,
+      "communion_weight": -0.382683,
+      "source_reference": "avalie-seu-professor/src/domain/qti/QtiOctant.ts; qtiWeights.ts (manual VIL-24, jan. 2013)",
+      "validation_status": "validated"
+    },
+    {
+      "code": "oc6",
+      "label_pt_br": "Insatisfeito",
+      "label_en": "Dissatisfied",
+      "agency_weight": -0.382683,
+      "communion_weight": -0.92388,
+      "source_reference": "avalie-seu-professor/src/domain/qti/QtiOctant.ts; qtiWeights.ts (manual VIL-24, jan. 2013)",
+      "validation_status": "validated"
+    },
+    {
+      "code": "oc7",
+      "label_pt_br": "Irritável",
+      "label_en": "Confrontational",
+      "agency_weight": 0.382683,
+      "communion_weight": -0.92388,
+      "source_reference": "avalie-seu-professor/src/domain/qti/QtiOctant.ts; qtiWeights.ts (manual VIL-24, jan. 2013)",
+      "validation_status": "validated"
+    },
+    {
+      "code": "oc8",
+      "label_pt_br": "Rigoroso",
+      "label_en": "Imposing",
+      "agency_weight": 0.92388,
+      "communion_weight": -0.382683,
+      "source_reference": "avalie-seu-professor/src/domain/qti/QtiOctant.ts; qtiWeights.ts (manual VIL-24, jan. 2013)",
+      "validation_status": "validated"
+    }
+  ],
+  "items": [
+    {
+      "order": 1,
+      "id": "qti24-item-01",
+      "text_pt_br": "sabe conduzir bem a turma",
+      "octant": "oc1",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 2,
+      "id": "qti24-item-02",
+      "text_pt_br": "é alguém em quem você pode confiar",
+      "octant": "oc2",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 3,
+      "id": "qti24-item-03",
+      "text_pt_br": "é paciente",
+      "octant": "oc3",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 4,
+      "id": "qti24-item-04",
+      "text_pt_br": "deixa os alunos fazerem as coisas do jeito deles",
+      "octant": "oc4",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 5,
+      "id": "qti24-item-05",
+      "text_pt_br": "age sem firmeza",
+      "octant": "oc5",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 6,
+      "id": "qti24-item-06",
+      "text_pt_br": "fica de mau humor",
+      "octant": "oc6",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 7,
+      "id": "qti24-item-07",
+      "text_pt_br": "fica bravo(a)",
+      "octant": "oc7",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 8,
+      "id": "qti24-item-08",
+      "text_pt_br": "decide quando os alunos podem falar",
+      "octant": "oc8",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 9,
+      "id": "qti24-item-09",
+      "text_pt_br": "tem autoridade",
+      "octant": "oc1",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 10,
+      "id": "qti24-item-10",
+      "text_pt_br": "tem senso de humor",
+      "octant": "oc2",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 11,
+      "id": "qti24-item-11",
+      "text_pt_br": "se coloca no lugar dos alunos",
+      "octant": "oc3",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 12,
+      "id": "qti24-item-12",
+      "text_pt_br": "faz as vontades dos alunos",
+      "octant": "oc4",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 13,
+      "id": "qti24-item-13",
+      "text_pt_br": "parece inseguro(a)",
+      "octant": "oc5",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 14,
+      "id": "qti24-item-14",
+      "text_pt_br": "demonstra insatisfação",
+      "octant": "oc6",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 15,
+      "id": "qti24-item-15",
+      "text_pt_br": "ameaça os alunos com punições",
+      "octant": "oc7",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 16,
+      "id": "qti24-item-16",
+      "text_pt_br": "exige silêncio durante a aula",
+      "octant": "oc8",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 17,
+      "id": "qti24-item-17",
+      "text_pt_br": "demonstra segurança ao agir",
+      "octant": "oc1",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 18,
+      "id": "qti24-item-18",
+      "text_pt_br": "cria um clima agradável na sala de aula",
+      "octant": "oc2",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 19,
+      "id": "qti24-item-19",
+      "text_pt_br": "é flexível com os alunos",
+      "octant": "oc3",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 20,
+      "id": "qti24-item-20",
+      "text_pt_br": "aceita bem o que os alunos querem fazer",
+      "octant": "oc4",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 21,
+      "id": "qti24-item-21",
+      "text_pt_br": "age de forma hesitante",
+      "octant": "oc5",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 22,
+      "id": "qti24-item-22",
+      "text_pt_br": "parece estar de cara fechada",
+      "octant": "oc6",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 23,
+      "id": "qti24-item-23",
+      "text_pt_br": "se exalta com facilidade",
+      "octant": "oc7",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "order": 24,
+      "id": "qti24-item-24",
+      "text_pt_br": "mantém a disciplina com rigor",
+      "octant": "oc8",
+      "source_reference": "avalie-seu-professor/src/domain/qti/qtiItems.ts (textos congelados)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    }
+  ]
+}

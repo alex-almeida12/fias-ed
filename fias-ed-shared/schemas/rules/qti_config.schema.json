@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/rules/qti_config.schema.json",
+  "type": "object",
+  "required": ["rules_version", "instrument", "octants", "items"],
+  "properties": {
+    "rules_version": {"$ref": "common.schema.json#/$defs/rules_version"},
+    "instrument": {"allOf": [{"$ref": "common.schema.json#/$defs/trace"}, {
+      "required": ["name", "version", "stem", "likert", "weights", "min_responses", "sources"],
+      "properties": {
+        "likert": {"type": "object", "required": ["min", "max", "min_label", "max_label"],
+                   "properties": {"min": {"const": 1}, "max": {"const": 5}}},
+        "weights": {"type": "object", "required": ["a", "b"],
+                    "properties": {"a": {"const": 0.92388}, "b": {"const": 0.382683}}},
+        "min_responses": {"type": "integer", "minimum": 1},
+        "sources": {"type": "array", "minItems": 4, "items": {"type": "object", "required": ["path", "sha256"],
+                    "properties": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}}
+      }}]},
+    "octants": {"type": "array", "minItems": 8, "maxItems": 8, "items": {"allOf": [
+      {"$ref": "common.schema.json#/$defs/trace"},
+      {"required": ["code", "label_pt_br", "label_en", "agency_weight", "communion_weight"],
+       "properties": {"code": {"pattern": "^oc[1-8]$"}}}]}},
+    "items": {"type": "array", "minItems": 24, "maxItems": 24, "items": {"allOf": [
+      {"$ref": "common.schema.json#/$defs/trace"},
+      {"required": ["order", "id", "text_pt_br", "octant"],
+       "properties": {"order": {"type": "integer", "minimum": 1, "maximum": 24},
+                      "text_pt_br": {"type": "string", "minLength": 3},
+                      "octant": {"pattern": "^oc[1-8]$"}}}]}}
+  }
+}
