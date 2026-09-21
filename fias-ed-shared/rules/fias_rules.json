@@ -1,0 +1,46 @@
+{
+  "rules_version": "1.0.0",
+  "coding": {"interval_seconds": 3, "source_reference": "CAP4 l.56 (protocolo de codificação a cada 3 s; Flanders 1970)", "validation_status": "validated"},
+  "aggregation": {"method": "largest_coverage", "tie_break": "earliest_start", "gap_category": 10,
+    "source_reference": "Spec 2026-09-21 §4.3 — regra turno→intervalo não definida nas fontes (inventário item 11)",
+    "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+  "matrix": {"pad_category": 10, "source_reference": "CAP4 l.52 e l.279 (\"Convenciona-se acrescentar 10 no início e no fim da sequência\")", "validation_status": "validated"},
+  "classifier": {
+    "logit_index_offset": 1,
+    "input_format": "pair:previous_turn,current_turn",
+    "max_length": 256,
+    "token_type_ids": "zeros",
+    "padding": "max_length",
+    "uncertain_below": 0.5,
+    "role_categories": {"PROFESSOR": [1, 2, 3, 4, 5, 6, 7], "ALUNO": [8, 9]},
+    "source_reference": "experimentos/scripts/experimento_fias_ed_bert_ptbr.py (build_label_info: idx=cat-1; tokenizer(text_a,text_b), max_seq 256); ANALISE_MODELOS_EXISTENTES.md §token_type_ids; restrição por papel = spec §4.2",
+    "validation_status": "engineering_decision"
+  },
+  "categories": [
+    {"id": 1, "name": "Aceita sentimentos", "group": "teacher", "influence": "indirect", "aliases": ["Aceita Sentimentos"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"},
+    {"id": 2, "name": "Elogia ou encoraja", "group": "teacher", "influence": "indirect", "aliases": ["Elogia ou Encoraja"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"},
+    {"id": 3, "name": "Aceita ou usa ideias", "group": "teacher", "influence": "indirect", "aliases": ["Aceita ou Utiliza Ideias dos Alunos", "Aceita/Utiliza Ideias"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"},
+    {"id": 4, "name": "Faz perguntas", "group": "teacher", "influence": "indirect", "aliases": ["Faz Perguntas"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"},
+    {"id": 5, "name": "Expõe", "group": "teacher", "influence": "direct", "aliases": ["Expõe/Explica", "Expõe (lecture)"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"},
+    {"id": 6, "name": "Dá instruções", "group": "teacher", "influence": "direct", "aliases": ["Dá Direções"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"},
+    {"id": 7, "name": "Critica ou justifica autoridade", "group": "teacher", "influence": "direct", "aliases": ["Critica/Autoridade", "Critica ou Justifica Autoridade"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"},
+    {"id": 8, "name": "Resposta do aluno", "group": "student", "influence": null, "aliases": ["Resposta do Aluno"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"},
+    {"id": 9, "name": "Iniciativa do aluno", "group": "student", "influence": null, "aliases": ["Iniciativa do Aluno"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"},
+    {"id": 10, "name": "Silêncio ou confusão", "group": "silence", "influence": null, "aliases": ["Silêncio/Confusão", "Silêncio ou Confusão"], "source_reference": "CAP4 tab:art2-categorias-fias l.37-46; grupos CAP4 l.26", "validation_status": "validated"}
+  ],
+  "indices": [
+    {"id": "TT", "name": "Fala docente", "kind": "proportion", "numerator": [1, 2, 3, 4, 5, 6, 7], "denominator": "all", "enabled": true, "source_reference": "SIMB l.4-15; CAP4 l.279 (Flanders 1970)", "validation_status": "validated"},
+    {"id": "PT", "name": "Fala discente", "kind": "proportion", "numerator": [8, 9], "denominator": "all", "enabled": true, "source_reference": "SIMB l.4-15; CAP4 l.279 (Flanders 1970)", "validation_status": "validated"},
+    {"id": "SC", "name": "Silêncio ou confusão", "kind": "proportion", "numerator": [10], "denominator": "all", "enabled": true, "source_reference": "SIMB l.4-15; CAP4 l.279 (Flanders 1970)", "validation_status": "validated"},
+    {"id": "ID_RATIO", "name": "Razão influência indireta/direta (I/D)", "kind": "ratio", "numerator": [1, 2, 3, 4], "denominator": [5, 6, 7], "enabled": true, "source_reference": "SIMB l.4-15 (r_id: cat. 1–4 / cat. 5–7); CAP4 l.279", "validation_status": "validated"},
+    {"id": "PIR", "name": "Razão de iniciativa discente", "kind": "ratio", "numerator": [9], "denominator": [8, 9], "enabled": true, "source_reference": "SIMB l.4-15 (PIR: cat. 9 / fala discente)", "validation_status": "validated"},
+    {"id": "PUPIL_RESPONSE_RATIO", "name": "Razão de resposta discente", "kind": "ratio", "numerator": [8], "denominator": [8, 9], "enabled": true, "source_reference": "SIMB l.4-15 (definição: cat. 8 / fala discente)", "validation_status": "validated", "notes": "SIMB usa a sigla PTR (Pupil Talk Ratio), que diverge da definição; o id adotado segue a definição. Ver FIAS.md."},
+    {"id": "ID_REVISED", "name": "Razão I/D revisada", "kind": "ratio", "numerator": null, "denominator": null, "enabled": false, "source_reference": "CAP4 l.279 (citada, sem fórmula)", "validation_status": "PENDING_SCIENTIFIC_VALIDATION", "notes": "Fórmula a confirmar em Flanders (1970) pelo pesquisador."},
+    {"id": "TRR", "name": "Razão de resposta docente", "kind": "ratio", "numerator": [1, 2, 3], "denominator": null, "enabled": false, "source_reference": "SIMB l.4-15 (denominador 'fala docente reativa' não definido)", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"id": "I_A", "name": "Índice de Acolhimento", "kind": "proportion", "numerator": [1, 2, 3], "denominator": null, "enabled": false, "source_reference": "SIMB (apenas lista de símbolos)", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"id": "I_E", "name": "Índice de Estímulo ao Raciocínio", "kind": "proportion", "numerator": [4], "denominator": null, "enabled": false, "source_reference": "SIMB (apenas lista de símbolos)", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"id": "I_C", "name": "Índice de Controle", "kind": "proportion", "numerator": [5, 6, 7], "denominator": null, "enabled": false, "source_reference": "SIMB (apenas lista de símbolos)", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"id": "I_P", "name": "Índice de Protagonismo Discente", "kind": "proportion", "numerator": [8, 9], "denominator": null, "enabled": false, "source_reference": "SIMB (apenas lista de símbolos)", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"id": "R_PA", "name": "Razão de fala professor/aluno", "kind": "ratio", "numerator": null, "denominator": null, "enabled": false, "source_reference": "SIMB (sem definição)", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"}
+  ]
+}

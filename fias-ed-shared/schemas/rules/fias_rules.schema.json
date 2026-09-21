@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/rules/fias_rules.schema.json",
+  "type": "object",
+  "required": ["rules_version", "coding", "aggregation", "matrix", "classifier", "categories", "indices"],
+  "properties": {
+    "rules_version": {"$ref": "common.schema.json#/$defs/rules_version"},
+    "coding": {"allOf": [{"$ref": "common.schema.json#/$defs/trace"}, {
+      "required": ["interval_seconds"], "properties": {"interval_seconds": {"type": "number", "exclusiveMinimum": 0}}}]},
+    "aggregation": {"allOf": [{"$ref": "common.schema.json#/$defs/trace"}, {
+      "required": ["method", "tie_break", "gap_category"],
+      "properties": {"method": {"const": "largest_coverage"}, "tie_break": {"const": "earliest_start"},
+                     "gap_category": {"$ref": "common.schema.json#/$defs/category"}}}]},
+    "matrix": {"allOf": [{"$ref": "common.schema.json#/$defs/trace"}, {
+      "required": ["pad_category"], "properties": {"pad_category": {"$ref": "common.schema.json#/$defs/category"}}}]},
+    "classifier": {"allOf": [{"$ref": "common.schema.json#/$defs/trace"}, {
+      "required": ["logit_index_offset", "input_format", "max_length", "token_type_ids", "padding", "uncertain_below", "role_categories"],
+      "properties": {
+        "logit_index_offset": {"const": 1},
+        "input_format": {"const": "pair:previous_turn,current_turn"},
+        "max_length": {"const": 256},
+        "token_type_ids": {"const": "zeros"},
+        "padding": {"const": "max_length"},
+        "uncertain_below": {"type": "number", "minimum": 0, "maximum": 1},
+        "role_categories": {"type": "object", "required": ["PROFESSOR", "ALUNO"],
+          "additionalProperties": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/category"}, "minItems": 1}}
+      }}]},
+    "categories": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"allOf": [
+      {"$ref": "common.schema.json#/$defs/trace"},
+      {"required": ["id", "name", "group", "influence", "aliases"],
+       "properties": {"id": {"$ref": "common.schema.json#/$defs/category"}, "name": {"type": "string"},
+         "group": {"enum": ["teacher", "student", "silence"]},
+         "influence": {"enum": ["indirect", "direct", null]},
+         "aliases": {"type": "array", "items": {"type": "string"}}}}]}},
+    "indices": {"type": "array", "items": {"allOf": [
+      {"$ref": "common.schema.json#/$defs/trace"},
+      {"required": ["id", "name", "kind", "numerator", "denominator", "enabled"],
+       "properties": {"id": {"type": "string", "pattern": "^[A-Z_]+$"}, "name": {"type": "string"},
+         "kind": {"enum": ["proportion", "ratio"]},
+         "numerator": {"oneOf": [{"type": "null"}, {"type": "array", "items": {"$ref": "common.schema.json#/$defs/category"}, "minItems": 1}]},
+         "denominator": {"oneOf": [{"type": "null"}, {"const": "all"}, {"type": "array", "items": {"$ref": "common.schema.json#/$defs/category"}, "minItems": 1}]},
+         "enabled": {"type": "boolean"}, "notes": {"type": "string"}},
+       "if": {"properties": {"enabled": {"const": true}}},
+       "then": {"properties": {"numerator": {"type": "array"}, "denominator": {"not": {"type": "null"}}}}}]}}
+  }
+}

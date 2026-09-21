@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/rules/common.schema.json",
+  "$defs": {
+    "validation_status": {
+      "enum": ["validated", "PENDING_SCIENTIFIC_VALIDATION", "engineering_decision", "draft_pending_researcher_review"]
+    },
+    "trace": {
+      "type": "object",
+      "required": ["source_reference", "validation_status"],
+      "properties": {
+        "source_reference": {"type": "string", "minLength": 3},
+        "validation_status": {"$ref": "#/$defs/validation_status"}
+      }
+    },
+    "rules_version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+    "category": {"type": "integer", "minimum": 1, "maximum": 10}
+  }
+}
