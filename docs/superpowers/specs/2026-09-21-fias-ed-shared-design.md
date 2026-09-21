@@ -361,6 +361,33 @@ cita apenas TCLE e projeto CEP. Registra as divergências encontradas
 (UFERSA × UERN; princípios AIED Unplugged CAP4 × CEP; modo cloud não coberto
 pelos termos).
 
+## 14A. Exportação do dataset da(s) aula(s)
+
+Requisito do pesquisador (2026-09-21): exportar o dataset de uma ou mais
+aulas. O **formato** é definido aqui (schema + função de referência), para que
+Web e Android exportem exatamente o mesmo conteúdo; a tela de exportação fica
+nos subprojetos 2 e 3.
+
+- Entrada: uma ou mais aulas (segmentos classificados, respostas QTI,
+  metadados de processamento). O motor recalcula intervalos, matriz, índices,
+  QTI, MTSS, sugestões e triangulação com as mesmas funções da conformidade.
+- Tabelas: `lessons`, `segments`, `intervals`, `matrix`, `indices`,
+  `qti_responses` (q1..q24 por resposta, sem dados sociodemográficos),
+  `qti_results`, `mtss`, `recommendations`, `triangulation` e `manifest`.
+- Formatos: JSON único (validado por `schemas/export/lesson_dataset.schema.json`)
+  e ZIP com um CSV por tabela, mais `manifest.json` com SHA-256 de cada CSV.
+- **Privacidade**:
+  - Por padrão, **sem texto das falas**.
+  - A opção `include_text` exporta apenas `text_pseudonymized`: nomes próprios
+    substituídos por `[NOME]`, produzido pela etapa de NER do app. Se algum
+    segmento não tiver versão pseudonimizada, a exportação é recusada.
+  - Nunca exporta áudio, caminhos de arquivo, nome do professor, nome da turma,
+    `texto_original_asr` nem dados de login.
+  - A turma aparece só pelo UUID; a disciplina aparece pelo nome.
+- `manifest` registra `export_version`, `rules_version`, opções usadas,
+  quantidade de aulas, modelos e hashes (do `Processamento`) e data da
+  exportação, para reprodutibilidade.
+
 ## 15. Fora do escopo deste subprojeto
 
 API, banco físico, pipeline de áudio (ASR, diarização, OCR), telas, app
@@ -380,6 +407,9 @@ instalado pelo usuário (`npx impeccable install --global --providers=claude -y`
 8. Documentos da Seção 14 presentes, sem afirmações sem fonte.
 9. Nenhum arquivo alterado em `experimentos\` ou `avalie-seu-professor\`
    (conferido por hash antes/depois).
+10. Exportação: JSON valida contra o schema; ZIP tem um CSV por tabela com
+    hashes no manifest; sem `include_text` não há texto; com `include_text`
+    e segmento sem pseudonimização → recusa.
 
 ## 17. Pendências científicas que dependem do pesquisador
 
