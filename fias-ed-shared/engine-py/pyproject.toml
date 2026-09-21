@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fias-ed-engine"
+version = "1.0.0"
+description = "Motor de referência das regras FIAS-ED (FIAS, QTI-24, triangulação, MTSS Tier 1)"
+requires-python = ">=3.11"
+dependencies = ["jsonschema>=4.23,<5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+tools = ["fonttools>=4.53", "brotli>=1.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
