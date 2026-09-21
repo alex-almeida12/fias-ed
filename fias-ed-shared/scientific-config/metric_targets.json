@@ -1,0 +1,15 @@
+{
+  "rules_version": "1.0.0",
+  "targets": [
+    {"id": "WER", "definition": "(S+D+I)/N", "target": "<= 0.25", "source_reference": "CAP5 sec:val-metricas; tab:val-criterios-sintese (\"conforme literatura\", sem citação)", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"id": "DER", "target": "<= 0.25", "source_reference": "CAP5 tab:val-criterios-sintese (sem citação)", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"id": "KAPPA_MODEL", "target": ">= 0.60 (esperado 0.65–0.80)", "source_reference": "CAP5 tab:val-criterios-sintese", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"id": "KAPPA_HUMAN", "target": ">= 0.70", "source_reference": "CAP5 tab:val-criterios-sintese", "validation_status": "validated"},
+    {"id": "F1_AXIS", "target": ">= 0.70", "source_reference": "CAP5 tab:val-criterios-sintese", "validation_status": "validated"},
+    {"id": "OCR_ACCURACY", "target": ">= 0.95", "source_reference": "CAP5 tab:val-criterios-sintese", "validation_status": "validated"},
+    {"id": "PIPELINE_COMPLETION", "target": ">= 0.90 das aulas", "source_reference": "CAP5 tab:val-criterios-sintese", "validation_status": "validated"},
+    {"id": "CLOUD_OFFLINE_DEGRADATION", "target": "<= 10 p.p. de F1", "source_reference": "CAP5 tab:val-criterios-sintese", "validation_status": "validated"},
+    {"id": "SUS", "target": ">= 70", "source_reference": "CAP5 tab:val-criterios-sintese", "validation_status": "validated"},
+    {"id": "TAM", "target": ">= 4.0", "source_reference": "CAP5 tab:val-criterios-sintese", "validation_status": "validated"}
+  ]
+}

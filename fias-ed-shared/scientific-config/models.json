@@ -1,0 +1,54 @@
+{
+  "registry_version": "1.0.0",
+  "base_dir_env": "FIAS_ED_EXPERIMENTS_DIR",
+  "models": [
+    {
+      "model_id": "fias-bertimbau-ptbr-frente3",
+      "name": "BERTimbau base fine-tuned FIAS (Frente 3)",
+      "task": "fias_utterance_classification",
+      "base_model": "neuralmind/bert-base-portuguese-cased",
+      "platform": "web",
+      "format": "safetensors",
+      "artifacts": [
+        {"role": "weights", "relative_path": "resultados_bert_ptbr/frente3_ptbr/melhor_modelo/model.safetensors", "sha256": "625d32a2c0d7c26fe4c44d98f63d05e3be409b2d0504247b086ff47862942ded", "size_bytes": 435746832},
+        {"role": "tokenizer", "relative_path": "resultados_bert_ptbr/frente3_ptbr/melhor_modelo/tokenizer.json", "sha256": "b22b95acf8d863293658d68a3996f22ee077bc792415c976e632049e1e399466", "size_bytes": 678055},
+        {"role": "tokenizer_config", "relative_path": "resultados_bert_ptbr/frente3_ptbr/melhor_modelo/tokenizer_config.json", "sha256": "a350de5ef4f35840047a6ecbbdb93380cc424fc9cde8ecf6306c34071da1378d", "size_bytes": 395},
+        {"role": "config", "relative_path": "resultados_bert_ptbr/frente3_ptbr/melhor_modelo/config.json", "sha256": "e43872df3352131d301742c0331c1385ca3ae11d725ce3cc9a7bd7815a8e5279", "size_bytes": 1433}
+      ],
+      "label_map": "fias_category = argmax(logits) + 1 (fias_rules.classifier.logit_index_offset)",
+      "metrics": {"dataset": "TalkMoves-FIAS-PTBR test (n=32869)", "f1_macro": 0.7246, "accuracy": 0.8231, "cohen_kappa": 0.7698, "mcc": 0.77, "seed": 42, "max_length": 256},
+      "license": {"weights_base": "MIT (neuralmind/bert-base-portuguese-cased, model card HF)", "training_data": "CC BY-NC-SA 4.0 (TalkMoves) — uso não comercial"},
+      "limitations": [
+        "Melhor checkpoint selecionado no próprio conjunto de teste (sem validação separada): métricas levemente otimistas.",
+        "Domínio: aulas de matemática K-12 dos EUA traduzidas por LLM (Mistral Small); risco de domain shift em aulas brasileiras reais.",
+        "Rótulos FIAS derivados de TalkMoves por mapeamento conceitual + heurísticas (mapeamento_meta.json)."
+      ],
+      "forbidden_files": ["training_args.bin", "optimizer.pt", "rng_state.pth", "scaler.pt", "scheduler.pt"],
+      "source_reference": "experimentos/DOCUMENTACAO_EXPERIMENTOS.md §2; resultados_bert_ptbr/frente3_ptbr/resultados.json",
+      "validation_status": "validated"
+    },
+    {
+      "model_id": "fias-bertimbau-ptbr-frente3-onnx-int8",
+      "name": "BERTimbau FIAS ONNX int8 dinâmico",
+      "task": "fias_utterance_classification",
+      "base_model": "neuralmind/bert-base-portuguese-cased",
+      "platform": "android",
+      "format": "onnx",
+      "artifacts": [
+        {"role": "weights", "relative_path": "mobile_deploy/bertimbau/model_int8.onnx", "sha256": "cdeb8ccb2dc7c9bdfc643ad1ff3fb66a76901b270f57a4e08aef2458399abcd4", "size_bytes": 109688107}
+      ],
+      "onnx": {"opset": 17, "inputs": {"input_ids": "int64[batch,seq]", "attention_mask": "int64[batch,seq]", "token_type_ids": "int64[batch,seq]"}, "outputs": {"logits": "float32[batch,10]"}, "softmax_in_graph": false},
+      "label_map": "fias_category = argmax(logits) + 1",
+      "metrics": {
+        "pc_cpu": {"accuracy": 0.78, "latency_ms_mean": 47.7, "n": 100},
+        "galaxy_a06": {"accuracy_tokenizer_segments": 0.7773, "latency_ms_mean": 713.4, "latency_ms_p95": 851.7, "peak_ram_mb": 182, "load_s": 1.71, "n": 211},
+        "reanalysis_token_type_zeros": {"accuracy": 0.7915, "mean_confidence": 0.914, "n": 211, "note": "mesmas 211 amostras, onnxruntime PC"}
+      },
+      "license": {"weights_base": "MIT", "training_data": "CC BY-NC-SA 4.0 — uso não comercial"},
+      "limitations": ["Tokenização precisa ser reproduzida no app (WordPiece cased, tokenizer.json do modelo web).", "Padding fixo 256 para reproduzir métricas (int8 dinâmico sensível ao padding)."],
+      "forbidden_files": [],
+      "source_reference": "experimentos/DOCUMENTACAO_EXPERIMENTOS.md §3.4–3.5; mobile_deploy/bertimbau/info_exportacao.json; mobile_deploy/resultados_celular/benchmark_resultado_bertimbau_A06.json",
+      "validation_status": "validated"
+    }
+  ]
+}
