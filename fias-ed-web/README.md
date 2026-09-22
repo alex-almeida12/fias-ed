@@ -32,10 +32,26 @@ Todos os comandos rodam dentro de `fias-ed-web/`.
    ```bash
    docker compose up -d --build
    ```
-4. Crie o administrador (a senha é pedida duas vezes, sem aparecer na tela):
+4. Crie o administrador (a senha é pedida duas vezes, sem aparecer na tela).
+   **No PowerShell ou no Prompt de Comando (cmd)**:
    ```bash
    docker compose run --rm api python -m app.cli create-admin --username <usuario> --display-name "<Nome>"
    ```
+   **No Git Bash** o terminal (mintty) não é um TTY para o Docker: sem ajuda,
+   o comando acima não mostra o pedido de senha e a senha digitada aparece na
+   tela. Use uma das duas formas:
+   - com `winpty` (o pedido de senha oculto funciona como no PowerShell):
+     ```bash
+     winpty docker compose run --rm api python -m app.cli create-admin --username <usuario> --display-name "<Nome>"
+     ```
+   - sem TTY, passando a senha pelo stdin (duas linhas: senha e repetição).
+     Leia a senha com `read -s` antes, para ela não aparecer na tela nem ficar
+     no histórico do shell (nunca escreva a senha direto no comando):
+     ```bash
+     read -s -p "Senha: " PW; echo
+     printf '%s\n%s\n' "$PW" "$PW" | docker compose run -T --rm api python -m app.cli create-admin --username <usuario> --display-name "<Nome>"
+     unset PW
+     ```
 5. Abra **http://localhost:8080** (use `localhost`, não o IP: o cookie de
    sessão é `Secure` e o navegador só o aceita em HTTP puro para `localhost`).
 
@@ -49,7 +65,10 @@ na mesma máquina.
 O limite é 1,5 GB (`MAX_UPLOAD_BYTES=1610612736` no `.env`) e está repetido no
 nginx (`client_max_body_size 1536m` em `deploy/nginx.conf`). **Os dois mudam
 juntos**: ao alterar um, altere o outro e reconstrua com
-`docker compose up -d --build`.
+`docker compose up -d --build`. Um arquivo acima do limite é recusado pelo
+próprio nginx, antes de chegar à API; o nginx responde com o mesmo erro da API
+(`AUDIO_TOO_LARGE`, bloco `location @too_large` em `deploy/nginx.conf`), e o
+texto dessa mensagem, que cita "1,5 GB", também precisa ser ajustado.
 
 ## 4. Uso diário
 
@@ -68,8 +87,10 @@ sai, por isso é o único serviço sem healthcheck.
 ```bash
 # backend (pytest, em banco de teste descartável do projeto fias-ed-web-test)
 docker compose -f docker-compose.test.yml run --rm --build api-test pytest -q
-# frontend
-cd frontend && npm ci && npm test && npm run lint
+# frontend (funciona igual no PowerShell e no Git Bash, sem sair de fias-ed-web/)
+npm --prefix frontend ci
+npm --prefix frontend test
+npm --prefix frontend run lint
 # aceitação de ponta a ponta (com o sistema no ar)
 python scripts/smoke.py --admin-user <usuario>
 ```
@@ -88,7 +109,7 @@ temporária e as aulas dela ficam no banco como registros excluídos
 ```bash
 docker compose -f docker-compose.test.yml run --rm api-test bandit -r app --severity-level high
 docker compose -f docker-compose.test.yml run --rm api-test pip-audit --skip-editable
-cd frontend && npm audit --audit-level=high
+npm --prefix frontend audit --audit-level=high
 ```
 
 Última execução (2026-09-22):
