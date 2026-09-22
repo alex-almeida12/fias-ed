@@ -1,13 +1,14 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.audit import last_admin_change
 from app.core.errors import AppError
 from app.core.messages import error_message
-from app.models import Audio, AudioUpload, Aula, Disciplina, Job, Processamento, Turma, utcnow
+from app.models import (Audio, AudioUpload, Aula, ClassificacaoFIAS, Disciplina, Falante,
+                        IndicadorFIAS, Job, Processamento, Segmento, Transcricao, Turma, utcnow)
 
 
 def get_owned_aula(db: Session, actor, aula_id: uuid.UUID) -> Aula:
@@ -74,10 +75,37 @@ def detach_audio(db: Session, aula: Aula, now: datetime | None = None) -> list[s
     return paths
 
 
+def apagar_transcricao(db: Session, aula_id: uuid.UUID) -> None:
+    """Apaga fisicamente transcrição, segmentos, falantes e classificações da aula, na
+    ordem das chaves estrangeiras (PRIVACY.md: exclusão real, não soft delete, para
+    "áudio e transcrição" — Segmento carrega texto_original_asr, que traz fala e,
+    até a pseudonimização, nomes; Falante e ClassificacaoFIAS dependem de Segmento/
+    Transcricao por FK e são apagados junto).
+
+    IndicadorFIAS não entra aqui, de propósito: não referencia Segmento nem
+    Transcricao (só aula_id), não carrega texto nem nome — é o índice agregado que
+    o PRIVACY.md descreve como "demais entidades", protegido por soft delete "para
+    preservar o histórico necessário à reprodutibilidade científica", do mesmo jeito
+    que Processamento já é tratado logo abaixo, em soft_delete_aula."""
+    transcricao_ids = db.scalars(select(Transcricao.id).where(Transcricao.aula_id == aula_id)).all()
+    if not transcricao_ids:
+        return
+    segmento_ids = db.scalars(
+        select(Segmento.id).where(Segmento.transcricao_id.in_(transcricao_ids))).all()
+    if segmento_ids:
+        db.execute(delete(ClassificacaoFIAS).where(ClassificacaoFIAS.segmento_id.in_(segmento_ids)))
+    db.execute(delete(Segmento).where(Segmento.transcricao_id.in_(transcricao_ids)))
+    db.execute(delete(Falante).where(Falante.transcricao_id.in_(transcricao_ids)))
+    db.execute(delete(Transcricao).where(Transcricao.id.in_(transcricao_ids)))
+
+
 def soft_delete_aula(db: Session, aula: Aula) -> list[str]:
     now = utcnow()
     paths = detach_audio(db, aula, now)
+    apagar_transcricao(db, aula.id)
     db.execute(update(Processamento).where(Processamento.aula_id == aula.id,
                                            Processamento.deleted_at.is_(None)).values(deleted_at=now))
+    db.execute(update(IndicadorFIAS).where(IndicadorFIAS.aula_id == aula.id,
+                                           IndicadorFIAS.deleted_at.is_(None)).values(deleted_at=now))
     aula.deleted_at = now
     return paths
