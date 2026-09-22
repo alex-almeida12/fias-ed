@@ -11,5 +11,18 @@
     {"recommendation_id": "PED_PROACTIVE_EXPECTATIONS", "tier1_dimension": "Gestão reativa", "text": "Uma possibilidade é combinar com a turma, no início da aula, as expectativas para os momentos de maior agitação, de modo que as intervenções possam ser mais breves.", "source_reference": "Redigido a partir da dimensão Tier 1 'Gestão reativa' ↔ 'Gestão proativa do clima de sala', CAP4 tab:art2-fias-tier1", "validation_status": "draft_pending_researcher_review"},
     {"recommendation_id": "PED_KEEP_STUDENT_VOICE", "tier1_dimension": "Engajamento ativo e voz discente", "text": "Os momentos de iniciativa dos estudantes podem ser um ponto de partida: considere observar o que os favoreceu nesta aula e repetir essas condições.", "source_reference": "Redigido a partir da dimensão Tier 1 'Engajamento ativo e voz discente', CAP4 tab:art2-fias-tier1", "validation_status": "draft_pending_researcher_review"}
   ],
-  "triangulation_pairs": []
+  "triangulation_pairs": [
+    {"pair_id": "TRI_WARMTH", "fias": {"categories": [2, 3]}, "qti_octants": ["oc2", "oc3"],
+     "reflection_question": "Nesta aula houve momentos de encorajamento e de uso das ideias dos estudantes. Como isso se relaciona com o quanto a turma percebe você como amigável e compreensivo?",
+     "source_reference": "CAP4 subsec:art2-triangulacao l.350-371 (exemplo de convergência: alta cat. 2/3 + DC/CS altos; Fisher 1995). Pareamento operacional proposto no spec §6.", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"pair_id": "TRI_INFLUENCE", "fias": {"index": "ID_RATIO"}, "qti_octants": ["oc1", "oc8"],
+     "reflection_question": "O equilíbrio entre fala de influência indireta e direta desta aula combina com o modo como os estudantes percebem sua liderança e seu rigor?",
+     "source_reference": "CAP4 subsec:art2-triangulacao l.350-371 (exemplo de divergência reveladora: I/D alta + DO alto). Pareamento operacional proposto no spec §6.", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"pair_id": "TRI_STUDENT_VOICE", "fias": {"index": "PIR"}, "qti_octants": ["oc4"],
+     "reflection_question": "Quanto espaço os estudantes tiveram para falar por iniciativa própria nesta aula, e como eles percebem a liberdade que você oferece?",
+     "source_reference": "CAP4 subsec:art2-triangulacao l.350-371 (complementaridade). Pareamento operacional proposto no spec §6.", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+    {"pair_id": "TRI_TENSION", "fias": {"categories": [7]}, "qti_octants": ["oc7", "oc6"],
+     "reflection_question": "Os momentos de crítica ou afirmação de autoridade desta aula aparecem também na forma como os estudantes percebem irritação ou insatisfação?",
+     "source_reference": "CAP4 subsec:art2-triangulacao l.350-371. Pareamento operacional proposto no spec §6.", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"}
+  ]
 }
