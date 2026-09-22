@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/rules/pedagogical_rules.schema.json",
+  "type": "object",
+  "required": ["rules_version", "recommendations", "triangulation_pairs"],
+  "properties": {
+    "rules_version": {"$ref": "common.schema.json#/$defs/rules_version"},
+    "recommendations": {"type": "array", "items": {"allOf": [{"$ref": "common.schema.json#/$defs/trace"}, {
+      "required": ["recommendation_id", "tier1_dimension", "text"],
+      "properties": {"recommendation_id": {"type": "string", "pattern": "^PED_[A-Z0-9_]+$"},
+                     "text": {"type": "string", "minLength": 10}}}]}},
+    "triangulation_pairs": {"type": "array", "items": {"allOf": [{"$ref": "common.schema.json#/$defs/trace"}, {
+      "required": ["pair_id", "fias", "qti_octants", "reflection_question"],
+      "properties": {
+        "pair_id": {"type": "string", "pattern": "^TRI_[A-Z0-9_]+$"},
+        "fias": {"oneOf": [
+          {"type": "object", "required": ["index"], "additionalProperties": false, "properties": {"index": {"type": "string"}}},
+          {"type": "object", "required": ["categories"], "additionalProperties": false, "properties": {"categories": {"type": "array", "items": {"$ref": "common.schema.json#/$defs/category"}, "minItems": 1}}}]},
+        "qti_octants": {"type": "array", "items": {"pattern": "^oc[1-8]$"}, "minItems": 1},
+        "reflection_question": {"type": "string", "minLength": 10}}}]}}
+  }
+}
