@@ -43,6 +43,9 @@ def create_app() -> FastAPI:
 
     from app.catalog.routes import router as catalog_router
     app.include_router(catalog_router, prefix="/api")
+
+    from app.aulas.routes import router as aulas_router
+    app.include_router(aulas_router, prefix="/api")
     return app
 
 
