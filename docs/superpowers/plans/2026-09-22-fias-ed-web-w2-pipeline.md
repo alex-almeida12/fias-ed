@@ -142,6 +142,20 @@ def test_segmento_tem_texto_original_e_pseudonimizado():
     assert {"texto_original_asr", "texto_revisado", "text_pseudonymized"} <= colunas
 
 
+def test_segmento_nasce_sem_falante_e_com_pseudonimizado_obrigatorio():
+    colunas = {c.name: c for c in inspect(Segmento).columns}
+    # O segmento existe entre a transcrição e a escolha da voz, quando ainda não
+    # se sabe quem falou.
+    assert colunas["falante_id"].nullable is True
+    # Nunca pode existir segmento sem a versão pseudonimizada (PRIVACY.md).
+    assert colunas["text_pseudonymized"].nullable is False
+
+
+def test_transcricao_guarda_rotulos_provisorios_do_diarizador():
+    colunas = {c.name: c for c in inspect(Transcricao).columns}
+    assert colunas["rotulos_provisorios"].nullable is True
+
+
 def test_segmento_guarda_tempo_global_em_ms():
     colunas = {c.name: c for c in inspect(Segmento).columns}
     assert colunas["inicio_ms"].type.python_type is int
@@ -181,6 +195,9 @@ class Transcricao(EntityMixin, Base):
     idioma: Mapped[str] = mapped_column(String(8), default="pt", nullable=False)
     duracao_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     revisada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Rótulos do diarizador por segmento, só entre DIARIZING e a escolha da voz.
+    # Apagados em atribuir_papeis; há teste que exige NULL depois da escolha (§48).
+    rotulos_provisorios: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class Falante(EntityMixin, Base):
@@ -193,7 +210,9 @@ class Falante(EntityMixin, Base):
 class Segmento(EntityMixin, Base):
     __tablename__ = "segmento"
     transcricao_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("transcricao.id"), index=True, nullable=False)
-    falante_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("falante.id"), nullable=False)
+    # Nulo entre a transcrição e a escolha da voz: o segmento existe antes de se
+    # saber quem falou. Preenchido em atribuir_papeis (Task 8).
+    falante_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("falante.id"), nullable=True)
     ordem: Mapped[int] = mapped_column(Integer, nullable=False)
     inicio_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     fim_ms: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -897,8 +916,13 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Modify: `backend/app/jobs/handlers.py`
 - Test: `backend/tests/test_job_transcribe.py`
 
+> **Ordem de execução:** esta task roda **depois da Task 6**. `Segmento.text_pseudonymized`
+> é `NOT NULL`, então `gravar_segmentos` já precisa de `pseudonimizar` na primeira
+> gravação — escrever o texto cru nessa coluna "por enquanto" seria um vazamento
+> silencioso se a Task 6 escorregasse.
+
 **Interfaces:**
-- Consumes: `Chunk`, `cortar`, `planejar_chunks` (Task 4); `obter_asr()` (Task 3); `SegmentoASR` (Task 3).
+- Consumes: `Chunk`, `cortar`, `planejar_chunks` (Task 4); `obter_asr()` (Task 3); `SegmentoASR` (Task 3); `pseudonimizar` (Task 6).
 - Produces:
   - `criar_transcricao(db, aula, audio, asr_model_id) -> Transcricao`
   - `gravar_segmentos(db, transcricao, segmentos: list[SegmentoASR], falante_id) -> None`
@@ -1155,22 +1179,8 @@ Siglas em caixa alta não casam com `_PALAVRA` (que exige minúsculas depois da 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_pseudonymize.py`
 Expected: PASS (11 testes)
 
-- [ ] **Step 5: Aplicar na gravação dos segmentos**
-
-Em `app/transcricao/service.py`, `gravar_segmentos` preenche `text_pseudonymized = pseudonimizar(texto)`. Acrescentar o teste:
-
-```python
-def test_segmento_nasce_com_versao_pseudonimizada(db, aula_preparada, asr_com_nome):
-    job = enfileirar(db, aula_preparada.id, "transcribe")
-    HANDLERS["transcribe"](db, job)
-    s = db.query(Segmento).order_by(Segmento.ordem).first()
-    assert "Maria" in s.texto_original_asr
-    assert "Maria" not in s.text_pseudonymized
-    assert "[NOME]" in s.text_pseudonymized
-```
-
-Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_job_transcribe.py tests/test_pseudonymize.py`
-Expected: PASS
+> A verificação de ponta a ponta — um segmento nascer pseudonimizado ao fim do job
+> de transcrição — pertence à Task 5, que é executada depois desta.
 
 - [ ] **Step 6: Excluir a aula passa a apagar transcrição e segmentos**
 
@@ -1412,7 +1422,7 @@ Expected: FAIL com `KeyError: 'diarize'`
 
 - [ ] **Step 6: Implementar `handle_diarize`**
 
-O resultado do alinhamento é guardado em `job.resultado` (JSONB) para a tela de escolha consumir, e some quando a escolha é feita.
+O resultado do alinhamento é guardado em `Transcricao.rotulos_provisorios` (JSONB) para a tela de escolha consumir, e é apagado quando a escolha é feita. A tabela `job` da W1 não tem coluna de resultado e não ganha uma.
 
 ```python
 def handle_diarize(db: Session, job: Job) -> None:
@@ -1501,6 +1511,14 @@ def test_escolher_voz_atribui_o_resto_a_aluno(cliente, db, aula_diarizada):
     assert r.status_code == 200
     papeis = [s.falante.papel for s in segmentos_da(db, aula_diarizada)]
     assert set(papeis) == {"PROFESSOR", "ALUNO"}
+
+
+def test_escolher_voz_apaga_os_rotulos_do_diarizador(cliente, db, aula_diarizada):
+    """§48: o agrupamento por voz existe só entre a diarização e a escolha.
+    Depois disso não pode sobrar nada dele no banco."""
+    cliente.post(f"/api/aulas/{aula_diarizada.id}/vozes/escolher", json={"rotulo": "voz-1"})
+    t = transcricao_da(db, aula_diarizada)
+    assert t.rotulos_provisorios is None
 
 
 def test_escolher_voz_leva_a_revisao_da_transcricao(cliente, db, aula_diarizada):
@@ -2199,13 +2217,31 @@ Teste, em `tests/test_job_fias.py`:
 
 ```python
 def test_processamento_registra_modelo_parametros_e_versoes(db, aula_revisada, classificador_falso):
+    """Os nomes de coluna são os da tabela criada na W1 (app/models.py), não
+    inventados aqui: asr_model, asr_model_hash, diarization_model, fias_model,
+    fias_model_hash, parameters."""
     job = enfileirar(db, aula_revisada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     proc = db.query(Processamento).filter_by(aula_id=aula_revisada.id).one()
-    assert proc.asr_model_id and proc.clf_model_id and proc.diar_model_id
+    assert proc.asr_model and proc.asr_model_hash
+    assert proc.diarization_model
+    assert proc.fias_model and proc.fias_model_hash
     assert proc.app_version and proc.rules_version
-    assert proc.parametros["asr"]["temperature"] == 0.0
-    assert proc.parametros["asr"]["language"] == "pt"
+    assert proc.parameters["asr"]["temperature"] == 0.0
+    assert proc.parameters["asr"]["language"] == "pt"
+
+
+def test_processamento_preenche_todas_as_colunas_obrigatorias(db, aula_revisada, classificador_falso):
+    """A tabela da W1 tem seis colunas NOT NULL que não são de modelo; nenhuma
+    pode ficar de fora, ou o INSERT falha em produção e não no teste."""
+    job = enfileirar(db, aula_revisada.id, "classify_fias")
+    HANDLERS["classify_fias"](db, job)
+    proc = db.query(Processamento).filter_by(aula_id=aula_revisada.id).one()
+    assert proc.hardware and proc.device
+    assert proc.audio_duration_ms > 0
+    assert proc.transcript_source in ("ASR_ORIGINAL", "TRANSCRICAO_REVISADA")
+    assert proc.stage_times_ms
+    assert proc.status == "FIAS_COMPLETED"
 
 
 def test_modelo_ia_nasce_do_registro_do_shared(db, aula_revisada, classificador_falso):
@@ -2229,10 +2265,15 @@ Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q test
 Expected: FAIL — `Processamento` ainda nasce vazio (a W1 criou a tabela e deixou os campos para a W2)
 
 Implementar `registrar_processamento(db, aula)` em `app/fias/service.py`, que
-grava (ou atualiza, se já existir) a linha com `asr_model_id`, `diar_model_id`,
-`clf_model_id`, `parametros` (JSONB com o que de fato foi usado: `language`,
+grava (ou atualiza, se já existir) a linha usando **os nomes de coluna que a W1
+criou**: `asr_model`, `asr_model_hash`, `diarization_model`, `fias_model`,
+`fias_model_hash`, `parameters` (JSONB com o que de fato foi usado: `language`,
 `temperature`, `max_length`, tamanho do modelo), `app_version` de
-`app/__init__.py` e `rules_version` das regras carregadas. Os `ModeloIA` são
+`app/__init__.py`, `rules_version` das regras carregadas, e também as seis
+colunas obrigatórias restantes: `hardware` e `device` (de `platform` e da
+presença de CUDA), `audio_duration_ms` (do `Audio`), `transcript_source`
+(`TRANSCRICAO_REVISADA` se algum segmento tem `texto_revisado`, senão
+`ASR_ORIGINAL`), `stage_times_ms` e `status`. Os `ModeloIA` são
 criados a partir de `entrada(model_id)` do registro do shared — nunca de uma
 lista local de hashes.
 
