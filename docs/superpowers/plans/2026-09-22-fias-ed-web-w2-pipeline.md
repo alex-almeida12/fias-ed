@@ -935,6 +935,25 @@ def test_prepare_audio_de_audio_ilegivel_vira_erro_com_mensagem_humana(db, aula_
     db.refresh(aula_com_audio_quebrado)
     assert aula_com_audio_quebrado.status == "ERROR"
     assert aula_com_audio_quebrado.error_code == "AUDIO_PREPARO_FALHOU"
+
+
+def test_prepare_audio_nao_deixa_arquivo_de_trabalho_orfao_ao_falhar(db, aula_com_audio_quebrado):
+    """fail_job é terminal. Um .wav parcial de 170 MB ficaria no disco para sempre."""
+    job = enfileirar(db, aula_com_audio_quebrado.id, "prepare_audio")
+    HANDLERS["prepare_audio"](db, job)
+    assert not work_path(aula_com_audio_quebrado.id).exists()
+
+
+def test_cortar_produz_pedacos_com_a_duracao_planejada(tmp_path, wav_sintetico):
+    """Mede a duração real de cada .wav com ffprobe, em vez de ecoar o plano de
+    entrada: é a única forma de um erro em -ss/-t aparecer no teste."""
+    from app.audio.probe import probe
+    plano = [(0, 2_000), (2_000, 2_000), (4_000, 1_000)]
+    chunks = cortar(wav_sintetico, plano, tmp_path)
+    reais = [probe(c.caminho).duration_ms for c in chunks]
+    for real, (_, planejado) in zip(reais, plano):
+        assert abs(real - planejado) <= 50  # tolerância de um quadro
+    assert abs(sum(reais) - sum(d for _, d in plano)) <= 50
 ```
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_audio_prepare.py`
@@ -952,10 +971,19 @@ def handle_prepare_audio(db: Session, job: Job) -> None:
         finish_job(db, job)
         db.commit()
         return
+    # O professor precisa ver "Preparando sua aula…" durante a normalização, que
+    # numa aula de 90 min é o estágio mais demorado. Sem isto, PREPROCESSING não
+    # é usado por ninguém e a tela fica parada no status anterior.
+    aula.status = "PREPROCESSING"
+    db.commit()
     trabalho = work_path(aula.id)
     try:
         normalizar(abs_path(audio.path), trabalho)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        # fail_job é terminal: não há retry. Uma saída parcial do ffmpeg ficaria
+        # órfã para sempre — mais de 170 MB numa aula de 90 min. handle_validate_audio
+        # já faz a limpeza equivalente no seu caminho de erro.
+        trabalho.unlink(missing_ok=True)
         aula.status, aula.error_code = "ERROR", "AUDIO_PREPARO_FALHOU"
         fail_job(db, job, "AUDIO_PREPARO_FALHOU")
         db.commit()
