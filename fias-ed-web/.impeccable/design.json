@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-22T00:00:00Z",
+  "title": "Design System: FIAS-ED Web",
+  "extensions": {
+    "colorMeta": {
+      "tinta-permanente": {
+        "role": "primary",
+        "displayName": "Tinta Permanente",
+        "tonalRamp": [
+          "oklch(15.0% 0.043 252.8)",
+          "oklch(26.4% 0.043 252.8)",
+          "oklch(37.9% 0.043 252.8)",
+          "oklch(49.3% 0.043 252.8)",
+          "oklch(60.7% 0.043 252.8)",
+          "oklch(72.1% 0.043 252.8)",
+          "oklch(83.6% 0.043 252.8)",
+          "oklch(95.0% 0.043 252.8)"
+        ]
+      },
+      "azul-anotacao": {
+        "role": "secondary",
+        "displayName": "Azul de Anotação",
+        "tonalRamp": [
+          "oklch(15.0% 0.050 227.6)",
+          "oklch(26.4% 0.050 227.6)",
+          "oklch(37.9% 0.050 227.6)",
+          "oklch(49.3% 0.050 227.6)",
+          "oklch(60.7% 0.050 227.6)",
+          "oklch(72.1% 0.050 227.6)",
+          "oklch(83.6% 0.050 227.6)",
+          "oklch(95.0% 0.050 227.6)"
+        ]
+      },
+      "papel-milimetrado": {
+        "role": "tertiary",
+        "displayName": "Papel Milimetrado",
+        "tonalRamp": [
+          "oklch(15.0% 0.026 240.7)",
+          "oklch(26.4% 0.026 240.7)",
+          "oklch(37.9% 0.026 240.7)",
+          "oklch(49.3% 0.026 240.7)",
+          "oklch(60.7% 0.026 240.7)",
+          "oklch(72.1% 0.026 240.7)",
+          "oklch(83.6% 0.026 240.7)",
+          "oklch(95.0% 0.026 240.7)"
+        ]
+      },
+      "papel-caderno": {
+        "role": "neutral",
+        "displayName": "Papel de Caderno",
+        "tonalRamp": [
+          "oklch(15.0% 0.008 56.3)",
+          "oklch(26.4% 0.008 56.3)",
+          "oklch(37.9% 0.008 56.3)",
+          "oklch(49.3% 0.008 56.3)",
+          "oklch(60.7% 0.008 56.3)",
+          "oklch(72.1% 0.008 56.3)",
+          "oklch(83.6% 0.008 56.3)",
+          "oklch(95.0% 0.008 56.3)"
+        ]
+      },
+      "folha-branca": {
+        "role": "neutral",
+        "displayName": "Folha em Branco",
+        "tonalRamp": [
+          "oklch(15.0% 0.000 89.9)",
+          "oklch(26.4% 0.000 89.9)",
+          "oklch(37.9% 0.000 89.9)",
+          "oklch(49.3% 0.000 89.9)",
+          "oklch(60.7% 0.000 89.9)",
+          "oklch(72.1% 0.000 89.9)",
+          "oklch(83.6% 0.000 89.9)",
+          "oklch(95.0% 0.000 89.9)"
+        ]
+      },
+      "grafite": {
+        "role": "neutral",
+        "displayName": "Grafite",
+        "tonalRamp": [
+          "oklch(15.0% 0.025 252.7)",
+          "oklch(26.4% 0.025 252.7)",
+          "oklch(37.9% 0.025 252.7)",
+          "oklch(49.3% 0.025 252.7)",
+          "oklch(60.7% 0.025 252.7)",
+          "oklch(72.1% 0.025 252.7)",
+          "oklch(83.6% 0.025 252.7)",
+          "oklch(95.0% 0.025 252.7)"
+        ]
+      },
+      "erro": {
+        "role": "state",
+        "displayName": "Erro",
+        "tonalRamp": [
+          "oklch(15.0% 0.129 23.2)",
+          "oklch(26.4% 0.129 23.2)",
+          "oklch(37.9% 0.129 23.2)",
+          "oklch(49.3% 0.129 23.2)",
+          "oklch(60.7% 0.129 23.2)",
+          "oklch(72.1% 0.129 23.2)",
+          "oklch(83.6% 0.129 23.2)",
+          "oklch(95.0% 0.129 23.2)"
+        ]
+      },
+      "acerto": {
+        "role": "state",
+        "displayName": "Acerto",
+        "tonalRamp": [
+          "oklch(15.0% 0.068 155.6)",
+          "oklch(26.4% 0.068 155.6)",
+          "oklch(37.9% 0.068 155.6)",
+          "oklch(49.3% 0.068 155.6)",
+          "oklch(60.7% 0.068 155.6)",
+          "oklch(72.1% 0.068 155.6)",
+          "oklch(83.6% 0.068 155.6)",
+          "oklch(95.0% 0.068 155.6)"
+        ]
+      },
+      "atencao": {
+        "role": "state",
+        "displayName": "Atenção",
+        "tonalRamp": [
+          "oklch(15.0% 0.092 76.8)",
+          "oklch(26.4% 0.092 76.8)",
+          "oklch(37.9% 0.092 76.8)",
+          "oklch(49.3% 0.092 76.8)",
+          "oklch(60.7% 0.092 76.8)",
+          "oklch(72.1% 0.092 76.8)",
+          "oklch(83.6% 0.092 76.8)",
+          "oklch(95.0% 0.092 76.8)"
+        ]
+      },
+      "informacao": {
+        "role": "state",
+        "displayName": "Informação",
+        "tonalRamp": [
+          "oklch(15.0% 0.070 242.1)",
+          "oklch(26.4% 0.070 242.1)",
+          "oklch(37.9% 0.070 242.1)",
+          "oklch(49.3% 0.070 242.1)",
+          "oklch(60.7% 0.070 242.1)",
+          "oklch(72.1% 0.070 242.1)",
+          "oklch(83.6% 0.070 242.1)",
+          "oklch(95.0% 0.070 242.1)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "A frase de abertura da Home. Uma por tela, no máximo. Rokkitt." },
+      "headline": { "displayName": "Headline (h1)", "purpose": "Título de página e de relatório. Rokkitt." },
+      "title": { "displayName": "Title (h2)", "purpose": "Título de seção, de diálogo e de estado vazio. Rokkitt." },
+      "subtitle": { "displayName": "Subtitle (h3)", "purpose": "Subtítulo funcional dentro de tabela, painel ou filtro. Ubuntu Bold; vira Rokkitt só se subir para 24px." },
+      "body": { "displayName": "Body", "purpose": "Texto corrido. Entrelinha de 1.55, deliberadamente larga: o produto é lido cansado." },
+      "label": { "displayName": "Label", "purpose": "Rótulo de campo e de eixo de gráfico. Sempre visível, nunca substituído por placeholder." },
+      "button": { "displayName": "Button", "purpose": "Texto de botão. Sem caixa alta e sem letter-spacing." },
+      "caption": { "displayName": "Caption", "purpose": "Metadado em Grafite, texto de erro de campo, conteúdo do badge de etapa." }
+    },
+    "shadows": [
+      { "name": "elevacao-modal", "value": "0 8px 24px rgb(47 65 86 / 0.2)", "purpose": "A única sombra do sistema. Só no diálogo — a única coisa que flutua sobre a página. Tingida de Tinta Permanente, nunca preta." },
+      { "name": "fundo-modal", "value": "rgb(47 65 86 / 0.45)", "purpose": "O escurecimento atrás do diálogo, também em Tinta Permanente." },
+      { "name": "anel-de-foco", "value": "outline: 3px solid var(--color-teal); outline-offset: 2px", "purpose": "Não é sombra, mas é o único outro efeito de profundidade do sistema. Global, em :focus-visible, nunca removido." }
+    ],
+    "motion": [
+      { "name": "sem-movimento-em-repouso", "value": "none", "purpose": "O sistema hoje não tem nenhuma transição, animação ou transform. Movimento, se vier, entra como resposta a estado (hover, foco, abertura de diálogo) e nunca como decoração ou entrada de página." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "600px" },
+      { "name": "md", "value": "900px" },
+      { "name": "lg", "value": "1200px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botão primário",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "A ação principal da tela. Uma por tela. O hover está especificado mas ainda não existe no CSS do projeto.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Adicionar aula</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 24px; border-radius: var(--radius-sm, 4px); font-family: var(--font-interface, Ubuntu, system-ui, sans-serif); font-size: 0.9375rem; font-weight: 500; line-height: 1.2; border: 1px solid transparent; cursor: pointer; } .ds-btn:focus-visible { outline: 3px solid var(--color-teal, #567C8D); outline-offset: 2px; } .ds-btn-primary { background: var(--color-navy, #2F4156); color: var(--color-white, #FFFFFF); } .ds-btn-primary:hover:not(:disabled) { background: var(--color-teal, #567C8D); } .ds-btn:active:not(:disabled) { transform: translateY(1px); } .ds-btn:disabled { background: var(--color-beige, #F5EFEB); color: var(--color-muted, #5B6673); border-color: var(--color-sky, #C8D9E6); cursor: not-allowed; }"
+    },
+    {
+      "name": "Botão secundário",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ação paralela: Selecionar áudio, Agir como, Substituir áudio. No hover o texto troca para Tinta Permanente junto com o fundo, porque Azul de Anotação sobre Papel Milimetrado é par proibido.",
+      "html": "<button class=\"ds-btn ds-btn-secondary\">Selecionar áudio</button>",
+      "css": ".ds-btn-secondary { background: var(--color-white, #FFFFFF); color: var(--color-teal, #567C8D); border-color: var(--color-teal, #567C8D); } .ds-btn-secondary:hover { background: var(--color-sky, #C8D9E6); color: var(--color-navy, #2F4156); } .ds-btn-secondary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Botão terciário",
+      "kind": "button",
+      "refersTo": "button-tertiary",
+      "description": "Ação de baixo peso: Cancelar, Excluir, Sair. Sem fundo próprio, então herda a superfície — sobre bege cai no par proibido teal/beige e precisa virar Tinta Permanente.",
+      "html": "<button class=\"ds-btn ds-btn-tertiary\">Cancelar</button>",
+      "css": ".ds-btn-tertiary { background: transparent; color: var(--color-teal, #567C8D); padding-inline: 8px; } .ds-btn-tertiary:hover { text-decoration: underline; text-underline-offset: 4px; }"
+    },
+    {
+      "name": "Campo de texto",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Rótulo sempre visível acima do campo, nunca placeholder como rótulo. Estado de erro carrega borda, texto e aria-invalid juntos.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-turma\">Turma</label><input class=\"ds-field-input\" id=\"ds-turma\" value=\"9º ano B\"></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; font-family: var(--font-interface, Ubuntu, system-ui, sans-serif); } .ds-field-label { font-size: 0.875rem; font-weight: 500; line-height: 1.4; color: var(--color-navy, #2F4156); } .ds-field-input { min-height: 44px; padding: 8px 12px; border: 1px solid var(--color-muted, #5B6673); border-radius: var(--radius-sm, 4px); font: inherit; font-size: 1rem; color: var(--color-navy, #2F4156); background: var(--color-white, #FFFFFF); } .ds-field-input:focus-visible { outline: 3px solid var(--color-teal, #567C8D); outline-offset: 2px; } .ds-field-input[aria-invalid=\"true\"] { border-color: var(--color-error, #9B3B3B); }"
+    },
+    {
+      "name": "Aviso",
+      "kind": "custom",
+      "refersTo": "banner",
+      "description": "Fundo bege com barra de 2px na margem esquerda carregando a cor de estado. O texto fica em Tinta Permanente em todas as variantes — a cor de estado vive na barra, não na letra.",
+      "html": "<div class=\"ds-banner ds-banner-error\" role=\"alert\">O arquivo enviado não é um áudio válido. Envie MP3, WAV, M4A, AAC ou FLAC.</div>",
+      "css": ".ds-banner { padding: 12px 16px; border-radius: var(--radius-sm, 4px); border-left: 2px solid; background: var(--color-beige, #F5EFEB); color: var(--color-navy, #2F4156); font-family: var(--font-interface, Ubuntu, system-ui, sans-serif); font-size: 1rem; line-height: 1.55; } .ds-banner-error { border-color: var(--color-error, #9B3B3B); } .ds-banner-info { border-color: var(--color-info, #3F6A8A); } .ds-banner-warning { border-color: var(--color-warning, #7A5512); } .ds-banner-success { border-color: var(--color-success, #3E6B4F); }"
+    },
+    {
+      "name": "Badge de etapa",
+      "kind": "chip",
+      "refersTo": "badge-progress",
+      "description": "Componente de assinatura. Os 18 estados técnicos da aula viram uma frase humana e um de três tons. Nunca mostra o nome do estado, e o pior tom se chama Precisa de atenção — usa Atenção, não Erro. Sem contorno: com borda e o raio dos botões, era lido como algo clicável.",
+      "html": "<span class=\"ds-badge ds-badge-progress\">Analisando sua aula…</span> <span class=\"ds-badge ds-badge-attention\">Confirme qual voz é a sua</span> <span class=\"ds-badge ds-badge-done\">Áudio conferido</span>",
+      "css": ".ds-badge { display: inline-block; padding: 4px 12px; border-radius: var(--radius-sm, 4px); font-family: var(--font-interface, Ubuntu, system-ui, sans-serif); font-size: 0.8125rem; font-weight: 500; line-height: 1.4; color: var(--color-navy, #2F4156); } .ds-badge-progress { background: var(--color-sky, #C8D9E6); } .ds-badge-attention { background: var(--color-beige, #F5EFEB); } .ds-badge-done { background: transparent; padding-inline: 0; }"
+    },
+    {
+      "name": "Estado vazio",
+      "kind": "card",
+      "refersTo": "empty-state",
+      "description": "Superfície bege, raio de 6px, sem sombra e sem borda. Título em Rokkitt. É um dos três recipientes nomeados do sistema — não existe card genérico.",
+      "html": "<section class=\"ds-empty\"><h2 class=\"ds-empty-title\">Nenhuma aula ainda</h2><p class=\"ds-empty-body\">Adicione sua primeira aula e envie o áudio gravado em sala.</p><button class=\"ds-btn ds-btn-primary\">Adicionar aula</button></section>",
+      "css": ".ds-empty { background: var(--color-beige, #F5EFEB); border-radius: var(--radius-md, 6px); padding: 48px 24px; text-align: center; color: var(--color-navy, #2F4156); } .ds-empty-title { font-family: var(--font-editorial, Rokkitt, Georgia, serif); font-size: 1.625rem; font-weight: 600; line-height: 1.2; margin: 0 0 16px; } .ds-empty-body { font-family: var(--font-interface, Ubuntu, system-ui, sans-serif); font-size: 1rem; line-height: 1.55; margin: 0 0 16px; }"
+    },
+    {
+      "name": "Barra de navegação",
+      "kind": "nav",
+      "refersTo": "topbar",
+      "description": "Única área sólida em Tinta Permanente do produto. O item atual se marca por sublinhado tipográfico, nunca por pílula de fundo. Quebra em linhas em 360px em vez de virar menu sanduíche.",
+      "html": "<header class=\"ds-topbar\"><a class=\"ds-topbar-brand\" href=\"#\">FIAS-ED</a><nav class=\"ds-topbar-nav\" aria-label=\"Navegação principal\"><a href=\"#\" aria-current=\"page\">Minhas aulas</a><a href=\"#\">Contas</a><a href=\"#\">Escolas</a></nav><span class=\"ds-topbar-user\">Ana Ribeiro</span></header>",
+      "css": ".ds-topbar { display: flex; align-items: center; gap: 24px; padding: 12px 16px; background: var(--color-navy, #2F4156); color: var(--color-white, #FFFFFF); flex-wrap: wrap; font-family: var(--font-interface, Ubuntu, system-ui, sans-serif); font-size: 1rem; } .ds-topbar-brand { font-family: var(--font-editorial, Rokkitt, Georgia, serif); font-size: 1.5rem; font-weight: 600; color: var(--color-white, #FFFFFF); text-decoration: none; } .ds-topbar-nav { display: flex; gap: 16px; flex: 1; flex-wrap: wrap; } .ds-topbar-nav a { color: var(--color-white, #FFFFFF); text-decoration: none; } .ds-topbar-nav a:hover { text-decoration: underline; text-underline-offset: 6px; } .ds-topbar-nav a[aria-current=\"page\"] { text-decoration: underline; text-underline-offset: 6px; } .ds-topbar-nav a:focus-visible { outline: 3px solid var(--color-sky, #C8D9E6); outline-offset: 2px; }"
+    },
+    {
+      "name": "Item de lista",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "O padrão para coleções. Lista com divisória de 1px em Papel Milimetrado, nunca grade de cards. O hover de linha está especificado mas ainda não existe no CSS.",
+      "html": "<ul class=\"ds-list\"><li class=\"ds-list-item\"><div><a class=\"ds-list-link\" href=\"#\">Aula de 12/03/2026</a><p class=\"ds-meta\">9º ano B · História · 47 min</p></div><span class=\"ds-badge ds-badge-done\">Áudio conferido</span></li></ul>",
+      "css": ".ds-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--color-sky, #C8D9E6); font-family: var(--font-interface, Ubuntu, system-ui, sans-serif); } .ds-list-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 16px 8px; border-bottom: 1px solid var(--color-sky, #C8D9E6); } .ds-list-item:hover { background: var(--color-beige, #F5EFEB); } .ds-list-link { color: var(--color-navy, #2F4156); font-weight: 500; } .ds-meta { color: var(--color-muted, #5B6673); font-size: 0.8125rem; margin: 4px 0 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "O Caderno de Campo",
+    "overview": "O FIAS-ED é o caderno em que o professor registra e relê a própria aula. Não é um painel que o observa, não é um relatório que alguém emitiu sobre ele: é a anotação dele, organizada. Essa metáfora decide tudo o que vem depois — a superfície é papel, a tipografia editorial é a letra de quem escreve, a tipografia de interface é o dado anotado, e a evidência fica sempre ao lado do fato, nunca substituída por um placar.\n\nA densidade é baixa e o ritmo é largo. O produto é usado por alguém cansado, no fim do expediente, para reler uma aula de 50 minutos — então o espaço em branco não é estética, é condição de leitura. A página tem no máximo 72rem, respira em passos de 4 a 64px, e prefere uma lista honesta a uma grade de cards. A cor é quase toda papel: branco e bege ocupam 65–75% de qualquer tela, e o azul entra só onde há ação, navegação ou hierarquia.\n\nO sistema é discreto e acolhedor, não frio. A contenção vem da confiança, não da timidez: alvos de 44px, cantos de 4px, uma linha de 1px onde outros sistemas poriam uma sombra. As rejeições são confirmadas e vinculantes (prompt §7): nada de gradiente, glow, glassmorphism, blob, card em excesso, raio exagerado, ícone de estrela, cérebro, robô ou sparkle, ilustração genérica ou gráfico decorativo. A tecnologia fica nos bastidores.",
+    "keyCharacteristics": [
+      "Papel antes de pigmento: branco e bege dominam; o azul é escasso por decisão.",
+      "Duas vozes tipográficas com fronteira rígida: Rokkitt escreve, Ubuntu informa.",
+      "Plano em repouso: profundidade por camada de cor e linha de 1px, não por sombra.",
+      "Alvo generoso, canto discreto: 44px de altura mínima, 4px de raio.",
+      "Evidência ao lado do fato; nunca um veredito sozinho na tela."
+    ],
+    "rules": [
+      { "name": "A Regra dos 70% de Papel", "body": "Branco e Papel de Caderno ocupam 65–75% da área de qualquer tela; Tinta Permanente fica em 10–15%, Azul de Anotação em 8–12%, Papel Milimetrado em 5–10%. Uma tela em que Tinta Permanente ou Azul de Anotação passem de 20% da área é revista antes de ir para implementação.", "section": "colors" },
+      { "name": "A Regra dos Três Pares Proibidos", "body": "Azul de Anotação sobre Papel de Caderno, Papel Milimetrado sobre Folha em Branco e Azul de Anotação sobre Papel Milimetrado nunca aparecem como texto sobre fundo, em nenhuma direção. Podem coexistir como blocos vizinhos. Isto é contraste, não gosto — está em forbidden_text_pairs.", "section": "colors" },
+      { "name": "A Regra da Paleta Fechada", "body": "Um estado nunca cria uma cor. Sem navy escurecido, sem filter: brightness(), sem opacity sobre cor de marca. Uma mudança de estado troca de token dentro das dez cores.", "section": "colors" },
+      { "name": "A Regra dos 24px", "body": "Rokkitt nunca aparece abaixo de 24px, e nunca em tabela, campo, número, rótulo ou elemento que se repita em lista. Rokkitt cria personalidade; Ubuntu garante legibilidade. Na dúvida, Ubuntu.", "section": "typography" },
+      { "name": "A Regra da Fronteira", "body": "A escolha entre as famílias nunca é estética: é 'isto é conteúdo pedagógico para ler ou é interface para operar?'. Nenhum componente define fonte por conta própria.", "section": "typography" },
+      { "name": "A Regra das Superfícies do Navegador", "body": "O que o produto não desenhou também carrega a identidade: seleção de texto em Papel Milimetrado, cursor de digitação em Azul de Anotação, barra de rolagem em Azul de Anotação sobre Papel de Caderno. Deixar qualquer um no padrão do sistema operacional é deixar um pedaço da tela fora da paleta.", "section": "colors" },
+      { "name": "A Regra do Alvo de 44px", "body": "Todo elemento interativo tem no mínimo 44px de altura, igual no desktop. Não é concessão ao toque, é o piso do produto.", "section": "layout" },
+      { "name": "A Regra da Medida", "body": "Texto corrido não passa de 68 caracteres por linha. A página vai a 72rem, mas a linha de leitura não: num monitor largo, um parágrafo de 1120px de largura é ilegível por mais correto que esteja o contraste.", "section": "layout" },
+      { "name": "A Regra do Ar Acima", "body": "Um título pertence ao que vem depois dele, não ao que veio antes: h2 e h3 em fluxo recebem mais espaço acima (32px e 24px) do que abaixo (16px).", "section": "layout" },
+      { "name": "A Regra do Plano em Repouso", "body": "Uma superfície só ganha sombra se puder ser fechada. Hoje isso significa o diálogo, e nada mais. Se um elemento novo pedir sombra, a pergunta é se ele deveria ser um diálogo.", "section": "elevation" },
+      { "name": "A Regra dos Dois Raios", "body": "Existem 4px e 6px. Não existe 8px, 12px, 9999px nem border-radius: 50%.", "section": "shapes" },
+      { "name": "A Regra do Estado Legível", "body": "Nenhum estado é comunicado só por cor. Toda variação de tom carrega texto, borda ou posição junto. Um badge sem a frase humana é um badge quebrado.", "section": "components" }
+    ],
+    "dos": [
+      "Do usar exclusivamente as variáveis de tokens.css. Uma cor, um tamanho de fonte ou um espaçamento escrito literalmente no CSS é um erro, mesmo que o valor bata com o token.",
+      "Do manter branco e Papel de Caderno em 65–75% da área de qualquer tela.",
+      "Do dar a Papel de Caderno o papel de 'aqui se lê e se reflete': estado vazio, aviso, área de áudio, e as seções de reflexão e sugestões da W2.",
+      "Do usar Rokkitt só em título de 24px ou mais, e Ubuntu em todo o resto.",
+      "Do escrever o estado da aula como frase de pessoa. STATUS_TEXT em frontend/src/app/status.ts é a fonte; um estado novo entra lá antes de aparecer na tela.",
+      "Do deixar tudo quebrar em linha (flex-wrap) em telas estreitas, em vez de esconder, truncar ou colapsar num menu.",
+      "Do manter o contorno de foco de 3px em Azul de Anotação em todo elemento interativo.",
+      "Do acompanhar toda cor de estado de um texto que diga a mesma coisa."
+    ],
+    "donts": [
+      "Don't pôr texto em Azul de Anotação sobre Papel de Caderno ou sobre Papel Milimetrado, nem texto em Papel Milimetrado sobre branco. Cuidado específico: o botão terciário e os links são Azul de Anotação e não têm fundo próprio — sobre qualquer superfície bege eles caem direto no par proibido.",
+      "Don't criar cor para estado. Sem navy escurecido, sem filter: brightness(), sem opacity sobre cor de marca. Estado troca de token.",
+      "Don't usar sombra fora do diálogo. Profundidade é camada de cor e linha de 1px.",
+      "Don't introduzir raio fora de 4px e 6px — nada de pílula, círculo ou canto largo.",
+      "Don't usar gradiente, glow, glassmorphism, blob, ícone de estrela, cérebro, robô ou sparkle, nem ilustração genérica ou gráfico decorativo (§7).",
+      "Don't escrever 'avaliação', 'avaliar', 'nota', 'desempenho', 'ranking' ou 'iniciar avaliação' em qualquer texto de interface. Essa restrição é de produto e a tipografia não a suaviza.",
+      "Don't transformar a coleção de aulas numa grade de cards. Lista com divisória de 1px.",
+      "Don't usar placeholder no lugar de rótulo, nem remover o contorno de foco.",
+      "Don't definir fonte dentro de um componente. Só --font-interface e --font-editorial.",
+      "Don't usar atributo style inline. Tudo passa por classe e token."
+    ]
+  }
+}
