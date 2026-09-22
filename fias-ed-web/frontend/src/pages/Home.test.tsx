@@ -24,7 +24,10 @@ test("entrar leva às aulas", async () => {
   await userEvent.type(screen.getByLabelText("Senha"), "senha-de-teste-123");
   await userEvent.click(screen.getByRole("button", { name: "Entrar" }));
   await waitFor(() => expect(window.location.pathname).toBe("/aulas"));
-  expect(screen.getByRole("link", { name: "Minhas aulas" })).toBeInTheDocument();
+  // `findBy` e não `getBy`: a URL muda assim que o navigate() roda, mas o React pode
+  // ainda não ter recommitado a árvore com o Layout. Com getBy, este teste falhava
+  // em ~1 de cada 5 execuções.
+  expect(await screen.findByRole("link", { name: "Minhas aulas" })).toBeInTheDocument();
 });
 
 test("falha de login mostra a mensagem da API", async () => {

@@ -115,7 +115,7 @@ fias-ed-web/
 - Produces: `app.core.config.get_settings() -> Settings` (campos listados abaixo, `lru_cache`, limpar com `get_settings.cache_clear()`); `app.core.db.get_engine()`, `SessionLocal`, `get_db()`; `app.core.errors.AppError(status: int, code: str, message: str, **extra)`; `app.core.logging.log_event(event: str, level=logging.INFO, **fields)` (levanta `ValueError` para campo fora de `ALLOWED_FIELDS`), `configure_logging()`; `app.main.create_app() -> FastAPI`; `app.APP_VERSION = "0.1.0"`.
 - Produces (testes): fixtures `app_instance`, `client_factory`, `client` (TestClient com `base_url="https://testserver"`).
 
-- [ ] **Step 1: Arquivos de infraestrutura**
+- [x] **Step 1: Arquivos de infraestrutura**
 
 `.dockerignore` (raiz do monorepo — o contexto de build é a raiz):
 ```
@@ -289,7 +289,7 @@ testpaths = ["tests"]
 addopts = "-p no:cacheprovider"
 ```
 
-- [ ] **Step 2: Escrever os testes (falham)**
+- [x] **Step 2: Escrever os testes (falham)**
 
 `fias-ed-web/backend/tests/__init__.py`: arquivo vazio.
 
@@ -423,12 +423,12 @@ def test_shared_engine_importable():
     assert load_rules("fias_rules")["rules_version"]
 ```
 
-- [ ] **Step 3: Rodar e ver falhar**
+- [x] **Step 3: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm --build api-test pytest -q`
 Expected: FAIL/ERROR na coleta (`ModuleNotFoundError: No module named 'app.main'`).
 
-- [ ] **Step 4: Implementar**
+- [x] **Step 4: Implementar**
 
 `app/__init__.py`:
 ```python
@@ -631,12 +631,12 @@ app = create_app()
 
 (O `path` registrado é o modelo da rota, ex. `/api/aulas/{aula_id}`, nunca a URL com dados.)
 
-- [ ] **Step 5: Rodar e ver passar**
+- [x] **Step 5: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm --build api-test pytest -q`
 Expected: todos os testes de `test_app_basics.py` PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add .dockerignore fias-ed-web
@@ -661,7 +661,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces: `app.models` com `Base`, `utcnow()`, constantes `AULA_STATUS`, `ROLES`, `REGIONS`, `MIME_TYPES`, `JOB_STATUS`, `ADMIN_ACTIONS` e as classes `Professor`, `Escola`, `Turma`, `Disciplina`, `Aula`, `Audio`, `Processamento`, `Sessao`, `AudioUpload`, `Job`, `AcessoAdmin` (campos abaixo).
 - Produces (testes): fixtures `migrator_engine` (sessão; aplica `alembic upgrade head`), `db` (Session como `fias_ed_app`); limpeza automática de todas as tabelas após cada teste.
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 Acrescentar ao fim de `backend/tests/conftest.py` (manter o conteúdo da Task 1):
 ```python
@@ -810,12 +810,12 @@ def test_base_fields_have_defaults(db):
     assert p.version == 1 and p.sync_status == "LOCAL_ONLY" and p.device_id and p.deleted_at is None
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_schema_compat.py tests/test_db_privileges.py`
 Expected: ERROR (`No module named 'app.models'` / `alembic.ini` ausente).
 
-- [ ] **Step 3: Implementar `app/models.py`**
+- [x] **Step 3: Implementar `app/models.py`**
 
 ```python
 import uuid
@@ -1016,7 +1016,7 @@ class AcessoAdmin(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 ```
 
-- [ ] **Step 4: Configurar o Alembic**
+- [x] **Step 4: Configurar o Alembic**
 
 `backend/alembic.ini`:
 ```ini
@@ -1102,12 +1102,12 @@ docker compose -f docker-compose.test.yml run --rm api-test alembic revision --a
 ```
 Expected: cria `backend/alembic/versions/0001_w1_inicial.py`. Revisar o arquivo: 11 `op.create_table` (professor, escola, turma, disciplina, aula, audio, processamento, sessao, audio_upload, job, acesso_admin), cada `sa.Enum(...)` com `native_enum=False` e `create_constraint=True`. Se o autogenerate omitir `create_constraint=True` em algum Enum, acrescentar manualmente (o teste `test_database_rejects_invalid_enum` detecta a falta).
 
-- [ ] **Step 5: Rodar e ver passar**
+- [x] **Step 5: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS em todos os testes (incluindo os da Task 1; `test_migrations_match_models` confirma que migração e models batem).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -1132,7 +1132,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces: `app.users.service`: `normalize_username(raw) -> str` (levanta `AppError(422, "USERNAME_INVALID")`), `validate_password(p) -> None` (levanta `AppError(422, "PASSWORD_TOO_SHORT")`), `create_professor(db, *, username, display_name, role, password, must_change_password) -> Professor` (levanta `AppError(409, "USERNAME_TAKEN")`; não faz commit).
 - Produces: `python -m app.cli create-admin --username U --display-name N` (senha via `getpass`).
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 `backend/tests/test_users.py`:
 ```python
@@ -1210,12 +1210,12 @@ def test_cli_rejects_mismatched_passwords(db, monkeypatch):
     assert db.query(Professor).count() == 0
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_users.py`
 Expected: ERROR (`No module named 'app.auth'`).
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 `app/auth/__init__.py` e `app/users/__init__.py`: vazios.
 
@@ -1334,12 +1334,12 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_users.py`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -1365,7 +1365,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces: `app.auth.routes.router` (prefixo aplicado em `main`: `/api`) e `me_payload(actor: Actor) -> dict` com chaves `id, username, display_name, role, must_change_password, acting_as` (`acting_as` = `{"id", "display_name"}` ou `None`).
 - Produces (testes): `tests/helpers.py` com `PASSWORD`, `make_user(db, username, role="PROFESSOR", *, password=PASSWORD, must_change=False, active=True) -> Professor` e `login(client, username, password=PASSWORD)` (faz login e coloca o cabeçalho `X-CSRF-Token` no client).
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 `backend/tests/helpers.py`:
 ```python
@@ -1526,12 +1526,12 @@ def test_must_change_password_blocks_other_routes(app_instance, client, db):
     assert client.get("/api/_pronto").status_code == 200
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_auth.py`
 Expected: ERROR (`No module named 'app.auth.deps'`).
 
-- [ ] **Step 3: Implementar `app/auth/sessions.py`**
+- [x] **Step 3: Implementar `app/auth/sessions.py`**
 
 ```python
 import hashlib
@@ -1612,7 +1612,7 @@ def clear_session_cookies(response: Response) -> None:
         response.delete_cookie(name, path="/", secure=True, samesite="strict")
 ```
 
-- [ ] **Step 4: Implementar `app/auth/deps.py`**
+- [x] **Step 4: Implementar `app/auth/deps.py`**
 
 ```python
 import uuid
@@ -1682,7 +1682,7 @@ def current_admin(actor: Actor = Depends(current_actor)) -> Actor:
     return actor
 ```
 
-- [ ] **Step 5: Implementar `app/auth/routes.py` e registrar em `main`**
+- [x] **Step 5: Implementar `app/auth/routes.py` e registrar em `main`**
 
 ```python
 import logging
@@ -1794,12 +1794,12 @@ Em `app/main.py`, dentro de `create_app()`, depois do `health_router`:
     app.include_router(auth_router, prefix="/api")
 ```
 
-- [ ] **Step 6: Rodar e ver passar**
+- [x] **Step 6: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS em todos.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -1823,7 +1823,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces: `app.admin.routes.router` (`APIRouter(prefix="/admin")`, incluído em `/api`) com `POST /admin/agir-como` `{"professor_id": uuid}` e `DELETE /admin/agir-como`, ambos devolvendo `me_payload`. Tasks 6 e 10 acrescentam rotas a este arquivo.
 - Convenção de `resource` em `acesso_admin`: `"aula"` para tudo que é de uma aula (inclusive upload e processamento, com `resource_id = aula_id`), `"turma"`, `"disciplina"`, `"professor"`.
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 `backend/tests/test_admin_act_as.py`:
 ```python
@@ -1903,12 +1903,12 @@ def test_last_admin_change_ignores_reads(db):
     assert last_admin_change(db, aula_id) is not None
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_admin_act_as.py`
 Expected: ERROR (`No module named 'app.audit'`).
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 `app/audit.py`:
 ```python
@@ -1995,12 +1995,12 @@ Em `app/main.py`, dentro de `create_app()`, depois do router de auth:
     app.include_router(admin_router, prefix="/api")
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -2027,7 +2027,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `GET /disciplinas` → `[{"id","name"}]`; `POST /disciplinas` `{"name"}` → 201.
   - `PATCH /admin/escolas/{id}` `{"name"?, "municipality"?, "region"?}`; `POST /admin/escolas/{id}/juntar` `{"destino_id"}` → 200 escola destino.
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 `backend/tests/test_catalog.py`:
 ```python
@@ -2151,12 +2151,12 @@ def test_admin_acting_as_creates_turma_for_professor(client, db):
     assert ("turma", "create") in actions
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_catalog.py`
 Expected: ERROR (`No module named 'app.catalog'`).
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 `app/catalog/__init__.py`: vazio.
 
@@ -2344,12 +2344,12 @@ Em `app/main.py`, dentro de `create_app()`:
     app.include_router(catalog_router, prefix="/api")
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -2379,7 +2379,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - `aula_payload` tem as chaves: `id, lesson_date, status, turma{id,name}, disciplina{id,name}, note, error_code, error_message, audio (ou null: original_filename, mime_type, size_bytes, duration_ms, channels, sample_rate), upload_pendente (ou null: original_filename, size_bytes), job_ativo, alterada_pelo_admin_em (ISO ou null)`. `aula_summary` tem `id, lesson_date, status, turma, disciplina`.
 - Produces (testes): `tests/helpers.make_aula(db, professor, status="DRAFT") -> Aula` (cria escola, turma e disciplina do professor).
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 Acrescentar ao fim de `backend/tests/helpers.py`:
 ```python
@@ -2550,12 +2550,12 @@ def test_storage_rejects_paths_outside_root():
         abs_path("../../etc/passwd")
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_messages.py tests/test_aulas.py`
 Expected: ERROR (`No module named 'app.core.messages'`).
 
-- [ ] **Step 3: Implementar `app/core/messages.py`**
+- [x] **Step 3: Implementar `app/core/messages.py`**
 
 ```python
 from app.core.config import get_settings
@@ -2602,7 +2602,7 @@ def error_message(code: str | None) -> str | None:
     return messages.get(code, "Algo deu errado. Tente novamente.")
 ```
 
-- [ ] **Step 4: Implementar `app/audio/storage.py`**
+- [x] **Step 4: Implementar `app/audio/storage.py`**
 
 `app/audio/__init__.py`: vazio.
 
@@ -2633,7 +2633,7 @@ def delete_file(rel: str) -> None:
     abs_path(rel).unlink(missing_ok=True)
 ```
 
-- [ ] **Step 5: Implementar `app/aulas/service.py` e `app/aulas/routes.py`**
+- [x] **Step 5: Implementar `app/aulas/service.py` e `app/aulas/routes.py`**
 
 `app/aulas/__init__.py`: vazio.
 
@@ -2804,12 +2804,12 @@ Em `app/main.py`, dentro de `create_app()`:
     app.include_router(aulas_router, prefix="/api")
 ```
 
-- [ ] **Step 6: Rodar e ver passar**
+- [x] **Step 6: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -2833,7 +2833,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces: `app.audio.routes`: `ALLOWED_EXTENSIONS = {"mp3","wav","m4a","aac","flac"}`, `UPLOAD_STATUSES = {"DRAFT","AUDIO_IMPORTED","AUDIO_VALIDATED","ERROR"}`, `sanitize_filename(raw: str) -> str`, `extension_of(name: str) -> str`; rotas `PUT /api/aulas/{id}/audio` (corpo binário, cabeçalho `X-Filename` com o nome percent-encoded; 201 com `aula_payload`) e `GET /api/aulas/{id}/audio` (arquivo original, suporta `Range`).
 - Produces (testes): `tests/audio_fixtures.make_audio(path: Path, seconds: float = 65, fmt: str = "wav") -> Path` (gera tom senoidal com ffmpeg; `fmt` em `wav|flac|mp3|m4a|aac`) e `upload(client, aula_id, path, filename=None)`.
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 `backend/tests/audio_fixtures.py`:
 ```python
@@ -3007,12 +3007,12 @@ def test_playback_requires_validated_audio_and_supports_range(client, db):
     assert r.status_code == 206 and r.content == b"0123"
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_audio_upload.py`
 Expected: ERROR (`No module named 'app.audio.routes'`).
 
-- [ ] **Step 3: Implementar `app/audio/routes.py`**
+- [x] **Step 3: Implementar `app/audio/routes.py`**
 
 ```python
 import hashlib
@@ -3137,12 +3137,12 @@ Em `app/main.py`, dentro de `create_app()`:
 
 Nota: o suporte a `Range` vem do `FileResponse` do Starlette (≥ 0.39). Se o teste de `Range` falhar por versão, fixar `starlette>=0.40` em `pyproject.toml` e rebuildar (`--build`).
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -3169,7 +3169,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces: `app.jobs.handlers.HANDLERS = {"validate_audio": handle_validate_audio}`; `app.jobs.worker.run_once(db) -> bool` e `main()` (`python -m app.jobs.worker`).
 - Produces rota: `POST /api/aulas/{id}/processar` → 202 com `aula_payload` (`job_ativo: true`); 409 `AULA_STATE` se não houver upload pendente; 409 `AULA_BUSY` com job ativo.
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 `backend/tests/test_validation.py`:
 ```python
@@ -3352,12 +3352,12 @@ def test_job_for_deleted_aula_is_closed(db):
     assert db.query(Job).one().status == "done"
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_validation.py tests/test_jobs.py`
 Expected: ERROR (`No module named 'app.audio.probe'`).
 
-- [ ] **Step 3: Implementar `app/audio/probe.py` e `app/audio/validation.py`**
+- [x] **Step 3: Implementar `app/audio/probe.py` e `app/audio/validation.py`**
 
 `app/audio/probe.py`:
 ```python
@@ -3438,7 +3438,7 @@ def check(ext: str, result: ProbeResult) -> str:
     return mime
 ```
 
-- [ ] **Step 4: Implementar a fila, o handler e o worker**
+- [x] **Step 4: Implementar a fila, o handler e o worker**
 
 `app/jobs/__init__.py`: vazio.
 
@@ -3600,7 +3600,7 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 5: Rota `processar` em `app/aulas/routes.py`**
+- [x] **Step 5: Rota `processar` em `app/aulas/routes.py`**
 
 Acrescentar ao import de `app.aulas.service` o nome `pending_upload`, acrescentar `from app.jobs.queue import enqueue` e, ao fim do arquivo:
 ```python
@@ -3618,12 +3618,12 @@ def processar_aula(aula_id: uuid.UUID, actor: Actor = Depends(current_actor), db
     return aula_payload(db, aula)
 ```
 
-- [ ] **Step 6: Rodar e ver passar**
+- [x] **Step 6: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -3650,7 +3650,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `DELETE /contas/{id}` `{"confirmar_username"}` → 204 (422 `CONFIRMACAO_INVALIDA`; 409 `PROPRIA_CONTA` / `ULTIMO_ADMIN`).
   - `GET /aulas?professor_id=` → `[aula_summary + {"professor": {"id","display_name"}}]`.
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 `backend/tests/test_admin_contas.py`:
 ```python
@@ -3820,12 +3820,12 @@ def test_professor_own_actions_are_not_flagged(client, db, tmp_path):
     assert db.query(AcessoAdmin).count() == 0
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_admin_contas.py tests/test_admin_act_as_flow.py`
 Expected: FAIL (404 nas rotas `/api/admin/contas` e `/api/admin/aulas`).
 
-- [ ] **Step 3: Acrescentar a `app/admin/routes.py`**
+- [x] **Step 3: Acrescentar a `app/admin/routes.py`**
 
 Substituir o bloco de imports do arquivo por:
 ```python
@@ -3987,12 +3987,12 @@ def list_all_aulas(professor_id: uuid.UUID | None = None, actor: Actor = Depends
 
 Nota: o teste `test_admin_lists_all_aulas_with_filter` espera 2 linhas de leitura (uma por chamada da lista).
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -4013,7 +4013,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: toda a API das Tasks 1–10; `make_audio`, `upload` (Task 8); `run_once` (Task 9).
 - Produces: nenhum código novo de produção, salvo correções que os testes revelarem.
 
-- [ ] **Step 1: Escrever os testes**
+- [x] **Step 1: Escrever os testes**
 
 `backend/tests/test_security.py`:
 ```python
@@ -4122,12 +4122,12 @@ def test_full_flow_logs_no_sensitive_data(client, db, tmp_path, caplog):
     assert any(getattr(r, "fields", {}).get("event") == "audio_validated" for r in caplog.records)
 ```
 
-- [ ] **Step 2: Rodar**
+- [x] **Step 2: Rodar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS. Se algum teste falhar, é um defeito real de produção: corrigir o código da rota envolvida (não o teste) e rodar de novo.
 
-- [ ] **Step 3: Auditorias Python (prompt §69)**
+- [x] **Step 3: Auditorias Python (prompt §69)**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test bandit -r app --severity-level high`
 Expected: `No issues identified.` para severidade alta (saída com código 0).
@@ -4137,7 +4137,7 @@ Expected: `No known vulnerabilities found`. Se houver achado, subir a versão m�
 
 Guardar as duas saídas (texto) no relatório da task — o README da Task 16 cita os resultados.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -4165,7 +4165,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces componentes: `Button` (`variant?: "primary"|"secondary"|"tertiary"`, `type` padrão `"button"`), `TextField`, `SelectField`, `TextAreaField` (props de input + `label`, `error?`), `Dialog` (`title`, `children`, `actions`, `onClose`), `Banner` (`kind?: "info"|"error"|"warning"|"success"`), `EmptyState` (`title`, `children`, `action?`), `StatusBadge` (`status`).
 - Produces (testes): `jsonResponse(body, status=200)`, `mockApi(handlers: Record<"MÉTODO /api/...", (init, url) => Response>)`.
 
-- [ ] **Step 1: Criar o projeto e instalar dependências**
+- [x] **Step 1: Criar o projeto e instalar dependências**
 
 `frontend/package.json`:
 ```json
@@ -4324,7 +4324,7 @@ export function mockApi(handlers: Record<string, Handler>) {
 }
 ```
 
-- [ ] **Step 2: Escrever os testes (falham)**
+- [x] **Step 2: Escrever os testes (falham)**
 
 `frontend/src/app/status.test.ts`:
 ```ts
@@ -4471,12 +4471,12 @@ test("texto hostil é renderizado como texto", () => {
 });
 ```
 
-- [ ] **Step 3: Rodar e ver falhar**
+- [x] **Step 3: Rodar e ver falhar**
 
 Run (de `frontend/`): `npm test`
 Expected: FAIL (módulos `./status`, `./format`, `./client`, componentes não existem).
 
-- [ ] **Step 4: Implementar status, formatação e cliente**
+- [x] **Step 4: Implementar status, formatação e cliente**
 
 `frontend/src/app/status.ts`:
 ```ts
@@ -4676,7 +4676,7 @@ export async function sendAndProcess(aulaId: string, file: File, onProgress: (fr
 }
 ```
 
-- [ ] **Step 5: Implementar CSS e componentes**
+- [x] **Step 5: Implementar CSS e componentes**
 
 `frontend/src/design/index.css`:
 ```css
@@ -4934,12 +4934,12 @@ export function StatusBadge({ status }: { status: string }) {
 }
 ```
 
-- [ ] **Step 6: Rodar testes, lint e build**
+- [x] **Step 6: Rodar testes, lint e build**
 
 Run (de `frontend/`): `npm test && npm run lint && npm run build`
 Expected: todos os testes PASS; lint sem erros; build gera `dist/` com os `.woff2` em `dist/assets/`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/frontend
@@ -4963,7 +4963,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces: `AuthProvider`, `useAuth(): { me: Me | null; loading: boolean; refresh(): Promise<void>; setMe(me: Me | null): void }`; `RequireAuth` (`allowPasswordChange?: boolean`), `RequireAdmin`; `Layout` (barra superior + faixa "agindo como" + `<Outlet />`); `App` (rotas: `/`, `/trocar-senha`, e sob `Layout`: `/aulas` — as páginas entram nas Tasks 14 e 15).
 - Produces (testes): `renderApp(path)` exportado de `src/test-utils.tsx` (acrescentado nesta task).
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 Acrescentar a `frontend/src/test-utils.tsx` (imports no topo do arquivo, o resto no fim):
 ```tsx
@@ -5096,12 +5096,12 @@ test("sair encerra a sessão", async () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run (de `frontend/`): `npm test`
 Expected: FAIL (`./app/App` não existe).
 
-- [ ] **Step 3: Implementar sessão e rotas**
+- [x] **Step 3: Implementar sessão e rotas**
 
 `frontend/src/app/AuthContext.tsx`:
 ```tsx
@@ -5255,7 +5255,7 @@ createRoot(document.getElementById("root")!).render(
 );
 ```
 
-- [ ] **Step 4: Implementar as páginas Home e Trocar senha**
+- [x] **Step 4: Implementar as páginas Home e Trocar senha**
 
 `frontend/src/pages/Home.tsx`:
 ```tsx
@@ -5373,12 +5373,12 @@ export function TrocarSenha() {
 }
 ```
 
-- [ ] **Step 5: Rodar testes, lint e build**
+- [x] **Step 5: Rodar testes, lint e build**
 
 Run (de `frontend/`): `npm test && npm run lint && npm run build`
 Expected: PASS; lint limpo; build ok.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fias-ed-web/frontend
@@ -5401,7 +5401,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: `api`, `ApiError`, `sendAndProcess` (Task 12); `useAuth` (Task 13); `statusText`, `JOB_MESSAGE`, `format*` (Task 12); componentes (Task 12).
 - Produces: `AudioPicker({ file, onChange, label? })` (input de arquivo oculto + botão "Selecionar áudio", aceita `.mp3,.wav,.m4a,.aac,.flac`); `NovaTurma({ onCreated(turma: Turma), onCancel })` (inclui escolha/criação de escola com tratamento de `ESCOLA_DUPLICADA`); páginas `Dashboard`, `NovaAula`, `AulaPage`.
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 `frontend/src/pages/Dashboard.test.tsx`:
 ```tsx
@@ -5602,12 +5602,12 @@ test("excluir a aula volta para a lista", async () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run (de `frontend/`): `npm test`
 Expected: FAIL (páginas ausentes).
 
-- [ ] **Step 3: Implementar `AudioPicker` e `NovaTurma`**
+- [x] **Step 3: Implementar `AudioPicker` e `NovaTurma`**
 
 `frontend/src/app/AudioPicker.tsx`:
 ```tsx
@@ -5718,7 +5718,7 @@ export function NovaTurma({ onCreated, onCancel }: Props) {
 }
 ```
 
-- [ ] **Step 4: Implementar `Dashboard`, `NovaAula` e `AulaPage`**
+- [x] **Step 4: Implementar `Dashboard`, `NovaAula` e `AulaPage`**
 
 `frontend/src/pages/Dashboard.tsx`:
 ```tsx
@@ -6033,7 +6033,7 @@ export function AulaPage() {
 }
 ```
 
-- [ ] **Step 5: Registrar as rotas em `App.tsx`**
+- [x] **Step 5: Registrar as rotas em `App.tsx`**
 
 Em `frontend/src/app/App.tsx`, acrescentar os imports:
 ```tsx
@@ -6048,12 +6048,12 @@ e trocar `<Route path="/aulas" element={null} />` por:
             <Route path="/aulas/:id" element={<AulaPage />} />
 ```
 
-- [ ] **Step 6: Rodar testes, lint e build**
+- [x] **Step 6: Rodar testes, lint e build**
 
 Run (de `frontend/`): `npm test && npm run lint && npm run build`
 Expected: PASS; lint limpo; build ok.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/frontend
@@ -6075,7 +6075,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: `api`, `ApiError`, tipos (Task 12); `useAuth` (Task 13); `RequireAdmin` (Task 13); componentes (Task 12); rotas de admin da API (Tasks 5, 6, 10).
 - Produces: páginas `Contas`, `AdminAulas`, `Escolas`.
 
-- [ ] **Step 1: Escrever os testes (falham)**
+- [x] **Step 1: Escrever os testes (falham)**
 
 `frontend/src/pages/admin/admin.test.tsx`:
 ```tsx
@@ -6171,12 +6171,12 @@ test("juntar escolas duplicadas", async () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run (de `frontend/`): `npm test`
 Expected: FAIL (páginas de admin ausentes).
 
-- [ ] **Step 3: Implementar as páginas**
+- [x] **Step 3: Implementar as páginas**
 
 `frontend/src/pages/admin/Contas.tsx`:
 ```tsx
@@ -6436,7 +6436,7 @@ export function Escolas() {
 
 (O `<span>` com o nome atual deixa a linha identificável por leitores de tela e pelos testes; o campo ao lado edita o nome.)
 
-- [ ] **Step 4: Registrar as rotas em `App.tsx`**
+- [x] **Step 4: Registrar as rotas em `App.tsx`**
 
 Acrescentar os imports:
 ```tsx
@@ -6452,12 +6452,12 @@ import { RequireAdmin, RequireAuth } from "./RequireAuth";
             <Route path="/admin/escolas" element={<RequireAdmin><Escolas /></RequireAdmin>} />
 ```
 
-- [ ] **Step 5: Rodar testes, lint e build**
+- [x] **Step 5: Rodar testes, lint e build**
 
 Run (de `frontend/`): `npm test && npm run lint && npm run build`
 Expected: PASS; lint limpo; build ok.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fias-ed-web/frontend
@@ -6482,7 +6482,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: imagens/Dockerfile das Tasks 1 e 12; toda a API.
 - Produces: `app.jobs.worker.HEARTBEAT_FILE` e `beat() -> None`; `docker compose up -d --build` sobe `db`, `migrate` (executa uma vez), `api`, `worker`, `web`; `python scripts/smoke.py --admin-user U` (teste de aceitação, só biblioteca padrão).
 
-- [ ] **Step 1: Batimento do worker (teste primeiro)**
+- [x] **Step 1: Batimento do worker (teste primeiro)**
 
 `backend/tests/test_worker_heartbeat.py`:
 ```python
@@ -6514,7 +6514,7 @@ e, em `main()`, chamar `beat()` como primeira linha dentro do `while True:`.
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS.
 
-- [ ] **Step 2: Imagens e nginx**
+- [x] **Step 2: Imagens e nginx**
 
 `fias-ed-web/deploy/db.Dockerfile` (o script de init vai dentro da imagem; nada é montado do Windows):
 ```dockerfile
@@ -6578,7 +6578,7 @@ COPY --from=build /build/fias-ed-web/frontend/dist /usr/share/nginx/html
 EXPOSE 8080
 ```
 
-- [ ] **Step 3: `docker-compose.yml`**
+- [x] **Step 3: `docker-compose.yml`**
 
 ```yaml
 name: fias-ed
@@ -6701,7 +6701,7 @@ docker compose run --rm api python -m app.cli create-admin --username pesquisado
 ```
 Expected: `db`, `api`, `worker`, `web` com estado `healthy`; `migrate` `exited (0)`; a coluna de portas mostra só `127.0.0.1:8080->8080/tcp` no `web`. Se o `db` não iniciar com `user: "70:70"` (permissão no volume), remover o volume de teste (`docker compose down -v`, só em instalação nova) e subir de novo; se persistir, registrar no relatório e remover a linha `user` (a imagem oficial troca para o usuário `postgres` sozinha).
 
-- [ ] **Step 4: Teste de aceitação `scripts/smoke.py`**
+- [x] **Step 4: Teste de aceitação `scripts/smoke.py`**
 
 ```python
 #!/usr/bin/env python3
@@ -6877,7 +6877,7 @@ if __name__ == "__main__":
 Run (de `fias-ed-web/`, com o sistema no ar): `python scripts/smoke.py --admin-user pesquisador`
 Expected: todas as linhas `ok` e `SMOKE OK` no fim.
 
-- [ ] **Step 5: `fias-ed-web/README.md`**
+- [x] **Step 5: `fias-ed-web/README.md`**
 
 Escrever o README com as seções abaixo (texto em pt-BR, comandos exatos):
 
@@ -6908,7 +6908,7 @@ Escrever o README com as seções abaixo (texto em pt-BR, comandos exatos):
 | React, React DOM, React Router | MIT | interface |
 | Vite, TypeScript, Vitest, Testing Library, ESLint | MIT/Apache-2.0 | build e testes (só desenvolvimento) |
 
-- [ ] **Step 6: Documentação compartilhada**
+- [x] **Step 6: Documentação compartilhada**
 
 Em `fias-ed-shared/docs/PRIVACY.md`, acrescentar ao fim:
 ```markdown
@@ -6954,7 +6954,7 @@ Detalhes: `docs/superpowers/specs/2026-09-22-fias-ed-web-w1-fundacao-design.md`.
 Run (de `fias-ed-shared/engine-py`): `.venv/Scripts/python -m pytest -q`
 Expected: PASS (os testes de documentação do shared verificam a linguagem de `PRIVACY.md` e `ARCHITECTURE.md`; nenhuma palavra da lista proibida fora de crases).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web ARCHITECTURE.md fias-ed-shared/docs/PRIVACY.md
@@ -7022,7 +7022,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: tudo.
 - Produces: evidência dos 10 critérios de aceite do spec §14, registrada no corpo do commit.
 
-- [ ] **Step 1: Suítes e auditorias**
+- [x] **Step 1: Suítes e auditorias**
 
 Run (de `fias-ed-web/`):
 ```bash
@@ -7036,7 +7036,7 @@ Expected: todos os testes PASS; bandit sem achados altos; pip-audit e npm audit 
 Run (de `fias-ed-shared/engine-py`): `.venv/Scripts/python -m pytest -q`
 Expected: PASS.
 
-- [ ] **Step 2: Sistema no ar**
+- [x] **Step 2: Sistema no ar**
 
 Run (de `fias-ed-web/`):
 ```bash
@@ -7048,7 +7048,7 @@ python scripts/smoke.py --admin-user <usuario>
 ```
 Expected: todos `healthy` (`migrate` saiu com 0); só `web` publica, e só em `127.0.0.1:8080`; nenhum `id -u` igual a `0`; `SMOKE OK`.
 
-- [ ] **Step 3: Fontes somente leitura intactas**
+- [x] **Step 3: Fontes somente leitura intactas**
 
 Run (da raiz do monorepo):
 ```bash
@@ -7056,7 +7056,7 @@ cd fias-ed-shared && engine-py/.venv/Scripts/python scripts/source_snapshot.py v
 ```
 Expected: `OK — nenhuma alteração`.
 
-- [ ] **Step 4: Conferir os critérios de aceite do spec §14, um a um**
+- [x] **Step 4: Conferir os critérios de aceite do spec §14, um a um**
 
 1. Compose: quatro serviços saudáveis, só `127.0.0.1:8080` publicado (Step 2).
 2. Fluxo completo com senha provisória até `AUDIO_VALIDATED`; extensão falsa → `AUDIO_FORMAT_MISMATCH` com mensagem humana (smoke).
@@ -7069,7 +7069,7 @@ Expected: `OK — nenhuma alteração`.
 9. Cabeçalhos de segurança no nginx (smoke).
 10. Fontes científicas intactas (Step 3).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add fias-ed-web/README.md
