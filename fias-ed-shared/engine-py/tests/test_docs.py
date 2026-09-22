@@ -18,6 +18,8 @@ REQUIRED = {
     "PRIVACY.md": ["retenção", "TCLE", "ALUNO", "biometria"],
     "FUTURE_SYNC.md": ["PENDING_SYNC", "CONFLICT"],
     "FUTURE_SYNC_API.md": ["device_id", "version"],
+    "UI_REFERENCES.md": ["URL", "Mobbin", "não copiar"],
+    "DESIGN_SYSTEM.md": ["#2F4156", "Rokkitt", "Ubuntu", "breakpoints", "empty state"],
 }
 # Documentos que DESCREVEM o vocabulário proibido podem citá-lo entre crases; o teste ignora trechos em `...`.
 import re
@@ -34,3 +36,8 @@ def test_doc_exists_with_key_terms(name, terms):
 def test_doc_language(name):
     text = re.sub(r"`[^`]*`", "", (DOCS / name).read_text(encoding="utf-8"))
     assert find_forbidden(text) == [], name
+
+
+def test_at_least_ten_references():
+    text = (DOCS / "UI_REFERENCES.md").read_text(encoding="utf-8")
+    assert text.count("https://") >= 10
