@@ -69,3 +69,28 @@ test("erro ao voltar à própria conta mostra aviso", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível voltar.");
   expect(screen.getByText("Você está agindo como: Ana Souza")).toBeInTheDocument();
 });
+
+test("sessão expirada: 401 numa chamada leva à entrada com aviso", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/aulas": () => jsonResponse({ error_code: "UNAUTHENTICATED", message: "Entre com seu usuário e senha." }, 401),
+  });
+  renderApp("/aulas");
+  await waitFor(() => expect(window.location.pathname).toBe("/"));
+  expect(await screen.findByRole("heading", { name: "Entrar" })).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("Sua sessão terminou. Entre de novo com seu usuário e senha.");
+  expect(screen.queryByRole("button", { name: "Sair" })).not.toBeInTheDocument();
+});
+
+test("sair com a sessão já expirada (401) conta como saída", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/aulas": () => jsonResponse([]),
+    "POST /api/auth/logout": () => jsonResponse({ error_code: "UNAUTHENTICATED", message: "Entre com seu usuário e senha." }, 401),
+  });
+  renderApp("/aulas");
+  await userEvent.click(await screen.findByRole("button", { name: "Sair" }));
+  await waitFor(() => expect(window.location.pathname).toBe("/"));
+  expect(await screen.findByRole("heading", { name: "Entrar" })).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});

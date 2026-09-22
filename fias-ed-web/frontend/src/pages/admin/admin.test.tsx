@@ -67,6 +67,40 @@ test("agir como professor a partir da lista de aulas", async () => {
   expect(await screen.findByText("Você está agindo como: Ana Souza")).toBeInTheDocument();
 });
 
+test("agir como professor sem aulas, a partir de Contas", async () => {
+  let body: unknown = null;
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(ADMIN),
+    "GET /api/admin/contas": () => jsonResponse([CONTA, { ...CONTA, id: "a1", username: "admin", display_name: "Pesquisador",
+      role: "ADMIN_LOCAL" }]),
+    "POST /api/admin/agir-como": (init) => {
+      body = JSON.parse(String(init!.body));
+      return jsonResponse({ ...ADMIN, acting_as: { id: "p1", display_name: "Ana Souza" } });
+    },
+    "GET /api/aulas": () => jsonResponse([]),
+  });
+  renderApp("/admin/contas");
+  const adminRow = (await screen.findByText("Pesquisador", { selector: "td" })).closest("tr")!;
+  expect(within(adminRow).queryByRole("button", { name: /Agir como/ })).not.toBeInTheDocument();
+  const row = screen.getByText("Ana Souza", { selector: "td" }).closest("tr")!;
+  await userEvent.click(within(row).getByRole("button", { name: "Agir como Ana Souza" }));
+  await waitFor(() => expect(window.location.pathname).toBe("/aulas"));
+  expect(body).toEqual({ professor_id: "p1" });
+  expect(await screen.findByText("Você está agindo como: Ana Souza")).toBeInTheDocument();
+});
+
+test("erro ao agir como professor a partir de Contas mostra aviso", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(ADMIN),
+    "GET /api/admin/contas": () => jsonResponse([CONTA]),
+    "POST /api/admin/agir-como": () => jsonResponse({ error_code: "CONTA_NAO_ENCONTRADA", message: "Conta não encontrada." }, 404),
+  });
+  renderApp("/admin/contas");
+  await userEvent.click(await screen.findByRole("button", { name: "Agir como Ana Souza" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Conta não encontrada.");
+  expect(window.location.pathname).toBe("/admin/contas");
+});
+
 test("juntar escolas duplicadas", async () => {
   let merged = false;
   const escolas = [

@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router";
 import { api, ApiError } from "../../api/client";
-import type { Conta, Role } from "../../api/types";
+import type { Conta, Me, Role } from "../../api/types";
+import { useAuth } from "../../app/AuthContext";
 import { Banner } from "../../design/components/Banner";
 import { Button } from "../../design/components/Button";
 import { Dialog } from "../../design/components/Dialog";
 import { SelectField, TextField } from "../../design/components/Field";
 
 export function Contas() {
+  const { setMe } = useAuth();
+  const navigate = useNavigate();
   const [contas, setContas] = useState<Conta[]>([]);
   const [form, setForm] = useState({ username: "", display_name: "", role: "PROFESSOR" as Role });
   const [senha, setSenha] = useState<{ nome: string; valor: string } | null>(null);
@@ -35,6 +39,17 @@ export function Contas() {
       await carregar();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível concluir a ação.");
+    }
+  }
+
+  // Entrada do "agir como" que não depende de o professor já ter aulas (ex.: conta recém-criada).
+  async function agirComo(c: Conta) {
+    setError(null);
+    try {
+      setMe(await api<Me>("/admin/agir-como", { method: "POST", json: { professor_id: c.id } }));
+      navigate("/aulas");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível agir como este professor.");
     }
   }
 
@@ -97,6 +112,9 @@ export function Contas() {
               <td>{c.role === "ADMIN_LOCAL" ? "Administrador" : "Professor"}</td>
               <td>{c.is_active ? "Ativa" : "Desativada"}</td>
               <td>
+                {c.role === "PROFESSOR" && (
+                  <Button variant="secondary" onClick={() => void agirComo(c)}>Agir como {c.display_name}</Button>
+                )}
                 <Button variant="tertiary" onClick={() => void acao(() => api(`/admin/contas/${c.id}`, { method: "PATCH", json: { is_active: !c.is_active } }))}>
                   {c.is_active ? "Desativar" : "Reativar"}
                 </Button>

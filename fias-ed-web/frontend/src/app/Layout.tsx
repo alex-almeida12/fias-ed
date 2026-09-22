@@ -17,11 +17,15 @@ export function Layout() {
     setError(null);
     try {
       await api("/auth/logout", { method: "POST" });
-      setMe(null);
-      navigate("/", { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Não foi possível sair. Tente novamente.");
+      // 401: a sessão já tinha terminado no servidor; para quem clicou em "Sair", deu certo.
+      if (!(err instanceof ApiError && err.status === 401)) {
+        setError(err instanceof ApiError ? err.message : "Não foi possível sair. Tente novamente.");
+        return;
+      }
     }
+    setMe(null);
+    navigate("/", { replace: true });
   }
 
   async function voltar() {

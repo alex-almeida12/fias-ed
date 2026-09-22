@@ -8,7 +8,7 @@ import { Button } from "../design/components/Button";
 import { TextField } from "../design/components/Field";
 
 export function Home() {
-  const { me, loading, setMe } = useAuth();
+  const { me, loading, aviso, setMe } = useAuth();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -41,6 +41,7 @@ export function Home() {
       </section>
       <section className="home__login" aria-labelledby="entrar-titulo">
         <h2 id="entrar-titulo">Entrar</h2>
+        {aviso && <Banner kind="info">{aviso}</Banner>}
         <form onSubmit={onSubmit} noValidate>
           <TextField label="Usuário" name="username" autoComplete="username" value={username}
             onChange={(e) => setUsername(e.target.value)} required />
