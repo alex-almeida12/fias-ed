@@ -11,10 +11,11 @@ from app.audio.storage import delete_file
 from app.audit import audit
 from app.auth.deps import Actor, current_actor
 from app.aulas.service import (aula_payload, aula_summary, get_owned_aula, has_active_job,
-                               soft_delete_aula)
+                               pending_upload, soft_delete_aula)
 from app.core.db import get_db
 from app.core.errors import AppError
 from app.core.logging import log_event
+from app.jobs.queue import enqueue
 from app.models import Aula, Disciplina, Turma
 
 router = APIRouter()
@@ -80,3 +81,17 @@ def delete_aula(aula_id: uuid.UUID, actor: Actor = Depends(current_actor), db: S
     for rel in paths:
         delete_file(rel)
     log_event("aula_deleted", aula_id=aula.id)
+
+
+@router.post("/aulas/{aula_id}/processar", status_code=202)
+def processar_aula(aula_id: uuid.UUID, actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
+    aula = get_owned_aula(db, actor, aula_id)
+    if has_active_job(db, aula.id):
+        raise AppError(409, "AULA_BUSY", "Esta aula já está sendo preparada.")
+    if aula.status != "AUDIO_IMPORTED" or pending_upload(db, aula.id) is None:
+        raise AppError(409, "AULA_STATE", "Envie o áudio da aula antes de processar.")
+    enqueue(db, aula.id, "validate_audio")
+    audit(db, actor, "aula", aula.id, "process")
+    db.commit()
+    log_event("aula_processing_requested", aula_id=aula.id)
+    return aula_payload(db, aula)
