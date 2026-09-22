@@ -398,7 +398,7 @@ def _escrever(caminho: Path, conteudo: bytes) -> str:
 
 
 @pytest.fixture()
-def base_falsa(tmp_path, monkeypatch):
+def base_falsa(tmp_path, monkeypatch):  # noqa: PT004 - yield fixture com limpeza
     """Monta um diretório que casa com uma entrada de registro inventada."""
     conteudo = b"pesos-de-mentira"
     sha = _escrever(tmp_path / "m" / "model.safetensors", conteudo)
@@ -412,10 +412,16 @@ def base_falsa(tmp_path, monkeypatch):
             "label_map": "fias_category = argmax(logits) + 1",
         }],
     }
-    caminho = tmp_path / "models.json"
-    caminho.write_text(json.dumps(registro), encoding="utf-8")
-    monkeypatch.setenv("FIAS_ED_MODELS_REGISTRY", str(caminho))
-    return tmp_path
+    (tmp_path / "scientific-config").mkdir()
+    (tmp_path / "scientific-config" / "models.json").write_text(json.dumps(registro), encoding="utf-8")
+    # Aponta o Settings para este diretório e limpa os dois caches, senão um
+    # teste herda o registro do anterior e passa por coincidência.
+    get_settings.cache_clear()
+    _ler.cache_clear()
+    monkeypatch.setenv("SHARED_DIR", str(tmp_path))
+    yield tmp_path
+    get_settings.cache_clear()
+    _ler.cache_clear()
 
 
 def test_artefatos_integros_passam(base_falsa):
@@ -465,7 +471,6 @@ fontes de verdade que divergem em silêncio.
 """
 import hashlib
 import json
-import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -479,16 +484,22 @@ class ModeloInvalido(Exception):
 
 
 def _caminho_registro() -> Path:
-    return Path(os.environ.get("FIAS_ED_MODELS_REGISTRY") or get_settings().models_registry)
+    s = get_settings()
+    return s.shared_dir / s.models_registry_rel
 
 
-@lru_cache(maxsize=1)
-def carregar_registro() -> dict:
-    caminho = _caminho_registro()
+@lru_cache(maxsize=None)
+def _ler(caminho: Path) -> dict:
+    """Cacheado por caminho: um caminho diferente relê do disco. Cachear sem
+    chave faria um teste herdar o registro de outro e passar por coincidência."""
     try:
         return json.loads(caminho.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ModeloInvalido("MODELO_REGISTRO_ILEGIVEL", f"registro ilegível: {caminho}") from exc
+
+
+def carregar_registro() -> dict:
+    return _ler(_caminho_registro())
 
 
 def entrada(model_id: str) -> dict:
@@ -526,8 +537,10 @@ Criar `backend/app/ml/__init__.py` vazio.
 Em `app/core/config.py`, dentro de `Settings`:
 
 ```python
-    models_dir: str = "/models"
-    models_registry: str = "/shared/scientific-config/models.json"
+    models_dir: Path = Path("/models")
+    # Derivado de shared_dir, que já é a resposta do projeto para "onde o shared
+    # está montado". Duas bases independentes divergiriam no deploy.
+    models_registry_rel: str = "scientific-config/models.json"
     asr_size: str = "small"
     asr_model_id: str = "faster-whisper-small"
     diar_model_id: str = "pyannote-speaker-diarization-3.1"
@@ -535,13 +548,17 @@ Em `app/core/config.py`, dentro de `Settings`:
     usar_modelos_falsos: bool = False
 ```
 
-Em `.env.example`, com comentário:
+Em `.env.example`. **Atenção ao nome das variáveis:** `Settings` não define
+`env_prefix`, então pydantic-settings mapeia cada campo para a env var de mesmo
+nome em maiúsculas, sem prefixo — é o padrão que `DEVICE_ID` e
+`MAX_UPLOAD_BYTES` já seguem. Escrever `FIAS_ED_MODELS_DIR` faria a
+configuração ser ignorada em silêncio.
 
 ```
 # Diretório dos pesos (fora do Git). Populado por scripts/setup_models.py.
-FIAS_ED_MODELS_DIR=/models
+MODELS_DIR=/models
 # Tamanho do modelo de ASR: tiny, base ou small (ver a tabela de medição no README).
-FIAS_ED_ASR_SIZE=small
+ASR_SIZE=small
 # Execução offline: nenhuma chamada de rede em tempo de execução.
 HF_HUB_OFFLINE=1
 TRANSFORMERS_OFFLINE=1
