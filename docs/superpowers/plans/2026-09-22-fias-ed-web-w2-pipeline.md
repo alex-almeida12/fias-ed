@@ -20,7 +20,7 @@ Valem para todas as tasks. Copiadas do spec e do plano da W1.
 - Entrada do classificador é **par de turnos**: `tokenizer(text_a, text_b)`, WordPiece cased, `max_length=256`, truncation `LongestFirst` à direita, padding `"max_length"`, sem lowercasing e sem prefixo de falante no texto.
 - Nenhum peso de modelo no Git. Os artefatos são conferidos contra `fias-ed-shared/scientific-config/models.json` (SHA-256 por artefato) e a carga é recusada se algum `forbidden_files` (`training_args.bin`, `optimizer.pt`, `rng_state.pth`, `scaler.pt`, `scheduler.pt`) estiver no diretório.
 - Execução offline: `HF_HUB_OFFLINE=1` e `TRANSFORMERS_OFFLINE=1` nos containers `api` e `worker`. Nenhuma chamada de rede em tempo de execução. O download do `pyannote` acontece uma vez, no setup, fora do fluxo do produto.
-- ASR com idioma fixado em `pt` e decodificação determinística (`temperature=0`), porque o §44 exige que a mesma aula reprocessada dê o mesmo texto.
+- ASR com idioma fixado e decodificação determinística (`temperature=0`), porque o §44 exige que a mesma aula reprocessada dê o mesmo texto. Atenção aos dois valores: o `faster-whisper` recebe `language="pt"` (código que ele conhece), enquanto a coluna `Transcricao.language` guarda `"pt-BR"`, o único valor que o enum do shared aceita.
 - Diarização separa **professor do resto**. Não existe `ALUNO_1`/`ALUNO_2` em lugar nenhum, nem no banco. Nenhum embedding de voz é persistido (§48).
 - Todo `Segmento` tem `text_pseudonymized` com nomes próprios trocados por `[NOME]`, inclusive depois de o professor editar o texto (`PRIVACY.md`).
 - Original nunca modificado (§17). Cópia de trabalho e chunks são apagados ao fim do estágio que os consome.
@@ -108,69 +108,97 @@ Cinco classes de entrada que o spec implica, que nenhum teste óbvio cobre, e qu
 ---
 ### Task 1: Tabelas da W2 e migração
 
+> **As seis entidades já estão especificadas** em `fias-ed-shared/schemas/entities/`.
+> Este é o modelo lógico de dados do projeto, compartilhado com o Android, e é a
+> autoridade: os nomes de campo, os tipos, os enums e a nulidade saem de lá,
+> literalmente. `test_schema_compat.py` compara coluna a coluna e reprova por
+> campo ausente, tipo diferente, enum diferente, `maxLength` diferente ou
+> nulidade diferente. Não invente campo nem renomeie nada.
+
 **Files:**
-- Modify: `backend/app/models.py`
+- Modify: `backend/app/models.py`, `backend/tests/test_schema_compat.py`
 - Create: `backend/alembic/versions/0002_w2_pipeline.py` (gerado)
 - Test: `backend/tests/test_models_w2.py`
 
 **Interfaces:**
-- Consumes: `EntityMixin`, `Base`, `_enum`, `AULA_STATUS` de `app/models.py` (W1).
-- Produces: as classes `Transcricao`, `Segmento`, `Falante`, `ClassificacaoFIAS`, `IndicadorFIAS`, `ModeloIA`, usadas por todas as tasks seguintes.
+- Consumes: `EntityMixin`, `Base`, `_enum`, `TRANSCRIPT_SOURCES` de `app/models.py` (W1).
+- Produces: `Transcricao`, `Falante`, `Segmento`, `ClassificacaoFIAS`, `IndicadorFIAS`, `ModeloIA`.
+
+**Decisão de privacidade que governa o uso destas tabelas** (não é coluna, é
+como elas são preenchidas): entre a diarização e a escolha da voz existe **uma
+linha `Falante` por voz detectada**, todas com `role="UNASSIGNED"` e o
+`diarization_label` do diarizador. Na escolha, essas linhas colapsam em
+**exatamente duas**: um `PROFESSOR` com o `diarization_label` da voz escolhida e
+um `ALUNO` com `diarization_label = "merged"`. Nenhum agrupamento de voz por
+estudante sobrevive à escolha (§48). A Task 8 implementa esse colapso; aqui só
+existe a tabela que o permite.
 
 - [ ] **Step 1: Escrever o teste que falha**
 
-Cria `backend/tests/test_models_w2.py`. O teste mais importante é o que fixa a decisão de privacidade: `Falante` guarda papel, não voz.
+Cria `backend/tests/test_models_w2.py`.
 
 ```python
-import uuid
-
 from sqlalchemy import inspect
 
-from app.models import ClassificacaoFIAS, Falante, IndicadorFIAS, ModeloIA, Segmento, Transcricao
+from app.models import (ClassificacaoFIAS, Falante, IndicadorFIAS, ModeloIA, Segmento,
+                        Transcricao)
 
 
-def test_falante_guarda_papel_e_nao_agrupamento_de_voz():
-    colunas = {c.name for c in inspect(Falante).columns}
-    assert "papel" in colunas
-    # §48: nada que agrupe estudantes por voz pode existir no banco.
-    proibidas = {"embedding", "voice_id", "speaker_label", "cluster", "aluno_indice"}
-    assert colunas & proibidas == set()
+def _colunas(modelo):
+    return {c.name: c for c in inspect(modelo).columns}
 
 
-def test_segmento_tem_texto_original_e_pseudonimizado():
-    colunas = {c.name for c in inspect(Segmento).columns}
-    assert {"texto_original_asr", "texto_revisado", "text_pseudonymized"} <= colunas
+def test_falante_tem_os_tres_papeis_do_shared():
+    col = _colunas(Falante)["role"]
+    assert set(col.type.enums) == {"PROFESSOR", "ALUNO", "UNASSIGNED"}
 
 
-def test_segmento_nasce_sem_falante_e_com_pseudonimizado_obrigatorio():
-    colunas = {c.name: c for c in inspect(Segmento).columns}
-    # O segmento existe entre a transcrição e a escolha da voz, quando ainda não
-    # se sabe quem falou.
-    assert colunas["falante_id"].nullable is True
-    # Nunca pode existir segmento sem a versão pseudonimizada (PRIVACY.md).
-    assert colunas["text_pseudonymized"].nullable is False
+def test_falante_liga_a_transcricao_e_nao_a_aula():
+    colunas = _colunas(Falante)
+    assert "transcricao_id" in colunas
+    assert "aula_id" not in colunas
 
 
-def test_transcricao_guarda_rotulos_provisorios_do_diarizador():
-    colunas = {c.name: c for c in inspect(Transcricao).columns}
-    assert colunas["rotulos_provisorios"].nullable is True
+def test_segmento_usa_os_nomes_de_tempo_do_shared():
+    colunas = _colunas(Segmento)
+    assert {"start_ms", "end_ms"} <= set(colunas)
+    assert "inicio_ms" not in colunas
 
 
-def test_segmento_guarda_tempo_global_em_ms():
-    colunas = {c.name: c for c in inspect(Segmento).columns}
-    assert colunas["inicio_ms"].type.python_type is int
-    assert colunas["fim_ms"].type.python_type is int
+def test_segmento_exige_falante_e_aceita_pseudonimizado_nulo():
+    colunas = _colunas(Segmento)
+    # O schema do shared resolve "ainda não se sabe quem falou" com
+    # role=UNASSIGNED, não com FK nula.
+    assert colunas["falante_id"].nullable is False
+    assert colunas["text_pseudonymized"].nullable is True
+    assert colunas["texto_revisado"].nullable is True
+    assert colunas["revisado"].nullable is False
 
 
-def test_modelo_ia_guarda_sha256_por_artefato():
-    colunas = {c.name for c in inspect(ModeloIA).columns}
-    assert {"model_id", "task", "sha256", "registry_version"} <= colunas
+def test_classificacao_guarda_a_predicao_crua_e_a_restrita_por_papel():
+    colunas = _colunas(ClassificacaoFIAS)
+    assert {"pred_raw", "pred_role_constrained", "confidence_raw", "confidence",
+            "uncertain"} <= set(colunas)
+    # Liga ao segmento, não à aula.
+    assert "segmento_id" in colunas and "aula_id" not in colunas
 
 
-def test_classificacao_e_indicador_referenciam_a_aula():
-    assert "aula_id" in {c.name for c in inspect(ClassificacaoFIAS).columns}
-    assert "aula_id" in {c.name for c in inspect(IndicadorFIAS).columns}
-    assert "aula_id" in {c.name for c in inspect(Transcricao).columns}
+def test_indicador_guarda_a_evidencia_estruturada():
+    colunas = _colunas(IndicadorFIAS)
+    assert {"index_id", "value", "reason", "numerator_count", "denominator_count",
+            "n_intervals", "validation_status"} <= set(colunas)
+    assert colunas["value"].nullable is True  # sem dado suficiente
+
+
+def test_modelo_ia_guarda_licenca_e_procedencia():
+    colunas = _colunas(ModeloIA)
+    assert {"model_id", "name", "model_version", "task", "format", "sha256",
+            "size_bytes", "source", "license", "parameters"} <= set(colunas)
+
+
+def test_transcricao_fixa_o_idioma_do_produto():
+    col = _colunas(Transcricao)["language"]
+    assert set(col.type.enums) == {"pt-BR"}
 ```
 
 - [ ] **Step 2: Rodar o teste e confirmar que falha**
@@ -180,92 +208,134 @@ Expected: FAIL com `ImportError: cannot import name 'Transcricao' from 'app.mode
 
 - [ ] **Step 3: Acrescentar as tabelas em `app/models.py`**
 
-Depois de `class Audio`, mantendo o estilo das tabelas da W1:
+Depois de `class Audio`, no estilo das tabelas da W1. Os valores abaixo saem dos
+schemas do shared, literalmente.
 
 ```python
-FALANTE_PAPEIS = ("PROFESSOR", "ALUNO")
-SEGMENTO_ORIGENS = ("ASR", "REVISADO")
+FALANTE_ROLES = ("PROFESSOR", "ALUNO", "UNASSIGNED")
+LANGUAGES = ("pt-BR",)
+MODEL_FORMATS = ("safetensors", "onnx", "ggml", "other")
+INDICADOR_REASONS = ("insufficient_data",)
+VALIDATION_STATUS = ("validated", "PENDING_SCIENTIFIC_VALIDATION", "engineering_decision",
+                     "draft_pending_researcher_review")
 
 
 class Transcricao(EntityMixin, Base):
     __tablename__ = "transcricao"
     aula_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aula.id"), index=True, nullable=False)
     audio_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("audio.id"), nullable=False)
-    asr_model_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    idioma: Mapped[str] = mapped_column(String(8), default="pt", nullable=False)
-    duracao_ms: Mapped[int] = mapped_column(Integer, nullable=False)
-    revisada_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # Rótulos do diarizador por segmento, só entre DIARIZING e a escolha da voz.
-    # Apagados em atribuir_papeis; há teste que exige NULL depois da escolha (§48).
-    rotulos_provisorios: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    language: Mapped[str] = mapped_column(_enum(LANGUAGES, "transcricao_language"),
+                                          default="pt-BR", nullable=False)
+    asr_model_id: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class Falante(EntityMixin, Base):
-    # §48: papel, nunca agrupamento por voz. Os rótulos do diarizador não chegam aqui.
+    """Uma linha por voz enquanto role=UNASSIGNED; exatamente duas depois da
+    escolha do professor (PROFESSOR e ALUNO). Nenhum agrupamento de voz por
+    estudante sobrevive à escolha (§48)."""
     __tablename__ = "falante"
-    aula_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aula.id"), index=True, nullable=False)
-    papel: Mapped[str] = mapped_column(_enum(FALANTE_PAPEIS, "falante_papel"), nullable=False)
+    transcricao_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("transcricao.id"), index=True,
+                                                      nullable=False)
+    diarization_label: Mapped[str] = mapped_column(String(32), nullable=False)
+    role: Mapped[str] = mapped_column(_enum(FALANTE_ROLES, "falante_role"),
+                                      default="UNASSIGNED", nullable=False)
 
 
 class Segmento(EntityMixin, Base):
     __tablename__ = "segmento"
-    transcricao_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("transcricao.id"), index=True, nullable=False)
-    # Nulo entre a transcrição e a escolha da voz: o segmento existe antes de se
-    # saber quem falou. Preenchido em atribuir_papeis (Task 8).
-    falante_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("falante.id"), nullable=True)
-    ordem: Mapped[int] = mapped_column(Integer, nullable=False)
-    inicio_ms: Mapped[int] = mapped_column(Integer, nullable=False)
-    fim_ms: Mapped[int] = mapped_column(Integer, nullable=False)
-    texto_original_asr: Mapped[str] = mapped_column(String(4000), nullable=False)
-    texto_revisado: Mapped[str | None] = mapped_column(String(4000), nullable=True)
-    text_pseudonymized: Mapped[str] = mapped_column(String(4000), nullable=False)
-    origem: Mapped[str] = mapped_column(_enum(SEGMENTO_ORIGENS, "segmento_origem"), default="ASR", nullable=False)
+    transcricao_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("transcricao.id"), index=True,
+                                                      nullable=False)
+    falante_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("falante.id"), nullable=False)
+    start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    texto_original_asr: Mapped[str] = mapped_column(String(10000), nullable=False)
+    texto_revisado: Mapped[str | None] = mapped_column(String(10000), nullable=True)
+    revisado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    asr_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    text_pseudonymized: Mapped[str | None] = mapped_column(String(10000), nullable=True)
 
 
 class ClassificacaoFIAS(EntityMixin, Base):
     __tablename__ = "classificacao_fias"
-    aula_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aula.id"), index=True, nullable=False)
-    segmento_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("segmento.id"), nullable=False)
-    categoria: Mapped[int] = mapped_column(Integer, nullable=False)
-    confianca: Mapped[float] = mapped_column(Float, nullable=False)
-    modelo_ia_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("modelo_ia.id"), nullable=False)
-    rules_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    segmento_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("segmento.id"), index=True,
+                                                   nullable=False)
+    transcript_source: Mapped[str] = mapped_column(
+        _enum(TRANSCRIPT_SOURCES, "classificacao_transcript_source"), nullable=False)
+    pred_raw: Mapped[int] = mapped_column(Integer, nullable=False)
+    pred_role_constrained: Mapped[int] = mapped_column(Integer, nullable=False)
+    confidence_raw: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    uncertain: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    model_id: Mapped[str] = mapped_column(String, nullable=False)
+    rules_version: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class IndicadorFIAS(EntityMixin, Base):
     __tablename__ = "indicador_fias"
     aula_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aula.id"), index=True, nullable=False)
-    codigo: Mapped[str] = mapped_column(String(32), nullable=False)
-    valor: Mapped[float] = mapped_column(Float, nullable=False)
-    evidencia: Mapped[dict] = mapped_column(JSONB, nullable=False)
-    rules_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    index_id: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reason: Mapped[str | None] = mapped_column(_enum(INDICADOR_REASONS, "indicador_reason"),
+                                               nullable=True)
+    numerator_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    denominator_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    n_intervals: Mapped[int] = mapped_column(Integer, nullable=False)
+    rules_version: Mapped[str] = mapped_column(String, nullable=False)
+    validation_status: Mapped[str] = mapped_column(
+        _enum(VALIDATION_STATUS, "indicador_validation_status"), nullable=False)
+    mean_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class ModeloIA(EntityMixin, Base):
     __tablename__ = "modelo_ia"
-    model_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    task: Mapped[str] = mapped_column(String(64), nullable=False)
-    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
-    registry_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    model_id: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    model_version: Mapped[str] = mapped_column(String, nullable=False)
+    task: Mapped[str] = mapped_column(String, nullable=False)
+    format: Mapped[str] = mapped_column(_enum(MODEL_FORMATS, "modelo_format"), nullable=False)
+    sha256: Mapped[str] = mapped_column(String, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source: Mapped[str] = mapped_column(String(500), nullable=False)
+    license: Mapped[str] = mapped_column(String(200), nullable=False)
+    parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
 ```
 
-Acrescentar `Float` e `JSONB` aos imports, se ainda não estiverem.
+Acrescentar `Boolean` e `Float` aos imports do SQLAlchemy, se faltarem.
+
+Conferir cada `maxLength` do schema contra o `String(n)` escrito acima antes de
+rodar: o teste de compatibilidade compara o comprimento exato.
 
 - [ ] **Step 4: Rodar o teste e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_models_w2.py`
-Expected: PASS (5 testes)
+Expected: PASS (8 testes)
 
-- [ ] **Step 5: Gerar e conferir a migração**
+- [ ] **Step 5: Estender o teste de compatibilidade com o shared**
 
-Run: `docker compose -f docker-compose.test.yml run --rm api-test alembic revision --autogenerate -m "w2 pipeline"`
-Depois **abrir o arquivo gerado** em `alembic/versions/` e conferir que ele só cria as seis tabelas novas — nenhum `drop` de tabela da W1. Renomear para `0002_w2_pipeline.py` e ajustar `down_revision` para a revisão da W1.
+Em `backend/tests/test_schema_compat.py`, acrescentar as seis entidades à lista:
 
-- [ ] **Step 6: Conferir compatibilidade com os schemas do shared**
-
-O teste `tests/test_schema_compat.py` da W1 compara as tabelas com `fias-ed-shared/schemas/entities/`. Estender a lista de entidades verificadas com as seis novas e rodar:
+```python
+ENTITY_TABLES = ["professor", "escola", "turma", "disciplina", "aula", "audio", "processamento",
+                 "transcricao", "falante", "segmento", "classificacao_fias", "indicador_fias",
+                 "modelo_ia"]
+```
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_schema_compat.py`
+Expected: PASS (13 parametrizações)
+
+Se alguma reprovar, **a tabela é que está errada**, não o schema: o shared é a
+autoridade. Corrija a coluna.
+
+- [ ] **Step 6: Gerar e conferir a migração**
+
+Run: `docker compose -f docker-compose.test.yml run --rm api-test alembic revision --autogenerate -m "w2 pipeline"`
+
+Abrir o arquivo gerado em `alembic/versions/` e conferir que ele **só cria as
+seis tabelas novas** — nenhum `drop` de tabela da W1, nenhuma alteração em
+`processamento`. Renomear para `0002_w2_pipeline.py` e ajustar `down_revision`
+para a revisão da W1.
+
+Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_schema_compat.py::test_migrations_match_models`
 Expected: PASS
 
 - [ ] **Step 7: Rodar a suíte inteira**
@@ -277,10 +347,15 @@ Expected: PASS, sem regressão da W1
 
 ```bash
 git add fias-ed-web/backend
-git commit -m "feat(web): tabelas da W2 — transcrição, segmento, falante, FIAS e modelo
+git commit -m "feat(web): tabelas da W2, iguais aos schemas do shared
 
-Falante guarda papel (PROFESSOR/ALUNO) e nenhuma coluna de agrupamento por voz,
-com teste que reprova se alguma aparecer (§48).
+As seis entidades saem de fias-ed-shared/schemas/entities/ literalmente — nomes,
+tipos, enums, maxLength e nulidade —, porque o shared é o modelo lógico de dados
+do projeto e o contrato com o Android. test_schema_compat.py passa a cobrir as
+treze tabelas.
+
+Falante tem role UNASSIGNED, que é como o shared resolve o segmento existir
+antes de se saber quem falou; a FK do segmento continua NOT NULL.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
@@ -946,8 +1021,8 @@ def test_transcricao_soma_o_deslocamento_de_cada_chunk(db, aula_preparada, asr_f
     HANDLERS["transcribe"](db, job)
     t = db.query(Transcricao).filter_by(aula_id=aula_preparada.id).one()
     segmentos = db.query(Segmento).filter_by(transcricao_id=t.id).order_by(Segmento.ordem).all()
-    assert [s.inicio_ms for s in segmentos] == [0, 1_000, 600_000, 601_000]
-    assert all(s.fim_ms <= t.duracao_ms for s in segmentos)
+    assert [s.start_ms for s in segmentos] == [0, 1_000, 600_000, 601_000]
+    assert all(s.end_ms <= duracao_do_audio(db, t) for s in segmentos)
 
 
 def test_transcricao_leva_a_diarizing(db, aula_preparada, asr_falso_por_chunk):
@@ -1249,8 +1324,8 @@ Item 2 do Review Focus. O alinhamento é função pura e é onde a lógica mais 
   - `alinhar(segmentos: list[SegmentoASR], turnos: list[TurnoDiar]) -> list[str | None]` — um rótulo de voz por segmento, na mesma ordem; `None` quando não há sobreposição alguma.
   - `resumo_por_voz(segmentos, rotulos) -> list[GrupoDeVoz]`
   - `@dataclass(frozen=True) GrupoDeVoz(rotulo: str, tempo_total_ms: int, n_segmentos: int, amostras: list[tuple[int, int]])`
-  - `guardar_rotulos_provisorios(db, transcricao, rotulos: list[str | None]) -> None` — grava os
-    rótulos do diarizador numa coluna JSONB da `Transcricao`, apagada na escolha da voz (§48)
+  - `criar_falantes_provisorios(db, transcricao, rotulos: list[str | None]) -> dict[str, uuid.UUID]` —
+    cria um `Falante` por voz com `role="UNASSIGNED"` e devolve rótulo → id
   - `handle_diarize(db, job)`
 
 - [ ] **Step 1: Escrever o teste que falha**
@@ -1399,7 +1474,7 @@ def test_diarize_nao_grava_agrupamento_de_voz_no_banco(db, aula_transcrita, diar
     job = enfileirar(db, aula_transcrita.id, "diarize")
     HANDLERS["diarize"](db, job)
     falantes = db.query(Falante).filter_by(aula_id=aula_transcrita.id).all()
-    assert {f.papel for f in falantes} <= {"PROFESSOR", "ALUNO"}
+    assert {f.role for f in falantes} <= {"PROFESSOR", "ALUNO", "UNASSIGNED"}
 
 
 def test_uma_voz_so_nao_e_erro(db, aula_transcrita, diarizador_falso_uma_voz):
@@ -1422,7 +1497,7 @@ Expected: FAIL com `KeyError: 'diarize'`
 
 - [ ] **Step 6: Implementar `handle_diarize`**
 
-O resultado do alinhamento é guardado em `Transcricao.rotulos_provisorios` (JSONB) para a tela de escolha consumir, e é apagado quando a escolha é feita. A tabela `job` da W1 não tem coluna de resultado e não ganha uma.
+O resultado do alinhamento é guardado em `Falante` com `role="UNASSIGNED"` para a tela de escolha consumir, e é apagado quando a escolha é feita. A tabela `job` da W1 não tem coluna de resultado e não ganha uma.
 
 ```python
 def handle_diarize(db: Session, job: Job) -> None:
@@ -1442,7 +1517,7 @@ def handle_diarize(db: Session, job: Job) -> None:
         return
     segmentos = segmentos_asr(db, transcricao)
     rotulos = alinhar(segmentos, turnos)
-    guardar_rotulos_provisorios(db, transcricao, rotulos)
+    criar_falantes_provisorios(db, transcricao, rotulos)
     aula.status, aula.error_code = "READY_FOR_SPEAKER_REVIEW", None
     finish_job(db, job)
     db.commit()
@@ -1509,7 +1584,7 @@ def test_vozes_sao_numeradas_e_nunca_chamadas_de_aluno(cliente, aula_diarizada):
 def test_escolher_voz_atribui_o_resto_a_aluno(cliente, db, aula_diarizada):
     r = cliente.post(f"/api/aulas/{aula_diarizada.id}/vozes/escolher", json={"rotulo": "voz-1"})
     assert r.status_code == 200
-    papeis = [s.falante.papel for s in segmentos_da(db, aula_diarizada)]
+    papeis = [s.falante.role for s in segmentos_da(db, aula_diarizada)]
     assert set(papeis) == {"PROFESSOR", "ALUNO"}
 
 
@@ -1517,8 +1592,9 @@ def test_escolher_voz_apaga_os_rotulos_do_diarizador(cliente, db, aula_diarizada
     """§48: o agrupamento por voz existe só entre a diarização e a escolha.
     Depois disso não pode sobrar nada dele no banco."""
     cliente.post(f"/api/aulas/{aula_diarizada.id}/vozes/escolher", json={"rotulo": "voz-1"})
-    t = transcricao_da(db, aula_diarizada)
-    assert t.rotulos_provisorios is None
+    papeis = {f.role for f in falantes_da(db, aula_diarizada)}
+    assert papeis == {"PROFESSOR", "ALUNO"}
+    assert "UNASSIGNED" not in papeis
 
 
 def test_escolher_voz_leva_a_revisao_da_transcricao(cliente, db, aula_diarizada):
@@ -1709,7 +1785,7 @@ def test_transcricao_vem_paginada_em_blocos_de_cinco_minutos(cliente, aula_com_t
     corpo = r.json()
     assert corpo["bloco"] == 0
     assert corpo["blocos"] == 10  # 50 min
-    assert all(s["inicio_ms"] < 300_000 for s in corpo["segmentos"])
+    assert all(s["start_ms"] < 300_000 for s in corpo["segmentos"])
 
 
 def test_editar_texto_regrava_a_versao_pseudonimizada(cliente, db, segmento_qualquer):
@@ -1748,7 +1824,7 @@ def test_trocar_papel_de_um_segmento(cliente, db, segmento_qualquer):
                       json={"papel": "ALUNO", "version": segmento_qualquer.version})
     assert r.status_code == 200
     db.refresh(segmento_qualquer)
-    assert segmento_qualquer.falante.papel == "ALUNO"
+    assert segmento_qualquer.falante.role == "ALUNO"
 
 
 def test_concluir_a_revisao_leva_a_ready_for_fias(cliente, db, aula_em_revisao):
@@ -2128,7 +2204,11 @@ def test_indices_sao_gravados_com_evidencia_e_rules_version(db, aula_revisada, c
     HANDLERS["classify_fias"](db, job)
     indicadores = db.query(IndicadorFIAS).filter_by(aula_id=aula_revisada.id).all()
     assert indicadores
-    assert all(i.evidencia for i in indicadores)
+    # A evidência do shared é estruturada, não um JSONB livre.
+    assert all(i.numerator_count is not None for i in indicadores)
+    assert all(i.denominator_count is not None for i in indicadores)
+    assert all(i.n_intervals > 0 for i in indicadores)
+    assert all(i.validation_status for i in indicadores)
     assert all(i.rules_version for i in indicadores)
 
 
@@ -2186,12 +2266,12 @@ def classificar_aula(db, aula) -> None:
     apagar_resultado_anterior(db, aula)
     codificados = []
     for seg, logits in zip(segmentos, lotes):
-        predicao = constrain_by_role(logits, seg.falante.papel, regras)
+        predicao = constrain_by_role(logits, seg.falante.role, regras)
         categoria = categoria_de(predicao.logits, offset)
         db.add(ClassificacaoFIAS(aula_id=aula.id, segmento_id=seg.id, categoria=categoria,
                                  confianca=predicao.confidence, modelo_ia_id=modelo_id(db),
                                  rules_version=regras["rules_version"]))
-        codificados.append(CodedSegment(start_ms=seg.inicio_ms, end_ms=seg.fim_ms, category=categoria))
+        codificados.append(CodedSegment(start_ms=seg.start_ms, end_ms=seg.end_ms, category=categoria))
 
     intervalos = segments_to_intervals(codificados, total_ms=duracao(db, aula), rules=regras)
     matriz = transition_matrix(intervalos, regras)
