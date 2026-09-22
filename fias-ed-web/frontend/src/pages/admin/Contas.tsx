@@ -13,13 +13,11 @@ export function Contas() {
   const [error, setError] = useState<string | null>(null);
   const [excluindo, setExcluindo] = useState<Conta | null>(null);
   const [confirmacao, setConfirmacao] = useState("");
-  // Nota: referência estável — o Dialog refoca no próprio container a cada render em que
-  // `onClose` muda de identidade; uma arrow inline recriada a cada tecla digitada no campo
-  // de confirmação roubaria o foco do TextField no meio da digitação.
-  const fecharExclusao = useCallback(() => setExcluindo(null), []);
 
-  // Ruling P15: carregamento não deve falhar em silêncio.
+  // Ruling P15: carregamento não deve falhar em silêncio; limpa erro anterior antes de tentar
+  // de novo, para um recarregamento bem-sucedido apagar o aviso de uma falha anterior.
   const carregar = useCallback(async () => {
+    setError(null);
     try {
       setContas(await api<Conta[]>("/admin/contas"));
     } catch (err) {
@@ -110,7 +108,7 @@ export function Contas() {
         </tbody>
       </table>
       {excluindo && (
-        <Dialog title={`Excluir a conta de ${excluindo.display_name}?`} onClose={fecharExclusao}
+        <Dialog title={`Excluir a conta de ${excluindo.display_name}?`} onClose={() => setExcluindo(null)}
           actions={<>
             <Button variant="tertiary" onClick={() => setExcluindo(null)}>Cancelar</Button>
             <Button onClick={() => void excluir()} disabled={confirmacao.trim().toLowerCase() !== excluindo.username}>Excluir conta</Button>

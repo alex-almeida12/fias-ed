@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { expect, test, vi } from "vitest";
 import { Banner } from "./Banner";
 import { Button } from "./Button";
@@ -25,6 +26,28 @@ test("Dialog fecha com Esc e tem nome acessível", async () => {
   expect(screen.getByRole("dialog", { name: "Excluir aula?" })).toBeInTheDocument();
   await userEvent.keyboard("{Escape}");
   expect(onClose).toHaveBeenCalled();
+});
+
+// Revisão da Task 15: um `onClose` inline (nova identidade a cada render, comum em formulários
+// controlados) não pode roubar o foco de um campo enquanto o usuário digita, e o Esc deve chamar
+// a versão mais recente de `onClose` (fechando sobre o estado atual), não a de quando montou.
+test("Dialog mantém o foco ao digitar e chama a versão mais recente do onClose no Esc", async () => {
+  const chamadas: string[] = [];
+  function Wrapper() {
+    const [valor, setValor] = useState("");
+    return (
+      <Dialog title="Editar" onClose={() => chamadas.push(valor)} actions={<Button>Ok</Button>}>
+        <TextField label="Campo" value={valor} onChange={(e) => setValor(e.target.value)} />
+      </Dialog>
+    );
+  }
+  render(<Wrapper />);
+  const input = screen.getByLabelText("Campo");
+  await userEvent.type(input, "abcde");
+  expect(input).toHaveValue("abcde");
+  expect(input).toHaveFocus();
+  await userEvent.keyboard("{Escape}");
+  expect(chamadas).toEqual(["abcde"]);
 });
 
 test("Banner de erro é alerta", () => {

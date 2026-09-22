@@ -63,8 +63,10 @@ export function Escolas() {
   const [escolas, setEscolas] = useState<Escola[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Ruling P15: carregamento não deve falhar em silêncio.
+  // Ruling P15: carregamento não deve falhar em silêncio; limpa erro anterior antes de tentar
+  // de novo, para um recarregamento bem-sucedido apagar o aviso de uma falha anterior.
   const carregar = useCallback(async () => {
+    setError(null);
     try {
       setEscolas(await api<Escola[]>("/escolas"));
     } catch (err) {

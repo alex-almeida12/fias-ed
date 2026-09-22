@@ -18,13 +18,16 @@ export function AdminAulas() {
   const [aulas, setAulas] = useState<AulaResumo[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Ruling P15: carregamento não deve falhar em silêncio.
+  // Ruling P15: carregamento não deve falhar em silêncio; limpa erro anterior antes de cada
+  // tentativa, para um recarregamento bem-sucedido apagar o aviso de uma falha anterior.
   useEffect(() => {
+    setError(null);
     api<Conta[]>("/admin/contas")
       .then(setContas)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Não foi possível carregar os professores."));
   }, []);
   useEffect(() => {
+    setError(null);
     api<AulaResumo[]>(filtro ? `/admin/aulas?professor_id=${filtro}` : "/admin/aulas")
       .then(setAulas)
       .catch((err) => setError(err instanceof ApiError ? err.message : "Não foi possível carregar as aulas."));

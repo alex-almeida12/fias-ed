@@ -172,3 +172,27 @@ test("erro ao juntar escolas mostra aviso", async () => {
   expect(await within(row).findByRole("alert")).toHaveTextContent("Não foi possível juntar as escolas.");
   expect(screen.getByText("E. São José")).toBeInTheDocument();
 });
+
+// Ruling P15 (revisão): carregar deve limpar o erro anterior a cada tentativa — uma falha ao
+// recarregar não pode deixar o aviso preso mesmo depois de um recarregamento seguinte ter êxito.
+test("escolas: falha ao recarregar mostra aviso, e um recarregamento seguinte bem-sucedido o apaga", async () => {
+  const escola = { id: "e1", name: "Escola São José", municipality: "Mossoró", region: null };
+  let chamadasEscolas = 0;
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(ADMIN),
+    "GET /api/escolas": () => {
+      chamadasEscolas += 1;
+      // 1ª chamada (montagem): sucesso. 2ª (recarregar após 1º Salvar): falha. 3ª (recarregar
+      // após 2º Salvar): sucesso de novo.
+      if (chamadasEscolas === 2) return jsonResponse({ error_code: "ERRO", message: "Falha ao listar escolas." }, 500);
+      return jsonResponse([escola]);
+    },
+    "PATCH /api/admin/escolas/e1": () => jsonResponse(escola),
+  });
+  renderApp("/admin/escolas");
+  const row = (await screen.findByText("Escola São José")).closest("tr")!;
+  await userEvent.click(within(row).getByRole("button", { name: "Salvar" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Falha ao listar escolas.");
+  await userEvent.click(within(row).getByRole("button", { name: "Salvar" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+});
