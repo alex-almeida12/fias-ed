@@ -1,4 +1,6 @@
 import { vi } from "vitest";
+import { render } from "@testing-library/react";
+import { App } from "./app/App";
 
 export function jsonResponse(body: unknown, status = 200): Response {
   if (status === 204) return new Response(null, { status });
@@ -16,3 +18,14 @@ export function mockApi(handlers: Record<string, Handler>) {
     return handler(init, url);
   });
 }
+
+export function renderApp(path: string) {
+  window.history.pushState({}, "", path);
+  return render(<App />);
+}
+
+export const PROFESSORA = {
+  id: "p1", username: "ana", display_name: "Ana Souza", role: "PROFESSOR" as const,
+  must_change_password: false, acting_as: null,
+};
+export const ADMIN = { ...PROFESSORA, id: "a1", username: "admin", display_name: "Pesquisador", role: "ADMIN_LOCAL" as const };
