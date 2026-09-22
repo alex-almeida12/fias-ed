@@ -36,6 +36,7 @@ def error_message(code: str | None) -> str | None:
         "AUDIO_TOO_LARGE": (f"O arquivo passa de {format_size(s.max_upload_bytes)}. Tente exportar o "
                             "áudio em MP3 ou M4A, que ocupam menos espaço."),
         "AUDIO_LOCKED": "A análise desta aula já começou. Para usar outro áudio, crie uma nova aula.",
+        "AUDIO_PREPARO_FALHOU": "Não conseguimos preparar este áudio para análise. Tente enviar o arquivo de novo.",
         "JOB_FAILED": ("Algo deu errado ao preparar sua aula. Tente processar novamente; "
                        "se continuar, avise o administrador."),
     }
