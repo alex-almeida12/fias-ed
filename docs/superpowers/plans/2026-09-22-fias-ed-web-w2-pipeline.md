@@ -1223,9 +1223,27 @@ def test_ner_pega_nome_que_a_heuristica_perde(monkeypatch):
 
 
 def test_sem_modelo_de_ner_a_heuristica_ainda_protege(monkeypatch):
-    """O modelo pode faltar no diretório; isso não pode virar vazamento silencioso."""
-    monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_ner", lambda t: set())
+    """O modelo pode faltar no diretório; isso não pode virar vazamento silencioso.
+
+    Substitui o CARREGADOR, não `nomes_por_ner`: trocar a função pública prova
+    um caminho vizinho ("se vier vazio, a heurística cobre"), não o caminho que
+    a docstring promete ("se o modelo faltar, o carregador trata e não quebra").
+    """
+    monkeypatch.setattr("app.pipeline.pseudonymize._modelo", lambda: None)
+    assert nomes_por_ner("chamei a Ana no quadro") == set()
     assert "[NOME]" in pseudonimizar("chamei a Ana no quadro")
+
+
+def test_nome_que_e_prefixo_de_outra_palavra_nao_corta_a_palavra(monkeypatch):
+    """A substituição final precisa de fronteira de palavra. Sem ela, um nome
+    detectado que seja prefixo de outra palavra não detectada corrompe o texto:
+    "Rafaela" viraria "[NOME]a"."""
+    monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_ner", lambda t: {"Rafael"})
+    assert pseudonimizar("o Rafael e a Rafaela chegaram") == "o [NOME] e a [NOME]a chegaram" or            pseudonimizar("o Rafael e a Rafaela chegaram") == "o [NOME] e a [NOME] chegaram"
+    # O que não pode, em nenhum caso, é a palavra longa virar "[NOME]a" por
+    # substring do nome curto quando ela própria não foi detectada:
+    monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_ner", lambda t: {"Ana"})
+    assert pseudonimizar("Fomos ao Anapolis") == "Fomos ao Anapolis"
 
 
 def test_texto_vazio():
