@@ -27,10 +27,7 @@ function LinhaEscola({ escola, outras, onChange }: { escola: Escola; outras: Esc
 
   return (
     <tr>
-      <td>
-        <span className="meta">{escola.name}</span>
-        <TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={200} />
-      </td>
+      <td><TextField label="Nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={200} /></td>
       <td><TextField label="Município" value={municipio} onChange={(e) => setMunicipio(e.target.value)} maxLength={120} /></td>
       <td>
         <SelectField label="Região" value={regiao} onChange={(e) => setRegiao(e.target.value)}>
@@ -82,7 +79,7 @@ export function Escolas() {
       <h1>Escolas</h1>
       <p>Corrija nomes e junte escolas cadastradas em duplicidade. As turmas da escola juntada passam para a escola que fica.</p>
       {error && <Banner kind="error">{error}</Banner>}
-      <table className="table">
+      <table className="table table--campos">
         <thead>
           <tr><th>Nome</th><th>Município</th><th>Região</th><th><span className="visually-hidden">Salvar</span></th><th>Duplicidade</th></tr>
         </thead>

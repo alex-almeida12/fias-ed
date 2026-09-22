@@ -30,7 +30,8 @@
 
 /* Campos */
 .field { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
-.field__label { font-family: var(--type-label-font); font-size: var(--type-label-size); font-weight: var(--type-label-weight); }
+.field__label { font-family: var(--type-label-font); font-size: var(--type-label-size); font-weight: var(--type-label-weight);
+  line-height: var(--type-label-line); }
 .field__input { min-height: 44px; padding: var(--space-2) var(--space-3); border: var(--border-hairline) solid var(--color-muted);
   border-radius: var(--radius-sm); font: inherit; color: var(--color-text); background: var(--color-white); }
 .field__input[aria-invalid="true"] { border-color: var(--color-error); }
@@ -98,6 +99,19 @@
 .meta { color: var(--color-text-muted); font-size: var(--type-caption-size); }
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { text-align: left; padding: var(--space-3) var(--space-2); border-bottom: var(--border-hairline) solid var(--color-border); }
+/* Tabela de texto mantém o alinhamento vertical ao meio: a linha de texto casa com
+   o rótulo de um botão de 44px, que é centrado na própria altura.
+
+   Tabela cujas células são campos de formulário (ex.: Escolas) alinha pelo topo —
+   ao meio, cada coluna se centraria pela própria altura e os campos de uma mesma
+   linha não se alinhariam entre si. */
+.table--campos th, .table--campos td { vertical-align: top; }
+.table--campos td > .field:last-child { margin-bottom: 0; }
+/* Célula que só tem ação, sem rótulo acima: desce exatamente uma linha de rótulo
+   mais o intervalo do .field, para o botão ficar alinhado aos campos vizinhos e
+   não aos rótulos deles. O valor sai dos tokens, não é medida solta. Só vale nesta
+   variante: numa tabela de texto, a ação alinha com o texto e não leva recuo. */
+.table--campos td > .btn:first-child { margin-top: calc(var(--type-label-size) * var(--type-label-line) + var(--space-1)); }
 
 /* Home */
 .home { display: grid; gap: var(--space-7); max-width: 72rem; margin: 0 auto; padding: var(--space-7) var(--space-4); }
