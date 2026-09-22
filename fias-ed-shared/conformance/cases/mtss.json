@@ -1,0 +1,97 @@
+{
+  "rules_version": "1.0.0",
+  "cases": [
+    {
+      "id": "mtss-lesson-expositive",
+      "function": "evaluate_mtss",
+      "description": "lesson-expositive",
+      "input": {
+        "intervals": [
+          5,
+          5,
+          5,
+          4,
+          8,
+          8,
+          10
+        ]
+      },
+      "expected": [
+        "MTSS_EXPOSITIVE_PREDOMINANCE",
+        "MTSS_DIRECT_OVER_INDIRECT",
+        "MTSS_NO_STUDENT_INITIATIVE",
+        "MTSS_NO_IDEA_UPTAKE",
+        "MTSS_NO_PRAISE",
+        "MTSS_QUESTIONS_PRESENT"
+      ]
+    },
+    {
+      "id": "mtss-lesson-dialogic",
+      "function": "evaluate_mtss",
+      "description": "lesson-dialogic",
+      "input": {
+        "intervals": [
+          4,
+          8,
+          3,
+          9,
+          2,
+          4,
+          8,
+          3,
+          10
+        ]
+      },
+      "expected": [
+        "MTSS_STUDENT_INITIATIVE_PRESENT",
+        "MTSS_QUESTIONS_PRESENT"
+      ]
+    },
+    {
+      "id": "mtss-lesson-teacher-only-indirect",
+      "function": "evaluate_mtss",
+      "description": "lesson-teacher-only-indirect",
+      "input": {
+        "intervals": [
+          4,
+          4,
+          10
+        ]
+      },
+      "expected": [
+        "MTSS_QUESTIONS_PRESENT"
+      ]
+    },
+    {
+      "id": "mtss-lesson-empty",
+      "function": "evaluate_mtss",
+      "description": "lesson-empty",
+      "input": {
+        "intervals": []
+      },
+      "expected": []
+    },
+    {
+      "id": "mtss-lesson-reactive",
+      "function": "evaluate_mtss",
+      "description": "lesson-reactive",
+      "input": {
+        "intervals": [
+          5,
+          7,
+          6,
+          7,
+          8,
+          10
+        ]
+      },
+      "expected": [
+        "MTSS_DIRECT_OVER_INDIRECT",
+        "MTSS_NO_STUDENT_INITIATIVE",
+        "MTSS_NO_IDEA_UPTAKE",
+        "MTSS_NO_PRAISE",
+        "MTSS_REACTIVE_MANAGEMENT_PRESENT"
+      ]
+    }
+  ]
+}

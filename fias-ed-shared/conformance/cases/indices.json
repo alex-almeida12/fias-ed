@@ -1,0 +1,303 @@
+{
+  "rules_version": "1.0.0",
+  "cases": [
+    {
+      "id": "indices-lesson-expositive",
+      "function": "compute_indices",
+      "description": "lesson-expositive",
+      "input": {
+        "intervals": [
+          5,
+          5,
+          5,
+          4,
+          8,
+          8,
+          10
+        ],
+        "n_segments": 7,
+        "confidences": [
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8
+        ]
+      },
+      "expected": {
+        "TT": {
+          "value": 0.5714285714285714,
+          "reason": null,
+          "numerator_count": 4,
+          "denominator_count": 7
+        },
+        "PT": {
+          "value": 0.2857142857142857,
+          "reason": null,
+          "numerator_count": 2,
+          "denominator_count": 7
+        },
+        "SC": {
+          "value": 0.14285714285714285,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 7
+        },
+        "ID_RATIO": {
+          "value": 0.3333333333333333,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 3
+        },
+        "PIR": {
+          "value": 0.0,
+          "reason": null,
+          "numerator_count": 0,
+          "denominator_count": 2
+        },
+        "PUPIL_RESPONSE_RATIO": {
+          "value": 1.0,
+          "reason": null,
+          "numerator_count": 2,
+          "denominator_count": 2
+        }
+      }
+    },
+    {
+      "id": "indices-lesson-dialogic",
+      "function": "compute_indices",
+      "description": "lesson-dialogic",
+      "input": {
+        "intervals": [
+          4,
+          8,
+          3,
+          9,
+          2,
+          4,
+          8,
+          3,
+          10
+        ],
+        "n_segments": 9,
+        "confidences": [
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8
+        ]
+      },
+      "expected": {
+        "TT": {
+          "value": 0.5555555555555556,
+          "reason": null,
+          "numerator_count": 5,
+          "denominator_count": 9
+        },
+        "PT": {
+          "value": 0.3333333333333333,
+          "reason": null,
+          "numerator_count": 3,
+          "denominator_count": 9
+        },
+        "SC": {
+          "value": 0.1111111111111111,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 9
+        },
+        "ID_RATIO": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 5,
+          "denominator_count": 0
+        },
+        "PIR": {
+          "value": 0.3333333333333333,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 3
+        },
+        "PUPIL_RESPONSE_RATIO": {
+          "value": 0.6666666666666666,
+          "reason": null,
+          "numerator_count": 2,
+          "denominator_count": 3
+        }
+      }
+    },
+    {
+      "id": "indices-lesson-teacher-only-indirect",
+      "function": "compute_indices",
+      "description": "lesson-teacher-only-indirect",
+      "input": {
+        "intervals": [
+          4,
+          4,
+          10
+        ],
+        "n_segments": 3,
+        "confidences": [
+          0.8,
+          0.8,
+          0.8
+        ]
+      },
+      "expected": {
+        "TT": {
+          "value": 0.6666666666666666,
+          "reason": null,
+          "numerator_count": 2,
+          "denominator_count": 3
+        },
+        "PT": {
+          "value": 0.0,
+          "reason": null,
+          "numerator_count": 0,
+          "denominator_count": 3
+        },
+        "SC": {
+          "value": 0.3333333333333333,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 3
+        },
+        "ID_RATIO": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 2,
+          "denominator_count": 0
+        },
+        "PIR": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 0,
+          "denominator_count": 0
+        },
+        "PUPIL_RESPONSE_RATIO": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 0,
+          "denominator_count": 0
+        }
+      }
+    },
+    {
+      "id": "indices-lesson-empty",
+      "function": "compute_indices",
+      "description": "lesson-empty",
+      "input": {
+        "intervals": [],
+        "n_segments": 0,
+        "confidences": []
+      },
+      "expected": {
+        "TT": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 0,
+          "denominator_count": 0
+        },
+        "PT": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 0,
+          "denominator_count": 0
+        },
+        "SC": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 0,
+          "denominator_count": 0
+        },
+        "ID_RATIO": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 0,
+          "denominator_count": 0
+        },
+        "PIR": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 0,
+          "denominator_count": 0
+        },
+        "PUPIL_RESPONSE_RATIO": {
+          "value": null,
+          "reason": "insufficient_data",
+          "numerator_count": 0,
+          "denominator_count": 0
+        }
+      }
+    },
+    {
+      "id": "indices-lesson-reactive",
+      "function": "compute_indices",
+      "description": "lesson-reactive",
+      "input": {
+        "intervals": [
+          5,
+          7,
+          6,
+          7,
+          8,
+          10
+        ],
+        "n_segments": 6,
+        "confidences": [
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8
+        ]
+      },
+      "expected": {
+        "TT": {
+          "value": 0.6666666666666666,
+          "reason": null,
+          "numerator_count": 4,
+          "denominator_count": 6
+        },
+        "PT": {
+          "value": 0.16666666666666666,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 6
+        },
+        "SC": {
+          "value": 0.16666666666666666,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 6
+        },
+        "ID_RATIO": {
+          "value": 0.0,
+          "reason": null,
+          "numerator_count": 0,
+          "denominator_count": 4
+        },
+        "PIR": {
+          "value": 0.0,
+          "reason": null,
+          "numerator_count": 0,
+          "denominator_count": 1
+        },
+        "PUPIL_RESPONSE_RATIO": {
+          "value": 1.0,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 1
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,149 @@
+{
+  "rules_version": "1.0.0",
+  "cases": [
+    {
+      "id": "seg-empty",
+      "function": "segments_to_intervals",
+      "description": "Áudio sem fala vira silêncio",
+      "input": {
+        "segments": [],
+        "total_ms": 9000
+      },
+      "expected": [
+        10,
+        10,
+        10
+      ]
+    },
+    {
+      "id": "seg-partial-last",
+      "function": "segments_to_intervals",
+      "description": "Último intervalo parcial conta",
+      "input": {
+        "segments": [],
+        "total_ms": 7000
+      },
+      "expected": [
+        10,
+        10,
+        10
+      ]
+    },
+    {
+      "id": "seg-largest",
+      "function": "segments_to_intervals",
+      "description": "Maior cobertura vence",
+      "input": {
+        "segments": [
+          {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "category": 5
+          },
+          {
+            "start_ms": 1000,
+            "end_ms": 3000,
+            "category": 4
+          }
+        ],
+        "total_ms": 3000
+      },
+      "expected": [
+        4
+      ]
+    },
+    {
+      "id": "seg-tie",
+      "function": "segments_to_intervals",
+      "description": "Empate: segmento que começa antes",
+      "input": {
+        "segments": [
+          {
+            "start_ms": 0,
+            "end_ms": 1500,
+            "category": 5
+          },
+          {
+            "start_ms": 1500,
+            "end_ms": 3000,
+            "category": 8
+          }
+        ],
+        "total_ms": 3000
+      },
+      "expected": [
+        5
+      ]
+    },
+    {
+      "id": "seg-span",
+      "function": "segments_to_intervals",
+      "description": "Segmento cobrindo vários intervalos",
+      "input": {
+        "segments": [
+          {
+            "start_ms": 500,
+            "end_ms": 7000,
+            "category": 5
+          }
+        ],
+        "total_ms": 9000
+      },
+      "expected": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "id": "seg-gap",
+      "function": "segments_to_intervals",
+      "description": "Intervalo sem fala = 10",
+      "input": {
+        "segments": [
+          {
+            "start_ms": 0,
+            "end_ms": 3000,
+            "category": 4
+          },
+          {
+            "start_ms": 6000,
+            "end_ms": 9000,
+            "category": 8
+          }
+        ],
+        "total_ms": 9000
+      },
+      "expected": [
+        4,
+        10,
+        8
+      ]
+    },
+    {
+      "id": "seg-unsorted",
+      "function": "segments_to_intervals",
+      "description": "Entrada fora de ordem",
+      "input": {
+        "segments": [
+          {
+            "start_ms": 6000,
+            "end_ms": 9000,
+            "category": 8
+          },
+          {
+            "start_ms": 0,
+            "end_ms": 3000,
+            "category": 4
+          }
+        ],
+        "total_ms": 9000
+      },
+      "expected": [
+        4,
+        10,
+        8
+      ]
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "rules_version": "1.0.0",
+  "cases": [
+    {
+      "id": "role-agree",
+      "function": "constrain_by_role",
+      "description": "role-agree",
+      "input": {
+        "logits": [
+          0,
+          0,
+          0,
+          0,
+          5,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "role": "PROFESSOR"
+      },
+      "expected": {
+        "pred_raw": 5,
+        "pred_role_constrained": 5,
+        "confidence_raw": 0.9428256185740149,
+        "confidence": 0.9428256185740149,
+        "uncertain": false
+      }
+    },
+    {
+      "id": "role-teacher-diverge",
+      "function": "constrain_by_role",
+      "description": "role-teacher-diverge",
+      "input": {
+        "logits": [
+          0,
+          0,
+          4,
+          0,
+          0,
+          0,
+          0,
+          5,
+          0,
+          0
+        ],
+        "role": "PROFESSOR"
+      },
+      "expected": {
+        "pred_raw": 8,
+        "pred_role_constrained": 3,
+        "confidence_raw": 0.7033422033655949,
+        "confidence": 0.258745136726426,
+        "uncertain": true
+      }
+    },
+    {
+      "id": "role-student-diverge",
+      "function": "constrain_by_role",
+      "description": "role-student-diverge",
+      "input": {
+        "logits": [
+          0,
+          0,
+          0,
+          0,
+          5,
+          0,
+          0,
+          0,
+          4,
+          0
+        ],
+        "role": "ALUNO"
+      },
+      "expected": {
+        "pred_raw": 5,
+        "pred_role_constrained": 9,
+        "confidence_raw": 0.7033422033655949,
+        "confidence": 0.258745136726426,
+        "uncertain": true
+      }
+    },
+    {
+      "id": "role-flat-uncertain",
+      "function": "constrain_by_role",
+      "description": "role-flat-uncertain",
+      "input": {
+        "logits": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "role": "PROFESSOR"
+      },
+      "expected": {
+        "pred_raw": 1,
+        "pred_role_constrained": 1,
+        "confidence_raw": 0.1,
+        "confidence": 0.1,
+        "uncertain": true
+      }
+    }
+  ]
+}
