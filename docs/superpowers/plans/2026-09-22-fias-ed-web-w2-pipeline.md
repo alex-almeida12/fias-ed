@@ -537,7 +537,7 @@ Criar `backend/app/ml/__init__.py` vazio.
 Em `app/core/config.py`, dentro de `Settings`:
 
 ```python
-    models_dir: Path = Path("/models")
+    models_dir: str = "/models"
     # Derivado de shared_dir, que já é a resposta do projeto para "onde o shared
     # está montado". Duas bases independentes divergiriam no deploy.
     models_registry_rel: str = "scientific-config/models.json"
