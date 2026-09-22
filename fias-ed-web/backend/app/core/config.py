@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     job_poll_seconds: float = 2.0
     job_stale_minutes: int = 30
     job_max_attempts: int = 3
+    models_dir: str = "/models"
+    models_registry: str = "/shared/scientific-config/models.json"
+    asr_size: str = "small"
+    asr_model_id: str = "faster-whisper-small"
+    diar_model_id: str = "pyannote-speaker-diarization-3.1"
+    clf_model_id: str = "fias-bertimbau-ptbr-frente3"
+    usar_modelos_falsos: bool = False
 
 
 @lru_cache
