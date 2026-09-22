@@ -112,8 +112,8 @@ base comum `id` UUID, `created_at`, `updated_at`, `deleted_at`, `version`,
 
 | Tabela | Campos específicos (schema) | Observações |
 |---|---|---|
-| `professor` | `username`, `display_name`, `role` (ADMIN_LOCAL, PROFESSOR) | + `password_hash`, `is_active`, `failed_logins`, `locked_until` — só no banco, nunca na API nem na exportação |
-| `escola` | `professor_id` (acrescentado ao schema, ver abaixo), `name`, `municipality`, `region` | criada pelo professor |
+| `professor` | `username`, `display_name`, `role` (ADMIN_LOCAL, PROFESSOR) | + `password_hash`, `is_active`, `must_change_password`, `failed_logins`, `locked_until` — só no banco, nunca na API nem na exportação |
+| `escola` | `name`, `municipality`, `region` | cadastro comum a todos os professores (ver §4.3) |
 | `turma` | `escola_id` (opcional), `professor_id`, `name`, `school_year`, `level` | |
 | `disciplina` | `professor_id`, `name` | |
 | `aula` | `professor_id`, `turma_id`, `disciplina_id`, `lesson_date`, `status`, `note`, `error_code` | |
@@ -124,14 +124,25 @@ Tabelas internas (fora do modelo lógico compartilhado, não exportadas):
 
 | Tabela | Campos |
 |---|---|
-| `sessao` | `id`, `professor_id`, `token_sha256`, `csrf_token_sha256`, `created_at`, `last_seen_at`, `expires_at` |
+| `sessao` | `id`, `professor_id`, `acting_as_professor_id` (só admin), `token_sha256`, `csrf_token_sha256`, `created_at`, `last_seen_at`, `expires_at` |
 | `job` | `id`, `type`, `aula_id`, `status` (queued, running, done, failed), `attempts`, `error_code`, `locked_at`, `created_at`, `finished_at` |
-| `acesso_admin` | `id`, `admin_id`, `resource`, `resource_id`, `action`, `created_at` |
+| `acesso_admin` | `id`, `admin_id`, `professor_id` (dono dos dados), `resource`, `resource_id`, `action` (`read`, `create`, `update`, `delete`, `upload`, `process`), `created_at` |
 
-O schema `escola` do shared não tem `professor_id`. W1 acrescenta
-`professor_id` (uuid, obrigatório) a `escola.schema.json`, ao exemplo, ao
-ENTITY_DICTIONARY.md e às tabelas de exportação do shared, com testes do
-shared verdes — o banco nunca diverge do schema.
+### 4.3 Escola como cadastro comum
+
+No modelo do shared, `Escola` é a instituição; o vínculo com o professor é
+feito pela `Turma` (`professor_id`). Vários professores dão aula na mesma
+escola, por isso a escola **não tem dono** e o schema do shared não muda:
+
+- qualquer professor escolhe uma escola existente ou cria uma nova (nome,
+  município, região);
+- ao criar, o sistema procura escolas com o mesmo nome (sem diferenciar
+  maiúsculas, acentos e espaços extras) no mesmo município e oferece usar a
+  existente;
+- o ADMIN_LOCAL corrige dados de escolas e junta duplicatas (as turmas da
+  escola removida passam para a escola mantida; a removida recebe
+  `deleted_at`);
+- turma e disciplina continuam pertencendo ao professor.
 
 ### 4.2 Compatibilidade com o shared
 
@@ -154,6 +165,10 @@ mesmo conjunto de valores para enums.
   `SameSite=Strict`, `Secure`, `Path=/`. Expira após 2 h de inatividade ou
   12 h absolutas. Logout apaga a linha. Troca ou redefinição de senha apaga
   todas as sessões do professor.
+- **Senha provisória:** quando o admin cria a conta ou redefine a senha, o
+  sistema gera uma senha provisória aleatória (mostrada uma única vez ao
+  admin) e marca `must_change_password`; no primeiro acesso, o professor só
+  consegue trocar a senha antes de usar o sistema.
 - **CSRF (prompt §61):** token por sessão, entregue em cookie legível
   `fias_csrf` e exigido no cabeçalho `X-CSRF-Token` em POST/PUT/PATCH/DELETE;
   comparação em tempo constante.
@@ -167,16 +182,27 @@ mesmo conjunto de valores para enums.
   por `professor_id` do usuário atual. Recurso de outro professor → **404**
   (não revela existência).
 - **ADMIN_LOCAL:**
-  - administra contas;
-  - **lê** aulas, áudios (inclusive reprodução), transcrições e relatórios de
-    todos os professores, **somente leitura** — não edita nem apaga dados de
-    aulas de outros professores, preservando que o conteúdo analisado é o que
-    o professor produziu e revisou;
-  - cada leitura de dados de outro professor gera uma linha em
-    `acesso_admin`;
-  - pode ter aulas próprias, nas quais age como professor.
+  - administra contas e escolas;
+  - vê a lista de aulas de todos os professores (filtro por professor);
+  - **pode fazer tudo o que o professor faz, em nome de qualquer professor:**
+    escolhe um professor ("Agir como") e passa a usar as mesmas telas e rotas
+    do professor sobre os dados dele — criar aulas, enviar e substituir áudio,
+    processar, excluir e, nas fatias seguintes, revisar falantes e
+    transcrição, lançar o QTI e gerar o relatório. O professor escolhido fica
+    em `sessao.acting_as_professor_id`; todas as rotas de professor usam o
+    "professor efetivo" (o próprio usuário, ou o escolhido pelo admin);
+  - a aula continua pertencendo ao professor (`professor_id` dele), mesmo
+    quando criada pelo admin;
+  - uma faixa fixa no topo da tela mostra "Você está agindo como:
+    <nome do professor>" com o botão **Voltar à minha conta**;
+  - **cada leitura ou alteração** do admin em dados de outro professor gera
+    uma linha em `acesso_admin`; o professor vê, na própria aula, o aviso
+    "Alterada pelo administrador em <data>" quando houver alteração feita
+    pelo admin;
+  - pode ter aulas próprias, nas quais age como professor comum.
 - `PRIVACY.md` do shared é atualizado: o pesquisador (ADMIN_LOCAL) tem acesso
-  de leitura aos dados das aulas, e esse acesso é registrado.
+  total às aulas dos professores, e toda leitura ou alteração dele é
+  registrada.
 
 ## 7. Aula, upload e validação do áudio
 
@@ -190,8 +216,15 @@ mesmo conjunto de valores para enums.
    `audio_store/original/<uuid>.<ext>` com permissão somente leitura;
    `aula.status = AUDIO_IMPORTED`. O nome original é guardado apenas em
    `original_filename` (texto), nunca usado para montar caminhos — o caminho
-   é sempre derivado do UUID (prompt §56). Enviar novo áudio para uma aula em
-   `AUDIO_IMPORTED`/`ERROR` substitui o anterior (arquivo antigo apagado).
+   é sempre derivado do UUID (prompt §56).
+   **Substituir o áudio** só é permitido antes do início da análise (status
+   `DRAFT`, `AUDIO_IMPORTED`, `AUDIO_VALIDATED` ou `ERROR`) e exige
+   confirmação em diálogo: "Substituir o áudio? O arquivo anterior será
+   apagado." O arquivo anterior é apagado fisicamente depois que o novo
+   termina de ser recebido; a aula volta para `AUDIO_IMPORTED`. A partir do
+   início da análise (W2), trocar o áudio exige criar uma nova aula, para não
+   misturar resultados de áudios diferentes (a API responde
+   `AUDIO_LOCKED`).
 3. **Processar aula:** cria um `job` do tipo `validate_audio`. O worker
    executa `ffprobe` com lista de argumentos (sem `shell=True`, sem
    `os.system`; prompt §57) e verifica:
@@ -244,9 +277,16 @@ normalização pertencem a W2 (`is_original = false`,
 - O professor exclui uma aula: arquivos de áudio apagados fisicamente na
   hora; linhas de `aula`, `audio`, `processamento` recebem `deleted_at` e
   somem de todas as consultas.
-- O admin desativa uma conta: sessões apagadas, login impedido; dados
-  mantidos. Exclusão de conta: mesma regra de exclusão para todas as aulas do
-  professor.
+- Ações do admin sobre contas (três ações distintas):
+  - **Desativar:** login impedido e sessões apagadas; dados mantidos; o
+    admin continua acessando e agindo sobre as aulas do professor e pode
+    **reativar** a conta.
+  - **Redefinir senha:** gera senha provisória (§5).
+  - **Excluir conta:** ação separada, que exige digitar o nome de usuário
+    para confirmar; apaga fisicamente todos os áudios do professor e marca
+    `deleted_at` no professor e em todas as suas turmas, disciplinas, aulas,
+    áudios e processamentos. Não é possível excluir a própria conta nem o
+    último ADMIN_LOCAL ativo.
 
 ## 8. API
 
@@ -259,14 +299,20 @@ tamanho em todos os campos de texto (nomes ≤ 120, observação ≤ 2000).
 | `POST /api/auth/logout` | autenticado | apaga sessão |
 | `GET /api/auth/me` | autenticado | usuário atual |
 | `POST /api/auth/password` | autenticado | troca a própria senha |
-| `GET/POST /api/turmas`, `/api/disciplinas`, `/api/escolas` | professor | listar/criar próprios |
-| `GET/POST /api/aulas` | professor | listar/criar próprias |
-| `GET/DELETE /api/aulas/{id}` | professor | detalhe/excluir |
-| `PUT /api/aulas/{id}/audio` | professor | upload (streaming) |
-| `GET /api/aulas/{id}/audio` | professor, admin (leitura) | reprodução do original (suporta `Range`) |
-| `POST /api/aulas/{id}/processar` | professor | enfileira `validate_audio` |
-| `GET/POST /api/admin/contas`, `PATCH /api/admin/contas/{id}` | admin | contas |
-| `GET /api/admin/aulas[?professor_id=]`, `GET /api/admin/aulas/{id}` | admin | leitura, com registro em `acesso_admin` |
+| `GET/POST /api/turmas`, `/api/disciplinas` | professor efetivo | listar/criar próprias |
+| `GET/POST /api/escolas` | professor efetivo | listar/criar (cadastro comum; `POST` devolve possíveis duplicatas) |
+| `GET/POST /api/aulas` | professor efetivo | listar/criar |
+| `GET/DELETE /api/aulas/{id}` | professor efetivo | detalhe/excluir |
+| `PUT /api/aulas/{id}/audio` | professor efetivo | upload/substituição (streaming) |
+| `GET /api/aulas/{id}/audio` | professor efetivo | reprodução do original (suporta `Range`) |
+| `POST /api/aulas/{id}/processar` | professor efetivo | enfileira `validate_audio` |
+| `POST /api/admin/agir-como`, `DELETE /api/admin/agir-como` | admin | começa/termina a ação em nome de um professor |
+| `GET /api/admin/aulas[?professor_id=]` | admin | lista de aulas de todos os professores |
+| `GET/POST /api/admin/contas`, `PATCH /api/admin/contas/{id}`, `POST /api/admin/contas/{id}/senha-provisoria`, `DELETE /api/admin/contas/{id}` | admin | contas (desativar/reativar via `PATCH`) |
+| `PATCH /api/admin/escolas/{id}`, `POST /api/admin/escolas/{id}/juntar` | admin | corrigir e juntar escolas |
+
+"Professor efetivo" = o próprio usuário, ou o professor escolhido pelo admin
+em "agir como".
 | `GET /api/health` | interno | healthcheck |
 
 Erros: handler global responde `{"error_code": "...", "message": "..."}` em
@@ -299,17 +345,46 @@ Um teste verifica que um fluxo completo não grava esses valores no log.
 | **Dashboard — Minhas aulas** | lista (data, turma, disciplina, status humano); botão **Adicionar aula**; estado vazio acolhedor. |
 | **Nova Aula / Upload** (§15) | campos Turma, Disciplina, Data, Observação opcional; área "Adicionar áudio da aula" com o texto "Selecione o arquivo de áudio gravado durante sua aula."; botões **Selecionar áudio** e **Processar aula**; barra de progresso do envio; erros explicados em português. |
 | **Aula** | status humano, mensagem do §36 enquanto houver job ativo (W1: "Preparando sua aula..."), dados do áudio, player do original, enviar outro áudio em caso de erro, excluir aula (com confirmação em diálogo próprio). |
-| **Admin — Contas** | criar professor, desativar, redefinir senha. |
-| **Admin — Aulas dos professores** | lista com filtro por professor; detalhe somente leitura. |
+| **Trocar senha** | obrigatória no primeiro acesso com senha provisória. |
+| **Admin — Contas** | criar professor (mostra a senha provisória uma vez), desativar/reativar, redefinir senha, excluir conta (confirmação digitando o nome de usuário). |
+| **Admin — Aulas dos professores** | lista de aulas de todos os professores com filtro por professor; botão **Agir como este professor**. |
+| **Admin — Escolas** | corrigir dados e juntar duplicatas. |
 
-Status humano (W1):
+Status em linguagem humana — todos os 17 status definidos já em W1 (W2 e W3
+apenas passam a usá-los). Um único módulo do frontend mapeia status → texto;
+um teste garante que todo valor do enum de `aula.status` tem texto.
 
-| Status | Texto |
+| Status | Texto na tela |
 |---|---|
-| `DRAFT` | Aguardando áudio |
-| `AUDIO_IMPORTED` | Áudio enviado |
-| `AUDIO_VALIDATED` | Áudio pronto para análise |
-| `ERROR` | Precisa de atenção |
+| `DRAFT` | Aguardando o áudio da aula |
+| `AUDIO_IMPORTED` | Áudio recebido, pronto para processar |
+| `AUDIO_VALIDATED` | Áudio conferido |
+| `PREPROCESSING`, `TRANSCRIBING`, `TRANSCRIBED`, `DIARIZING` | Analisando sua aula… |
+| `READY_FOR_SPEAKER_REVIEW` | Confirme qual voz é a sua |
+| `READY_FOR_TRANSCRIPT_REVIEW` | Revise a transcrição, se quiser |
+| `READY_FOR_FIAS`, `FIAS_COMPLETED` | Padrões de interação prontos |
+| `WAITING_QTI` | Aguardando a percepção dos estudantes |
+| `QTI_COMPLETED`, `TRIANGULATED`, `MTSS_INTERPRETED` | Preparando a interpretação pedagógica… |
+| `REPORT_READY` | Relatório da aula disponível |
+| `ERROR` | Precisa de atenção (seguido da mensagem do erro) |
+
+Enquanto houver job ativo, a tela da aula mostra a mensagem do §36 da etapa
+(W1: "Preparando sua aula...").
+
+Mensagens de erro (sempre dizendo o que fazer):
+
+| `error_code` | Mensagem |
+|---|---|
+| `AUDIO_FORMAT_MISMATCH`, `AUDIO_UNSUPPORTED_FORMAT` | Este arquivo não parece ser um áudio MP3, WAV, M4A, AAC ou FLAC. Tente exportar o áudio novamente no gravador. |
+| `AUDIO_TOO_LONG` | O áudio tem mais de 2h30. Divida a gravação e envie cada parte como uma aula. |
+| `AUDIO_TOO_SHORT` | O áudio tem menos de 1 minuto. Verifique se é o arquivo certo. |
+| `AUDIO_CORRUPTED` | Não conseguimos ler este arquivo. Ele pode estar incompleto; tente copiá-lo de novo do gravador. |
+| `AUDIO_TOO_LARGE` | O arquivo passa de 1,5 GB. Tente exportar o áudio em MP3 ou M4A, que ocupam menos espaço. |
+| `AUDIO_LOCKED` | A análise desta aula já começou. Para usar outro áudio, crie uma nova aula. |
+| `JOB_FAILED` | Algo deu errado ao preparar sua aula. Tente processar novamente; se continuar, avise o administrador. |
+
+Os limites citados nas mensagens (1,5 GB, 2h30, 1 minuto) vêm da configuração
+(§7.2), não de texto fixo.
 
 - Atualização de progresso: consulta ao status da aula a cada 3 s enquanto
   houver job `queued`/`running`.
@@ -329,7 +404,12 @@ tarefas de revisão visual param e aguardam a instalação.
   compose; `docker compose run --rm api pytest`). Cobre: compatibilidade com
   os schemas do shared; Argon2id; sessão (expiração por inatividade e
   absoluta, logout, invalidação ao trocar senha); CSRF; bloqueio após 5
-  falhas; ownership; somente leitura do admin e registro em `acesso_admin`;
+  falhas; senha provisória e troca obrigatória; ownership; "agir como" do
+  admin (rotas de professor sobre dados de outro professor, aula continua do
+  professor, registro em `acesso_admin` de leituras e alterações, aviso
+  "alterada pelo administrador"); desativar/reativar/excluir conta (não
+  exclui a própria nem o último admin); escolas (detecção de duplicata,
+  junção); substituição de áudio (permitida só antes da análise);
   upload e validação com áudios pequenos gerados no teste (WAV, FLAC, MP3,
   M4A e arquivo com extensão falsa); jobs (retomada de job travado, limite de
   tentativas); exclusão física dos arquivos; logs sem dados sensíveis.
@@ -339,8 +419,10 @@ tarefas de revisão visual param e aguardam a instalação.
   path traversal no nome do arquivo (`../`, `..\`), upload malformado,
   arquivo grande demais, extensão falsa, sessão inválida/expirada/forjada,
   endpoint administrativo acessado por professor, ausência de `X-CSRF-Token`.
-- **Frontend:** Vitest + Testing Library (fluxo de login, Nova Aula, upload,
-  status humano, XSS renderizado como texto); ESLint.
+- **Frontend:** Vitest + Testing Library (fluxo de login, troca obrigatória
+  de senha, Nova Aula, upload, confirmação de substituição, faixa "agindo
+  como", status humano para todo o enum, mensagens de erro, XSS renderizado
+  como texto); ESLint.
 - **Auditorias em W1:** `bandit`, `pip-audit`, `npm audit` (prompt §69–70).
   gitleaks e SECURITY_AUDIT.md ficam em W4.
 - **Dependências (prompt §68):** cada dependência nova é registrada no
@@ -351,8 +433,9 @@ tarefas de revisão visual param e aguardam a instalação.
 - `fias-ed-web/README.md`: pré-requisitos, `.env`, subir o sistema, criar o
   admin, rodar testes e auditorias, backup e restauração dos volumes
   (`pgdata`, `audio_store`), lista de dependências com licença.
-- `fias-ed-shared/docs/PRIVACY.md`: acesso de leitura do ADMIN_LOCAL,
-  `acesso_admin`, exclusão física de áudio, localização dos dados (volumes
+- `fias-ed-shared/docs/PRIVACY.md`: acesso total do ADMIN_LOCAL às aulas
+  dos professores, registro em `acesso_admin`, escola como cadastro comum,
+  exclusão física de áudio, localização dos dados (volumes
   Docker no PC do pesquisador).
 - `ARCHITECTURE.md` (raiz): containers, fila `job`, sessão, estado de W1.
 
@@ -368,17 +451,21 @@ sincronização com Android; gravação dentro do app (OPTIONAL_FEATURE, §12).
 
 1. `docker compose up` sobe `web`, `api`, `worker` e `db` saudáveis; apenas
    `127.0.0.1:8080` publicado.
-2. Fluxo completo: `create-admin` → admin cria professor → professor entra →
-   cria aula → envia áudio → processa → aula em `AUDIO_VALIDATED`. Arquivo
-   com extensão falsa → `ERROR` com `AUDIO_FORMAT_MISMATCH`.
-3. pytest e vitest verdes, incluindo os testes de segurança da §11.
-4. Teste de compatibilidade das tabelas com os schemas do shared verde.
-5. `bandit`, `pip-audit` e `npm audit` sem achados HIGH ou CRITICAL não
+2. Fluxo completo: `create-admin` → admin cria professor → professor entra
+   com a senha provisória e troca a senha → cria aula → envia áudio →
+   processa → aula em `AUDIO_VALIDATED`. Arquivo com extensão falsa →
+   `ERROR` com `AUDIO_FORMAT_MISMATCH` e mensagem humana.
+3. O admin age como o professor, cria e processa uma aula em nome dele; a
+   aula aparece para o professor com o aviso "Alterada pelo administrador" e
+   as ações constam em `acesso_admin`.
+4. pytest e vitest verdes, incluindo os testes de segurança da §11.
+5. Teste de compatibilidade das tabelas com os schemas do shared verde.
+6. `bandit`, `pip-audit` e `npm audit` sem achados HIGH ou CRITICAL não
    tratados (tratamentos registrados no README).
-6. Nenhum container como root ou privilegiado; API e worker conectam como
+7. Nenhum container como root ou privilegiado; API e worker conectam como
    `fias_ed_app`, que não tem permissão de DDL (teste).
-7. Home, Dashboard, Nova Aula e Upload revisadas com Impeccable e aprovadas
+8. Home, Dashboard, Nova Aula e Upload revisadas com Impeccable e aprovadas
    no critério do §84.
-8. Cabeçalhos de segurança presentes nas respostas do nginx (teste).
-9. Nenhum arquivo alterado em `artigos selecionados\` ou
+9. Cabeçalhos de segurança presentes nas respostas do nginx (teste).
+10. Nenhum arquivo alterado em `artigos selecionados\` ou
    `avalie-seu-professor\`.
