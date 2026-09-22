@@ -2,20 +2,26 @@
 import uuid
 
 import pytest
-from fastapi.routing import APIRoute
 
 from app.main import create_app
 from tests.helpers import login, make_user
 
 PUBLIC = {("POST", "/api/auth/login"), ("GET", "/api/health")}
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
+_HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 
 
 def _routes():
-    for route in create_app().routes:
-        if isinstance(route, APIRoute) and route.path.startswith("/api"):
-            for method in route.methods - {"HEAD", "OPTIONS"}:
-                yield method, route.path
+    # app.routes é uma lista de _IncludedRouter (wrappers internos do FastAPI 0.141) e não expõe
+    # method/path diretamente nem o prefixo "/api" nos objetos aninhados. app.openapi() é a API
+    # pública e estável que já resolve tudo isso (funciona mesmo com openapi_url=None).
+    schema = create_app().openapi()
+    for path, operations in schema["paths"].items():
+        if not path.startswith("/api"):
+            continue
+        for method in operations:
+            if method in _HTTP_METHODS:
+                yield method.upper(), path
 
 
 def _url(path: str) -> str:
@@ -25,6 +31,15 @@ def _url(path: str) -> str:
 
 
 ALL = sorted(set(_routes()))
+
+
+def test_routes_are_actually_collected():
+    """Guarda contra _routes() voltar a coletar 0 rotas silenciosamente (achado da revisão da Task 11)."""
+    assert len(ALL) >= 25, len(ALL)
+    for expected in (("POST", "/api/auth/login"), ("GET", "/api/health"), ("GET", "/api/aulas"),
+                      ("POST", "/api/aulas"), ("GET", "/api/admin/contas"),
+                      ("DELETE", "/api/aulas/{aula_id}")):
+        assert expected in ALL, expected
 
 
 @pytest.mark.parametrize("method,path", [r for r in ALL if r not in PUBLIC])
