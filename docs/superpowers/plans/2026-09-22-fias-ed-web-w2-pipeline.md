@@ -133,7 +133,7 @@ um `ALUNO` com `diarization_label = "merged"`. Nenhum agrupamento de voz por
 estudante sobrevive à escolha (§48). A Task 8 implementa esse colapso; aqui só
 existe a tabela que o permite.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Cria `backend/tests/test_models_w2.py`.
 
@@ -201,12 +201,12 @@ def test_transcricao_fixa_o_idioma_do_produto():
     assert set(col.type.enums) == {"pt-BR"}
 ```
 
-- [ ] **Step 2: Rodar o teste e confirmar que falha**
+- [x] **Step 2: Rodar o teste e confirmar que falha**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_models_w2.py`
 Expected: FAIL com `ImportError: cannot import name 'Transcricao' from 'app.models'`
 
-- [ ] **Step 3: Acrescentar as tabelas em `app/models.py`**
+- [x] **Step 3: Acrescentar as tabelas em `app/models.py`**
 
 Depois de `class Audio`, no estilo das tabelas da W1. Os valores abaixo saem dos
 schemas do shared, literalmente.
@@ -305,12 +305,12 @@ Acrescentar `Boolean` e `Float` aos imports do SQLAlchemy, se faltarem.
 Conferir cada `maxLength` do schema contra o `String(n)` escrito acima antes de
 rodar: o teste de compatibilidade compara o comprimento exato.
 
-- [ ] **Step 4: Rodar o teste e confirmar que passa**
+- [x] **Step 4: Rodar o teste e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_models_w2.py`
 Expected: PASS (8 testes)
 
-- [ ] **Step 5: Estender o teste de compatibilidade com o shared**
+- [x] **Step 5: Estender o teste de compatibilidade com o shared**
 
 Em `backend/tests/test_schema_compat.py`, acrescentar as seis entidades à lista:
 
@@ -326,7 +326,7 @@ Expected: PASS (13 parametrizações)
 Se alguma reprovar, **a tabela é que está errada**, não o schema: o shared é a
 autoridade. Corrija a coluna.
 
-- [ ] **Step 6: Gerar e conferir a migração**
+- [x] **Step 6: Gerar e conferir a migração**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test alembic revision --autogenerate -m "w2 pipeline"`
 
@@ -338,12 +338,12 @@ para a revisão da W1.
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_schema_compat.py::test_migrations_match_models`
 Expected: PASS
 
-- [ ] **Step 7: Rodar a suíte inteira**
+- [x] **Step 7: Rodar a suíte inteira**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS, sem regressão da W1
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add fias-ed-web/backend
