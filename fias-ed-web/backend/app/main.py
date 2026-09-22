@@ -46,6 +46,9 @@ def create_app() -> FastAPI:
 
     from app.aulas.routes import router as aulas_router
     app.include_router(aulas_router, prefix="/api")
+
+    from app.audio.routes import router as audio_router
+    app.include_router(audio_router, prefix="/api")
     return app
 
 
