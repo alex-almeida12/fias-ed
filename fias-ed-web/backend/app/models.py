@@ -121,6 +121,94 @@ class Audio(EntityMixin, Base):
     derived_from_audio_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("audio.id"), nullable=True)
 
 
+FALANTE_ROLES = ("PROFESSOR", "ALUNO", "UNASSIGNED")
+LANGUAGES = ("pt-BR",)
+MODEL_FORMATS = ("safetensors", "onnx", "ggml", "other")
+INDICADOR_REASONS = ("insufficient_data",)
+VALIDATION_STATUS = ("validated", "PENDING_SCIENTIFIC_VALIDATION", "engineering_decision",
+                     "draft_pending_researcher_review")
+
+
+class Transcricao(EntityMixin, Base):
+    __tablename__ = "transcricao"
+    aula_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aula.id"), index=True, nullable=False)
+    audio_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("audio.id"), nullable=False)
+    language: Mapped[str] = mapped_column(_enum(LANGUAGES, "transcricao_language"),
+                                          default="pt-BR", nullable=False)
+    asr_model_id: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class Falante(EntityMixin, Base):
+    """Uma linha por voz enquanto role=UNASSIGNED; exatamente duas depois da
+    escolha do professor (PROFESSOR e ALUNO). Nenhum agrupamento de voz por
+    estudante sobrevive à escolha (§48)."""
+    __tablename__ = "falante"
+    transcricao_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("transcricao.id"), index=True,
+                                                      nullable=False)
+    diarization_label: Mapped[str] = mapped_column(String(32), nullable=False)
+    role: Mapped[str] = mapped_column(_enum(FALANTE_ROLES, "falante_role"),
+                                      default="UNASSIGNED", nullable=False)
+
+
+class Segmento(EntityMixin, Base):
+    __tablename__ = "segmento"
+    transcricao_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("transcricao.id"), index=True,
+                                                      nullable=False)
+    falante_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("falante.id"), nullable=False)
+    start_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    texto_original_asr: Mapped[str] = mapped_column(String(10000), nullable=False)
+    texto_revisado: Mapped[str | None] = mapped_column(String(10000), nullable=True)
+    revisado: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    asr_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    text_pseudonymized: Mapped[str | None] = mapped_column(String(10000), nullable=True)
+
+
+class ClassificacaoFIAS(EntityMixin, Base):
+    __tablename__ = "classificacao_fias"
+    segmento_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("segmento.id"), index=True,
+                                                   nullable=False)
+    transcript_source: Mapped[str] = mapped_column(
+        _enum(TRANSCRIPT_SOURCES, "classificacao_transcript_source"), nullable=False)
+    pred_raw: Mapped[int] = mapped_column(Integer, nullable=False)
+    pred_role_constrained: Mapped[int] = mapped_column(Integer, nullable=False)
+    confidence_raw: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    uncertain: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    model_id: Mapped[str] = mapped_column(String, nullable=False)
+    rules_version: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class IndicadorFIAS(EntityMixin, Base):
+    __tablename__ = "indicador_fias"
+    aula_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aula.id"), index=True, nullable=False)
+    index_id: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reason: Mapped[str | None] = mapped_column(_enum(INDICADOR_REASONS, "indicador_reason"),
+                                               nullable=True)
+    numerator_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    denominator_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    n_intervals: Mapped[int] = mapped_column(Integer, nullable=False)
+    rules_version: Mapped[str] = mapped_column(String, nullable=False)
+    validation_status: Mapped[str] = mapped_column(
+        _enum(VALIDATION_STATUS, "indicador_validation_status"), nullable=False)
+    mean_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class ModeloIA(EntityMixin, Base):
+    __tablename__ = "modelo_ia"
+    model_id: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    model_version: Mapped[str] = mapped_column(String, nullable=False)
+    task: Mapped[str] = mapped_column(String, nullable=False)
+    format: Mapped[str] = mapped_column(_enum(MODEL_FORMATS, "modelo_format"), nullable=False)
+    sha256: Mapped[str] = mapped_column(String, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    source: Mapped[str] = mapped_column(String(500), nullable=False)
+    license: Mapped[str] = mapped_column(String(200), nullable=False)
+    parameters: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
 class Processamento(EntityMixin, Base):
     """Criada em W1 para manter o modelo completo; primeira linha nasce no W2."""
     __tablename__ = "processamento"
