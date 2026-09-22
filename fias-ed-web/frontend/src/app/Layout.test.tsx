@@ -43,3 +43,29 @@ test("sair encerra a sessão", async () => {
   await userEvent.click(await screen.findByRole("button", { name: "Sair" }));
   await waitFor(() => expect(window.location.pathname).toBe("/"));
 });
+
+// Ruling P15: sair/voltar não devem falhar silenciosamente.
+test("erro ao sair mostra aviso e mantém a sessão", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/aulas": () => jsonResponse([]),
+    "POST /api/auth/logout": () => jsonResponse({ error_code: "ERRO", message: "Não foi possível sair." }, 500),
+  });
+  renderApp("/aulas");
+  await userEvent.click(await screen.findByRole("button", { name: "Sair" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível sair.");
+  expect(window.location.pathname).toBe("/aulas");
+});
+
+test("erro ao voltar à própria conta mostra aviso", async () => {
+  const acting = { ...ADMIN, acting_as: { id: "p1", display_name: "Ana Souza" } };
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(acting),
+    "GET /api/aulas": () => jsonResponse([]),
+    "DELETE /api/admin/agir-como": () => jsonResponse({ error_code: "ERRO", message: "Não foi possível voltar." }, 500),
+  });
+  renderApp("/aulas");
+  await userEvent.click(await screen.findByRole("button", { name: "Voltar à minha conta" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível voltar.");
+  expect(screen.getByText("Você está agindo como: Ana Souza")).toBeInTheDocument();
+});

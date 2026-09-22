@@ -1,23 +1,37 @@
+import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
 import type { Me } from "../api/types";
+import { Banner } from "../design/components/Banner";
 import { Button } from "../design/components/Button";
 import { useAuth } from "./AuthContext";
 
 export function Layout() {
   const { me, setMe } = useAuth();
   const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
   if (!me) return null;
 
+  // Ruling P15: sair/voltar não devem falhar em silêncio.
   async function sair() {
-    await api("/auth/logout", { method: "POST" });
-    setMe(null);
-    navigate("/", { replace: true });
+    setError(null);
+    try {
+      await api("/auth/logout", { method: "POST" });
+      setMe(null);
+      navigate("/", { replace: true });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível sair. Tente novamente.");
+    }
   }
 
   async function voltar() {
-    setMe(await api<Me>("/admin/agir-como", { method: "DELETE" }));
-    navigate("/admin/aulas");
+    setError(null);
+    try {
+      setMe(await api<Me>("/admin/agir-como", { method: "DELETE" }));
+      navigate("/admin/aulas");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível voltar à sua conta. Tente novamente.");
+    }
   }
 
   return (
@@ -44,6 +58,7 @@ export function Layout() {
         </div>
       )}
       <main className="page">
+        {error && <Banner kind="error">{error}</Banner>}
         <Outlet />
       </main>
     </>
