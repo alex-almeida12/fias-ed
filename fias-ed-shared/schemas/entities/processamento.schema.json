@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/processamento.schema.json",
+  "title": "Processamento",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["aula_id", "app_version", "rules_version", "asr_model", "asr_model_hash", "diarization_model", "fias_model", "fias_model_hash", "parameters", "hardware", "device", "audio_duration_ms", "transcript_source", "stage_times_ms", "status"],
+    "properties": {
+      "aula_id": {"type": "string", "format": "uuid"},
+      "app_version": {"type": "string"},
+      "rules_version": {"type": "string"},
+      "asr_model": {"type": "string"},
+      "asr_model_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "diarization_model": {"type": "string"},
+      "fias_model": {"type": "string"},
+      "fias_model_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "parameters": {"type": "object"},
+      "hardware": {"type": "string", "maxLength": 200},
+      "device": {"type": "string", "maxLength": 200},
+      "audio_duration_ms": {"type": "integer", "minimum": 0},
+      "transcript_source": {"enum": ["ASR_ORIGINAL", "TRANSCRICAO_REVISADA"]},
+      "stage_times_ms": {"type": "object"},
+      "status": {"enum": ["DRAFT", "AUDIO_IMPORTED", "AUDIO_VALIDATED", "PREPROCESSING", "TRANSCRIBING", "TRANSCRIBED", "DIARIZING", "READY_FOR_SPEAKER_REVIEW", "READY_FOR_TRANSCRIPT_REVIEW", "READY_FOR_FIAS", "FIAS_COMPLETED", "WAITING_QTI", "QTI_COMPLETED", "TRIANGULATED", "MTSS_INTERPRETED", "REPORT_READY", "ERROR"]},
+      "processing_time_ms": {"type": "integer", "minimum": 0},
+      "role_divergence_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+      "error_code": {"type": "string", "maxLength": 64}
+    }
+  }],
+  "unevaluatedProperties": false
+}

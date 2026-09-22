@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/disciplina.schema.json",
+  "title": "Disciplina",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["professor_id", "name"],
+    "properties": {
+      "professor_id": {"type": "string", "format": "uuid"},
+      "name": {"type": "string", "maxLength": 120}
+    }
+  }],
+  "unevaluatedProperties": false
+}

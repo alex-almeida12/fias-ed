@@ -1,0 +1,19 @@
+{
+  "id": "01926b3e-7a1c-7c3e-9f00-000000000043",
+  "created_at": "2026-09-21T10:00:00Z",
+  "updated_at": "2026-09-21T10:00:00Z",
+  "deleted_at": null,
+  "version": 1,
+  "sync_status": "LOCAL_ONLY",
+  "device_id": "web-local",
+  "model_id": "fias-bertimbau-ptbr-frente3",
+  "name": "BERTimbau base fine-tuned FIAS (Frente 3)",
+  "model_version": "1.0.0",
+  "task": "fias_utterance_classification",
+  "format": "safetensors",
+  "sha256": "896fd21a20fb86b105ae4f1584fd8093a25da04385e28e35cb69a1b59533660e",
+  "size_bytes": 435746832,
+  "source": "experimentos/resultados_bert_ptbr/frente3_ptbr/melhor_modelo",
+  "license": "MIT",
+  "parameters": {"max_length": 256}
+}

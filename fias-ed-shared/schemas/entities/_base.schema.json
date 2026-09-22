@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/_base.schema.json",
+  "type": "object",
+  "required": ["id", "created_at", "updated_at", "deleted_at", "version", "sync_status", "device_id"],
+  "properties": {
+    "id": {"type": "string", "format": "uuid"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"},
+    "deleted_at": {"type": ["string", "null"], "format": "date-time"},
+    "version": {"type": "integer", "minimum": 1},
+    "sync_status": {"enum": ["LOCAL_ONLY", "PENDING_SYNC", "SYNCED", "CONFLICT"]},
+    "device_id": {"type": "string", "minLength": 1}
+  }
+}

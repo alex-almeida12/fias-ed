@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/professor.schema.json",
+  "title": "Professor",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["display_name", "role"],
+    "properties": {
+      "display_name": {"type": "string", "maxLength": 120},
+      "role": {"enum": ["ADMIN_LOCAL", "PROFESSOR"]},
+      "username": {"type": "string", "maxLength": 64}
+    }
+  }],
+  "unevaluatedProperties": false
+}

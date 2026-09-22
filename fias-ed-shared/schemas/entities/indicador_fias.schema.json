@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/indicador_fias.schema.json",
+  "title": "IndicadorFIAS",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["aula_id", "index_id", "value", "reason", "numerator_count", "denominator_count", "n_intervals", "rules_version", "validation_status"],
+    "properties": {
+      "aula_id": {"type": "string", "format": "uuid"},
+      "index_id": {"type": "string"},
+      "value": {"type": ["number", "null"]},
+      "reason": {"type": ["string", "null"], "enum": [null, "insufficient_data"]},
+      "numerator_count": {"type": "integer", "minimum": 0},
+      "denominator_count": {"type": "integer", "minimum": 0},
+      "n_intervals": {"type": "integer", "minimum": 0},
+      "rules_version": {"type": "string"},
+      "validation_status": {"enum": ["validated", "PENDING_SCIENTIFIC_VALIDATION", "engineering_decision", "draft_pending_researcher_review"]},
+      "mean_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
+    }
+  }],
+  "unevaluatedProperties": false
+}

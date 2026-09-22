@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/questionario_qti.schema.json",
+  "title": "QuestionarioQTI",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["aula_id", "instrument_version", "source", "confirmed"],
+    "properties": {
+      "aula_id": {"type": "string", "format": "uuid"},
+      "instrument_version": {"type": "string"},
+      "source": {"enum": ["IMPORT_AVALIE_SEU_PROFESSOR", "FORM", "MANUAL", "OCR"]},
+      "confirmed": {"type": "boolean"},
+      "import_filename": {"type": "string", "maxLength": 255}
+    }
+  }],
+  "unevaluatedProperties": false
+}

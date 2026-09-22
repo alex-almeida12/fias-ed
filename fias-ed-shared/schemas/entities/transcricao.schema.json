@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/transcricao.schema.json",
+  "title": "Transcricao",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["aula_id", "audio_id", "language", "asr_model_id"],
+    "properties": {
+      "aula_id": {"type": "string", "format": "uuid"},
+      "audio_id": {"type": "string", "format": "uuid"},
+      "language": {"enum": ["pt-BR"]},
+      "asr_model_id": {"type": "string", "format": "uuid"}
+    }
+  }],
+  "unevaluatedProperties": false
+}

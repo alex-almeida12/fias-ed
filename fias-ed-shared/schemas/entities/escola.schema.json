@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/escola.schema.json",
+  "title": "Escola",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+      "name": {"type": "string", "maxLength": 200},
+      "municipality": {"type": "string", "maxLength": 120},
+      "region": {"enum": ["Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"]}
+    }
+  }],
+  "unevaluatedProperties": false
+}

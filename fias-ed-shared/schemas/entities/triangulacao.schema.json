@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/triangulacao.schema.json",
+  "title": "Triangulacao",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["aula_id", "pairs", "rules_version"],
+    "properties": {
+      "aula_id": {"type": "string", "format": "uuid"},
+      "pairs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["pair_id", "fias_value", "qti_available", "qti_values"],
+          "properties": {
+            "pair_id": {"type": "string"},
+            "fias_value": {"type": ["number", "null"]},
+            "qti_available": {"type": "boolean"},
+            "qti_values": {"type": "array", "items": {"type": ["number", "null"]}}
+          },
+          "additionalProperties": false
+        }
+      },
+      "rules_version": {"type": "string"}
+    }
+  }],
+  "unevaluatedProperties": false
+}

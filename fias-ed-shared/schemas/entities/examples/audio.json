@@ -1,0 +1,20 @@
+{
+  "id": "01926b3e-7a1c-7c3e-9f00-000000000012",
+  "created_at": "2026-09-21T10:00:00Z",
+  "updated_at": "2026-09-21T10:00:00Z",
+  "deleted_at": null,
+  "version": 1,
+  "sync_status": "LOCAL_ONLY",
+  "device_id": "web-local",
+  "aula_id": "01926b3e-7a1c-7c3e-9f00-000000000013",
+  "original_filename": "aula_2026-09-21.wav",
+  "internal_filename": "0a1b2c3d-4e5f-4071-8293-a4b5c6d7e8f9.wav",
+  "path": "/data/audio/0a1b2c3d-4e5f-4071-8293-a4b5c6d7e8f9.wav",
+  "mime_type": "audio/wav",
+  "size_bytes": 1048576,
+  "duration_ms": 600000,
+  "sha256": "d7315f6bb2ed265535ab8a6ad93fdcd1493e8fe106c0a844a534c1dcd4c22d3d",
+  "channels": 1,
+  "sample_rate": 16000,
+  "is_original": true
+}

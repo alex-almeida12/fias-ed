@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/resultado_qti.schema.json",
+  "title": "ResultadoQTI",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["questionario_qti_id", "response_count", "displayable", "octants", "agency", "communion", "rules_version"],
+    "properties": {
+      "questionario_qti_id": {"type": "string", "format": "uuid"},
+      "response_count": {"type": "integer", "minimum": 0},
+      "displayable": {"type": "boolean"},
+      "octants": {
+        "type": "object",
+        "required": ["oc1", "oc2", "oc3", "oc4", "oc5", "oc6", "oc7", "oc8"],
+        "properties": {
+          "oc1": {"type": ["number", "null"]},
+          "oc2": {"type": ["number", "null"]},
+          "oc3": {"type": ["number", "null"]},
+          "oc4": {"type": ["number", "null"]},
+          "oc5": {"type": ["number", "null"]},
+          "oc6": {"type": ["number", "null"]},
+          "oc7": {"type": ["number", "null"]},
+          "oc8": {"type": ["number", "null"]}
+        },
+        "additionalProperties": false
+      },
+      "agency": {"type": ["number", "null"]},
+      "communion": {"type": ["number", "null"]},
+      "rules_version": {"type": "string"}
+    }
+  }],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,14 @@
+{
+  "id": "01926b3e-7a1c-7c3e-9f00-000000000008",
+  "created_at": "2026-09-21T10:00:00Z",
+  "updated_at": "2026-09-21T10:00:00Z",
+  "deleted_at": null,
+  "version": 1,
+  "sync_status": "LOCAL_ONLY",
+  "device_id": "web-local",
+  "professor_id": "01926b3e-7a1c-7c3e-9f00-000000000009",
+  "turma_id": "01926b3e-7a1c-7c3e-9f00-000000000010",
+  "disciplina_id": "01926b3e-7a1c-7c3e-9f00-000000000011",
+  "lesson_date": "2026-09-21",
+  "status": "DRAFT"
+}

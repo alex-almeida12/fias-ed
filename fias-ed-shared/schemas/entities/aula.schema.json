@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/aula.schema.json",
+  "title": "Aula",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["professor_id", "turma_id", "disciplina_id", "lesson_date", "status"],
+    "properties": {
+      "professor_id": {"type": "string", "format": "uuid"},
+      "turma_id": {"type": "string", "format": "uuid"},
+      "disciplina_id": {"type": "string", "format": "uuid"},
+      "lesson_date": {"type": "string", "format": "date"},
+      "status": {"enum": ["DRAFT", "AUDIO_IMPORTED", "AUDIO_VALIDATED", "PREPROCESSING", "TRANSCRIBING", "TRANSCRIBED", "DIARIZING", "READY_FOR_SPEAKER_REVIEW", "READY_FOR_TRANSCRIPT_REVIEW", "READY_FOR_FIAS", "FIAS_COMPLETED", "WAITING_QTI", "QTI_COMPLETED", "TRIANGULATED", "MTSS_INTERPRETED", "REPORT_READY", "ERROR"]},
+      "note": {"type": "string", "maxLength": 2000},
+      "error_code": {"type": "string", "maxLength": 64}
+    }
+  }],
+  "unevaluatedProperties": false
+}

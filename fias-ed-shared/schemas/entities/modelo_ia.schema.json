@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/modelo_ia.schema.json",
+  "title": "ModeloIA",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["model_id", "name", "model_version", "task", "format", "sha256", "size_bytes", "source", "license", "parameters"],
+    "properties": {
+      "model_id": {"type": "string"},
+      "name": {"type": "string"},
+      "model_version": {"type": "string"},
+      "task": {"type": "string"},
+      "format": {"enum": ["safetensors", "onnx", "ggml", "other"]},
+      "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "size_bytes": {"type": "integer", "minimum": 1},
+      "source": {"type": "string", "maxLength": 500},
+      "license": {"type": "string", "maxLength": 200},
+      "parameters": {"type": "object"}
+    }
+  }],
+  "unevaluatedProperties": false
+}

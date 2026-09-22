@@ -1,0 +1,14 @@
+{
+  "id": "01926b3e-7a1c-7c3e-9f00-000000000003",
+  "created_at": "2026-09-21T10:00:00Z",
+  "updated_at": "2026-09-21T10:00:00Z",
+  "deleted_at": null,
+  "version": 1,
+  "sync_status": "LOCAL_ONLY",
+  "device_id": "web-local",
+  "escola_id": "01926b3e-7a1c-7c3e-9f00-000000000004",
+  "professor_id": "01926b3e-7a1c-7c3e-9f00-000000000005",
+  "name": "9º Ano B",
+  "school_year": 2026,
+  "level": "Ensino Fundamental II"
+}

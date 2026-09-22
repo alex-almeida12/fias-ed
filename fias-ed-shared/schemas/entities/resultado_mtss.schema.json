@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/resultado_mtss.schema.json",
+  "title": "ResultadoMTSS",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["aula_id", "fired_rules", "rules_version"],
+    "properties": {
+      "aula_id": {"type": "string", "format": "uuid"},
+      "fired_rules": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["rule_id", "tier1_dimension", "framing", "evidence"],
+          "properties": {
+            "rule_id": {"type": "string"},
+            "tier1_dimension": {"type": "string"},
+            "framing": {"type": "string"},
+            "evidence": {"type": "object"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "rules_version": {"type": "string"}
+    }
+  }],
+  "unevaluatedProperties": false
+}

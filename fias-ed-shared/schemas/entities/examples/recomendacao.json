@@ -1,0 +1,14 @@
+{
+  "id": "01926b3e-7a1c-7c3e-9f00-000000000037",
+  "created_at": "2026-09-21T10:00:00Z",
+  "updated_at": "2026-09-21T10:00:00Z",
+  "deleted_at": null,
+  "version": 1,
+  "sync_status": "LOCAL_ONLY",
+  "device_id": "web-local",
+  "resultado_mtss_id": "01926b3e-7a1c-7c3e-9f00-000000000038",
+  "recommendation_id": "PED_CHECK_UNDERSTANDING",
+  "rule_id": "MTSS_EXPOSITIVE_PREDOMINANCE",
+  "text": "Considere intercalar os momentos de exposição com pausas curtas em que os estudantes expliquem com as próprias palavras o que acabaram de ouvir.",
+  "validation_status": "draft_pending_researcher_review"
+}

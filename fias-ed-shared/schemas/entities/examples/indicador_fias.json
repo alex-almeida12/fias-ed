@@ -1,0 +1,19 @@
+{
+  "id": "01926b3e-7a1c-7c3e-9f00-000000000025",
+  "created_at": "2026-09-21T10:00:00Z",
+  "updated_at": "2026-09-21T10:00:00Z",
+  "deleted_at": null,
+  "version": 1,
+  "sync_status": "LOCAL_ONLY",
+  "device_id": "web-local",
+  "aula_id": "01926b3e-7a1c-7c3e-9f00-000000000026",
+  "index_id": "TT",
+  "value": 0.62,
+  "reason": null,
+  "numerator_count": 10,
+  "denominator_count": 16,
+  "n_intervals": 16,
+  "rules_version": "1.0.0",
+  "validation_status": "validated",
+  "mean_confidence": 0.79
+}

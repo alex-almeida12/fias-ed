@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/relatorio.schema.json",
+  "title": "Relatorio",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["aula_id", "status", "rules_version", "app_version"],
+    "properties": {
+      "aula_id": {"type": "string", "format": "uuid"},
+      "status": {"enum": ["DRAFT", "READY"]},
+      "rules_version": {"type": "string"},
+      "app_version": {"type": "string"},
+      "pdf_path": {"type": "string", "maxLength": 1024},
+      "pdf_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    }
+  }],
+  "unevaluatedProperties": false
+}

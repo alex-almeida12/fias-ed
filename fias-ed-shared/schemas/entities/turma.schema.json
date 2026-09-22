@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/turma.schema.json",
+  "title": "Turma",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["escola_id", "professor_id", "name"],
+    "properties": {
+      "escola_id": {"type": "string", "format": "uuid"},
+      "professor_id": {"type": "string", "format": "uuid"},
+      "name": {"type": "string", "maxLength": 120},
+      "school_year": {"type": "integer"},
+      "level": {"type": "string", "maxLength": 60}
+    }
+  }],
+  "unevaluatedProperties": false
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/falante.schema.json",
+  "title": "Falante",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["transcricao_id", "diarization_label", "role"],
+    "properties": {
+      "transcricao_id": {"type": "string", "format": "uuid"},
+      "diarization_label": {"type": "string", "maxLength": 32},
+      "role": {"enum": ["PROFESSOR", "ALUNO", "UNASSIGNED"]}
+    }
+  }],
+  "unevaluatedProperties": false
+}

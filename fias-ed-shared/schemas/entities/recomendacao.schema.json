@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/recomendacao.schema.json",
+  "title": "Recomendacao",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["resultado_mtss_id", "recommendation_id", "rule_id", "text", "validation_status"],
+    "properties": {
+      "resultado_mtss_id": {"type": "string", "format": "uuid"},
+      "recommendation_id": {"type": "string"},
+      "rule_id": {"type": "string"},
+      "text": {"type": "string", "maxLength": 2000},
+      "validation_status": {"enum": ["validated", "PENDING_SCIENTIFIC_VALIDATION", "engineering_decision", "draft_pending_researcher_review"]}
+    }
+  }],
+  "unevaluatedProperties": false
+}

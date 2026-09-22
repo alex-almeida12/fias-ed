@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fias-ed.local/schemas/entities/segmento.schema.json",
+  "title": "Segmento",
+  "allOf": [{"$ref": "_base.schema.json"}, {
+    "type": "object",
+    "required": ["transcricao_id", "falante_id", "start_ms", "end_ms", "texto_original_asr", "texto_revisado", "revisado"],
+    "properties": {
+      "transcricao_id": {"type": "string", "format": "uuid"},
+      "falante_id": {"type": "string", "format": "uuid"},
+      "start_ms": {"type": "integer", "minimum": 0},
+      "end_ms": {"type": "integer", "minimum": 1},
+      "texto_original_asr": {"type": "string", "maxLength": 10000},
+      "texto_revisado": {"type": ["string", "null"], "maxLength": 10000},
+      "revisado": {"type": "boolean"},
+      "asr_confidence": {"type": "number", "minimum": 0, "maximum": 1}
+    }
+  }],
+  "unevaluatedProperties": false
+}
