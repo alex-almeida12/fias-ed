@@ -133,9 +133,9 @@ REPORT_READY
 
 Qualquer etapa pode transicionar para `ERROR` (com `error_code` e `note`)
 em caso de falha técnica; o professor pode retomar a partir do último
-estado consistente. Este fluxo e os nomes de estado vêm da spec do `shared`
-(§9, entidade `Aula`) — não existe, neste repositório, uma descrição do
-prompt original do pesquisador além do que está formalizado nesse enum.
+estado consistente. Este fluxo e os nomes de estado vêm do prompt mestre
+(`docs/PROMPT_MESTRE.md` §13 e §35) e da spec do `shared` (§9, entidade
+`Aula`).
 
 ## 4. Decisões de arquitetura tomadas
 
