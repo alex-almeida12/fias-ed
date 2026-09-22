@@ -298,6 +298,124 @@
           "denominator_count": 1
         }
       }
+    },
+    {
+      "id": "indices-lesson-instructions-predominance",
+      "function": "compute_indices",
+      "description": "lesson-instructions-predominance",
+      "input": {
+        "intervals": [
+          6,
+          6,
+          6,
+          8,
+          10
+        ],
+        "n_segments": 5,
+        "confidences": [
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8
+        ]
+      },
+      "expected": {
+        "TT": {
+          "value": 0.6,
+          "reason": null,
+          "numerator_count": 3,
+          "denominator_count": 5
+        },
+        "PT": {
+          "value": 0.2,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 5
+        },
+        "SC": {
+          "value": 0.2,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 5
+        },
+        "ID_RATIO": {
+          "value": 0.0,
+          "reason": null,
+          "numerator_count": 0,
+          "denominator_count": 3
+        },
+        "PIR": {
+          "value": 0.0,
+          "reason": null,
+          "numerator_count": 0,
+          "denominator_count": 1
+        },
+        "PUPIL_RESPONSE_RATIO": {
+          "value": 1.0,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 1
+        }
+      }
+    },
+    {
+      "id": "indices-lesson-tie-5-6",
+      "function": "compute_indices",
+      "description": "lesson-tie-5-6",
+      "input": {
+        "intervals": [
+          5,
+          6,
+          8,
+          10
+        ],
+        "n_segments": 4,
+        "confidences": [
+          0.8,
+          0.8,
+          0.8,
+          0.8
+        ]
+      },
+      "expected": {
+        "TT": {
+          "value": 0.5,
+          "reason": null,
+          "numerator_count": 2,
+          "denominator_count": 4
+        },
+        "PT": {
+          "value": 0.25,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 4
+        },
+        "SC": {
+          "value": 0.25,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 4
+        },
+        "ID_RATIO": {
+          "value": 0.0,
+          "reason": null,
+          "numerator_count": 0,
+          "denominator_count": 2
+        },
+        "PIR": {
+          "value": 0.0,
+          "reason": null,
+          "numerator_count": 0,
+          "denominator_count": 1
+        },
+        "PUPIL_RESPONSE_RATIO": {
+          "value": 1.0,
+          "reason": null,
+          "numerator_count": 1,
+          "denominator_count": 1
+        }
+      }
     }
   ]
 }

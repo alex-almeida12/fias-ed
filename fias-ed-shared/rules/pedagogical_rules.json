@@ -1,5 +1,5 @@
 {
-  "rules_version": "1.0.0",
+  "rules_version": "1.1.0",
   "recommendations": [
     {"recommendation_id": "PED_CHECK_UNDERSTANDING", "tier1_dimension": "Ensino explícito (modelagem)", "text": "Considere intercalar os momentos de exposição com pausas curtas em que os estudantes expliquem com as próprias palavras o que acabaram de ouvir.", "source_reference": "Redigido a partir da dimensão Tier 1 'Ensino explícito (modelagem)', CAP4 tab:art2-fias-tier1", "validation_status": "draft_pending_researcher_review"},
     {"recommendation_id": "PED_WAIT_TIME", "tier1_dimension": "Ensino explícito (modelagem)", "text": "Você pode experimentar aguardar alguns segundos a mais depois de uma pergunta antes de retomar a explicação, dando tempo para que mais estudantes elaborem uma resposta.", "source_reference": "Redigido a partir da dimensão Tier 1 'Ensino explícito (modelagem)', CAP4 tab:art2-fias-tier1", "validation_status": "draft_pending_researcher_review"},
@@ -13,7 +13,7 @@
   ],
   "triangulation_pairs": [
     {"pair_id": "TRI_WARMTH", "fias": {"categories": [2, 3]}, "qti_octants": ["oc2", "oc3"],
-     "reflection_question": "Nesta aula houve momentos de encorajamento e de uso das ideias dos estudantes. Como isso se relaciona com o quanto a turma percebe você como amigável e compreensivo?",
+     "reflection_question": "Observe a proporção de intervalos de encorajamento e de uso das ideias dos estudantes nesta aula. Como ela se relaciona com o quanto a turma percebe você como amigável e compreensivo?",
      "source_reference": "CAP4 subsec:art2-triangulacao l.350-371 (exemplo de convergência: alta cat. 2/3 + DC/CS altos; Fisher 1995). Pareamento operacional proposto no spec §6.", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
     {"pair_id": "TRI_INFLUENCE", "fias": {"index": "ID_RATIO"}, "qti_octants": ["oc1", "oc8"],
      "reflection_question": "O equilíbrio entre fala de influência indireta e direta desta aula combina com o modo como os estudantes percebem sua liderança e seu rigor?",
@@ -22,7 +22,7 @@
      "reflection_question": "Quanto espaço os estudantes tiveram para falar por iniciativa própria nesta aula, e como eles percebem a liberdade que você oferece?",
      "source_reference": "CAP4 subsec:art2-triangulacao l.350-371 (complementaridade). Pareamento operacional proposto no spec §6.", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
     {"pair_id": "TRI_TENSION", "fias": {"categories": [7]}, "qti_octants": ["oc7", "oc6"],
-     "reflection_question": "Os momentos de crítica ou afirmação de autoridade desta aula aparecem também na forma como os estudantes percebem irritação ou insatisfação?",
+     "reflection_question": "Observe a proporção de intervalos de crítica ou afirmação de autoridade nesta aula. Como ela se relaciona com a forma como os estudantes percebem irritação ou insatisfação?",
      "source_reference": "CAP4 subsec:art2-triangulacao l.350-371. Pareamento operacional proposto no spec §6.", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"}
   ]
 }

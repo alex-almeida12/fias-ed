@@ -39,6 +39,8 @@ INTERVAL_SEQS = [
     ("lesson-teacher-only-indirect", [4, 4, 10]),
     ("lesson-empty", []),
     ("lesson-reactive", [5, 7, 6, 7, 8, 10]),
+    ("lesson-instructions-predominance", [6, 6, 6, 8, 10]),
+    ("lesson-tie-5-6", [5, 6, 8, 10]),
 ]
 LOGIT_CASES = [
     ("role-agree", [0, 0, 0, 0, 5, 0, 0, 0, 0, 0], "PROFESSOR"),

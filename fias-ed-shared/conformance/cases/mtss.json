@@ -92,6 +92,47 @@
         "MTSS_NO_PRAISE",
         "MTSS_REACTIVE_MANAGEMENT_PRESENT"
       ]
+    },
+    {
+      "id": "mtss-lesson-instructions-predominance",
+      "function": "evaluate_mtss",
+      "description": "lesson-instructions-predominance",
+      "input": {
+        "intervals": [
+          6,
+          6,
+          6,
+          8,
+          10
+        ]
+      },
+      "expected": [
+        "MTSS_INSTRUCTIONS_PREDOMINANCE",
+        "MTSS_DIRECT_OVER_INDIRECT",
+        "MTSS_NO_STUDENT_INITIATIVE",
+        "MTSS_NO_IDEA_UPTAKE",
+        "MTSS_NO_PRAISE"
+      ]
+    },
+    {
+      "id": "mtss-lesson-tie-5-6",
+      "function": "evaluate_mtss",
+      "description": "lesson-tie-5-6",
+      "input": {
+        "intervals": [
+          5,
+          6,
+          8,
+          10
+        ]
+      },
+      "expected": [
+        "MTSS_EXPOSITIVE_PREDOMINANCE",
+        "MTSS_DIRECT_OVER_INDIRECT",
+        "MTSS_NO_STUDENT_INITIATIVE",
+        "MTSS_NO_IDEA_UPTAKE",
+        "MTSS_NO_PRAISE"
+      ]
     }
   ]
 }
