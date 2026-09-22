@@ -50,6 +50,16 @@ está definida em nenhuma fonte primária** (inventário item 11) —
 implementação necessária para o motor funcionar; o pesquisador deve revisá-la
 frente a Flanders (1970) antes de publicar resultados baseados nela.
 
+Sub-escolha ainda pendente dentro dessa regra (`fias_ed_engine.intervals.
+segments_to_intervals`, caso `seg-span` de `conformance/cases/intervals.json`):
+qualquer cobertura de fala dentro de um intervalo, por menor que seja, tem
+precedência sobre o silêncio — a categoria de preenchimento (10) só é
+atribuída quando nenhum segmento de fala cobre nenhuma fração do intervalo.
+Um intervalo com 2,9 s de silêncio e 0,1 s de fala recebe a categoria da
+fala, não a de silêncio. Essa precedência não tem fonte primária própria;
+está registrada aqui como parte da pendência "Regra de agregação turno →
+intervalo de 3 s" (spec §17, item 3), a confirmar com o pesquisador.
+
 ## Matriz de transições
 
 `matrix.pad_category = 10`: "Convenciona-se acrescentar 10 no início e no fim

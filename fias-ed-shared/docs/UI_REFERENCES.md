@@ -11,6 +11,13 @@ produto de IA genérico.
   login para navegação além da vitrine inicial; não foram acessadas para
   não violar a regra de "apenas páginas públicas, sem login". Nenhuma
   referência abaixo depende delas.
+- **Fontes acessíveis, mas não usadas como referência**: Dribbble, Behance,
+  Land-book, Awwwards e SaaSFrame são galerias de portfólio/marketing
+  visual, voltadas a estética vibrante e vitrine comercial; a lista abaixo
+  prioriza produtos de educação, saúde, dados e gestão acadêmica (governo,
+  sistema de saúde, observação de aula, publicações científicas), mais
+  próximos do tom sóbrio que o FIAS-ED precisa (ver Síntese de princípios,
+  item 7).
 - **Método**: cada URL abaixo foi efetivamente acessada (via busca web) em
   2026-09-21. Páginas que retornaram erro (403/404) ou que não carregaram
   conteúdo analisável (ex.: uma tentativa em `play.grafana.org`, que

@@ -77,6 +77,17 @@ enquanto o pesquisador não confirmar o corte junto a uma fonte primária. O
 motor (`fias_ed_engine.mtss.evaluate`) ignora toda regra com
 `enabled: false`.
 
+FU (Uso #3) cita ainda mais dois cortes que não estão representados em
+`mtss_rules.json`, nem mesmo como regra desabilitada: "≥ 80% acima da
+'mediana esperada' nas 4 escalas cooperativas do QTI" e "≥ 70% de
+convergência" (`RESEARCH_INVENTORY.md` §4.4). Diferente dos quatro cortes
+acima — que reaproximam um fato já calculado pelo motor a partir dos
+intervalos FIAS (`ID_RATIO`, `PT`) —, esses dois dependem de uma "mediana
+esperada" do QTI e de uma definição de "convergência" entre FIAS e QTI que
+o próprio FU não define operacionalmente. Por isso ficam pendentes da
+revisão do pesquisador (spec §17, item 4 — pareamento FIAS↔QTI), sem uma
+regra correspondente neste arquivo.
+
 ## O sistema nunca emite rótulos de conformidade
 
 Nenhuma regra, interpretação ou sugestão usa os rótulos `conforme` /
@@ -99,6 +110,18 @@ Além disso, toda regra disparada (`evaluate_mtss`) sempre inclui evidências:
 os índices numéricos usados e, quando aplicável, trechos de transcrição
 (`segments:category=N`) que sustentam o padrão relatado — nunca apenas um
 veredito isolado.
+
+## Seleção de trechos de evidência (`select_evidence_segments`)
+
+`fias_ed_engine.mtss.select_evidence_segments(segments, category, limit=3)`
+escolhe, para uma categoria FIAS disparada, até `limit` segmentos como
+evidência (maior confiança primeiro, empate pelo início mais cedo). Ela
+espera que cada item de `segments` seja um dicionário com as chaves
+`category` (categoria FIAS já resolvida) e `confidence` — diferente de
+outras estruturas de segmento do motor (`export.py`, `classifier.py`), que
+carregam `pred_role_constrained`/`pred_raw` em vez de `category`. Quem
+chama esta função (Web/Android) precisa mapear `pred_role_constrained` para
+`category` antes de montar a lista.
 
 ## `pedagogical_rules.json`: sugestões e pares de triangulação
 

@@ -1,9 +1,20 @@
 import pytest
 
 from fias_ed_engine.language import find_forbidden
-from fias_ed_engine.paths import SHARED_ROOT
+from fias_ed_engine.paths import CONFORMANCE_DIR, SHARED_ROOT
 
 DOCS = SHARED_ROOT / "docs"
+REPO_ROOT = SHARED_ROOT.parent
+
+# Documentos fora de docs/ que também não podem usar o vocabulário proibido
+# (README/arquitetura na raiz do monorepo, README e conformance/README do
+# próprio subprojeto shared).
+LANGUAGE_ONLY_FILES = {
+    "root README.md": REPO_ROOT / "README.md",
+    "root ARCHITECTURE.md": REPO_ROOT / "ARCHITECTURE.md",
+    "fias-ed-shared/README.md": SHARED_ROOT / "README.md",
+    "conformance/README.md": CONFORMANCE_DIR / "README.md",
+}
 REQUIRED = {
     "RESEARCH_INVENTORY.md": ["FIAS", "QTI", "MTSS", "AIED Unplugged", "PENDING_SCIENTIFIC_VALIDATION"],
     "ANALISE_MODELOS_EXISTENTES.md": ["token_type_ids", "0,7915", "BERTimbau", "CC BY-NC-SA", "training_args.bin"],
@@ -41,3 +52,9 @@ def test_doc_language(name):
 def test_at_least_ten_references():
     text = (DOCS / "UI_REFERENCES.md").read_text(encoding="utf-8")
     assert text.count("https://") >= 10
+
+
+@pytest.mark.parametrize("name,path", LANGUAGE_ONLY_FILES.items())
+def test_doc_language_outside_docs_dir(name, path):
+    text = re.sub(r"`[^`]*`", "", path.read_text(encoding="utf-8"))
+    assert find_forbidden(text) == [], name

@@ -66,6 +66,18 @@ def recommendations(fired: list[dict], pedagogical: dict) -> list[dict]:
 
 
 def select_evidence_segments(segments: list[dict], category: int, limit: int = 3) -> list[dict]:
+    """Escolhe até `limit` segmentos de evidência para uma categoria FIAS.
+
+    `segments` é uma lista de dicionários com as chaves `category` (a
+    categoria FIAS já atribuída ao segmento, ex. a partir de
+    `ClassificacaoFIAS.pred_role_constrained` resolvida pelo chamador) e
+    `confidence` (a confiança dessa classificação), além de `start_ms` para
+    o desempate. Isso é distinto de outras estruturas de segmento usadas
+    alhures no motor (ex. `export.py`, `classifier.py`), que carregam
+    `pred_role_constrained`/`pred_raw` em vez de `category`; é
+    responsabilidade de quem chama esta função mapear `pred_role_constrained`
+    para `category` antes de passar os segmentos aqui. Ver `MTSS.md`.
+    """
     chosen = [s for s in segments if s["category"] == category]
     chosen.sort(key=lambda s: (-s["confidence"], s["start_ms"]))
     return chosen[:limit]
