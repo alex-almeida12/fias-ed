@@ -90,7 +90,8 @@ físico fica a cargo dos subprojetos 2 e 3, mas segue o mesmo desenho:
   `TIMESTAMPTZ NULL`, índices em toda foreign key (`professor_id`,
   `turma_id`, `aula_id`, etc.) e em `sync_status` para consultas de
   sincronização futura. Objetos livres (`parameters`, `stage_times_ms`,
-  `evidence` de `ResultadoMTSS.fired_rules`) mapeiam para colunas `JSONB`.
+  `evidence` e `evidence_segments` de `ResultadoMTSS.fired_rules`) mapeiam
+  para colunas `JSONB`.
 - **Android (Room/SQLite)**: uma tabela `@Entity` por entidade, `id` como
   `PRIMARY KEY` em `TEXT`, campos de data como `TEXT` ISO-8601 ou `INTEGER`
   epoch (a critério do subprojeto 3), objetos livres serializados como
@@ -111,3 +112,27 @@ mais um `manifest`), não uma cópia do banco transacional. Por padrão
 recusada se qualquer segmento não tiver essa versão pseudonimizada. **Áudio
 nunca é exportado** neste formato. Ver `PRIVACY.md` §"Exportação" para o
 detalhamento de privacidade.
+
+### Serialização determinística do CSV (§14A)
+
+Para que a exportação em CSV (`fias_ed_engine.export.to_csv_files`) produza
+o mesmo conteúdo byte a byte em Web e Android a partir do mesmo dataset, as
+seguintes regras são fixas e devem ser reproduzidas por qualquer outro
+gerador de CSV do mesmo formato:
+
+- **Cabeçalho de cada uma das 10 tabelas** usa uma lista fixa de colunas por
+  tabela (`fias_ed_engine.export.TABLE_FIELDS`, derivada do próprio schema
+  de exportação), **sempre escrita**, mesmo quando a tabela não tem
+  nenhuma linha — o número de colunas nunca depende dos dados.
+- **Booleano**: `true` / `false` em minúsculas (nunca `True`/`False` do
+  Python nem `1`/`0`).
+- **Nulo**: célula vazia (string vazia), nunca a string `"null"` nem
+  `"None"`.
+- **Número de ponto flutuante**: `repr()` do valor em Python — a
+  representação decimal mais curta que recupera exatamente o mesmo `float`
+  ao ser lida de volta (round-trip). Implementações em outra linguagem
+  devem usar um algoritmo de impressão de float "shortest round-trip"
+  equivalente (ex. Grisu/Ryū) para reproduzir os mesmos dígitos.
+- **Objeto ou lista** (ex. `qti_values` de `triangulation`): JSON compacto,
+  sem escapar caracteres não-ASCII (`ensure_ascii=False`).
+- Demais valores (string, inteiro) são escritos sem transformação.

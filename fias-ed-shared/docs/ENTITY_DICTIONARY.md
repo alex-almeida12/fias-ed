@@ -87,7 +87,7 @@ tabelas por entidade.
 | `aula_id` | string (uuid) | sim | Referência a `Aula`. |
 | `audio_id` | string (uuid) | sim | Referência a `Audio`. |
 | `language` | enum: pt-BR | sim | Idioma da transcrição. |
-| `asr_model_id` | string (uuid) | sim | Referência ao `ModeloIA` de ASR usado. |
+| `asr_model_id` | string | sim | Código do `ModeloIA` de ASR usado (`ModeloIA.model_id`, ex. `faster-whisper-small`) — string curta, não UUID (mesma convenção de `ClassificacaoFIAS.model_id`). |
 
 ## Falante
 
@@ -109,6 +109,7 @@ tabelas por entidade.
 | `texto_revisado` | string (≤10000) ou null | sim | Transcrição revisada por humano, se houver. |
 | `revisado` | boolean | sim | Se o segmento já passou por revisão humana. |
 | `asr_confidence` | number [0,1] | não | Confiança do ASR para o segmento. |
+| `text_pseudonymized` | string (≤10000) ou null | não | Texto do segmento após a etapa de NER (nomes próprios substituídos por `[NOME]`), só presente quando essa etapa já rodou (ver `PRIVACY.md`). |
 
 ## ClassificacaoFIAS
 
@@ -184,7 +185,7 @@ Schema: `schemas/entities/classificacao_fias.schema.json`.
 | Campo | Tipo | Obrigatório | Descrição |
 |---|---|---|---|
 | `aula_id` | string (uuid) | sim | Referência a `Aula`. |
-| `fired_rules` | array de objetos `{rule_id, tier1_dimension, framing, evidence}` | sim | Regras MTSS disparadas para a aula. |
+| `fired_rules` | array de objetos `{rule_id, tier1_dimension, framing, evidence, evidence_segments?, validation_status}` | sim | Regras MTSS disparadas para a aula. `evidence_segments` (opcional) é uma lista de `{segmento_id, start_ms, end_ms}` apontando os trechos de transcrição citados como evidência (spec §7: "segmento, timestamp"); `validation_status` é o status de validação da própria regra (`mtss_rules.json`). |
 | `rules_version` | string | sim | Versão de `mtss_rules.json` usada. |
 
 ## Recomendacao

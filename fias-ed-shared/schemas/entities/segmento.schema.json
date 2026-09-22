@@ -13,7 +13,8 @@
       "texto_original_asr": {"type": "string", "maxLength": 10000},
       "texto_revisado": {"type": ["string", "null"], "maxLength": 10000},
       "revisado": {"type": "boolean"},
-      "asr_confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      "asr_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+      "text_pseudonymized": {"type": ["string", "null"], "maxLength": 10000}
     }
   }],
   "unevaluatedProperties": false

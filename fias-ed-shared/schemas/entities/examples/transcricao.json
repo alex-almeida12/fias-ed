@@ -9,5 +9,5 @@
   "aula_id": "01926b3e-7a1c-7c3e-9f00-000000000015",
   "audio_id": "01926b3e-7a1c-7c3e-9f00-000000000016",
   "language": "pt-BR",
-  "asr_model_id": "01926b3e-7a1c-7c3e-9f00-000000000017"
+  "asr_model_id": "faster-whisper-small"
 }

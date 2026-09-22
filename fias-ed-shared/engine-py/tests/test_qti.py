@@ -92,7 +92,9 @@ def test_aggregate_mean_and_threshold():
 
 def test_aggregate_empty():
     agg = aggregate([], CFG)
-    assert agg == {"response_count": 0, "displayable": False, "octants": None, "agency": None, "communion": None}
+    assert agg == {"response_count": 0, "displayable": False,
+                   "octants": {o["code"]: None for o in CFG["octants"]},
+                   "agency": None, "communion": None}
 
 
 def _csv(rows, with_scores=True):

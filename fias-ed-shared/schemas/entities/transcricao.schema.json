@@ -9,7 +9,7 @@
       "aula_id": {"type": "string", "format": "uuid"},
       "audio_id": {"type": "string", "format": "uuid"},
       "language": {"enum": ["pt-BR"]},
-      "asr_model_id": {"type": "string", "format": "uuid"}
+      "asr_model_id": {"type": "string"}
     }
   }],
   "unevaluatedProperties": false

@@ -37,7 +37,9 @@ def score_response(answers: dict[int, int], cfg: dict) -> dict:
 def aggregate(responses: list[dict[int, int]], cfg: dict) -> dict:
     n = len(responses)
     if n == 0:
-        return {"response_count": 0, "displayable": False, "octants": None, "agency": None, "communion": None}
+        return {"response_count": 0, "displayable": False,
+                "octants": {o["code"]: None for o in cfg["octants"]},
+                "agency": None, "communion": None}
     scores = [score_response(r, cfg) for r in responses]
     mean = lambda xs: sum(xs) / len(xs)  # noqa: E731
     return {

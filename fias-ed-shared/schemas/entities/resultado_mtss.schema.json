@@ -11,12 +11,26 @@
         "type": "array",
         "items": {
           "type": "object",
-          "required": ["rule_id", "tier1_dimension", "framing", "evidence"],
+          "required": ["rule_id", "tier1_dimension", "framing", "evidence", "validation_status"],
           "properties": {
             "rule_id": {"type": "string"},
             "tier1_dimension": {"type": "string"},
             "framing": {"type": "string"},
-            "evidence": {"type": "object"}
+            "evidence": {"type": "object"},
+            "evidence_segments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["segmento_id", "start_ms", "end_ms"],
+                "properties": {
+                  "segmento_id": {"type": "string", "format": "uuid"},
+                  "start_ms": {"type": "integer", "minimum": 0},
+                  "end_ms": {"type": "integer", "minimum": 1}
+                },
+                "additionalProperties": false
+              }
+            },
+            "validation_status": {"enum": ["validated", "PENDING_SCIENTIFIC_VALIDATION", "engineering_decision", "draft_pending_researcher_review"]}
           },
           "additionalProperties": false
         }

@@ -20,6 +20,22 @@ _LESSON_FIELDS = ("lesson_id", "lesson_date", "disciplina", "turma_id", "duratio
 _SEGMENT_FIELDS = ("segment_id", "start_ms", "end_ms", "role", "pred_raw", "pred_role_constrained", "confidence", "uncertain")
 _PROCESSING_FIELDS = ("app_version", "fias_model", "fias_model_hash", "asr_model", "asr_model_hash", "diarization_model")
 
+# Colunas fixas por tabela do CSV, na ordem em que o cabeçalho é escrito —
+# sempre as mesmas colunas, com ou sem linhas, para que Web e Android
+# exportem arquivos byte-idênticos dado o mesmo dataset (ver DATABASE_MODEL.md).
+TABLE_FIELDS: dict[str, tuple[str, ...]] = {
+    "lessons": ("lesson_id", *_LESSON_FIELDS[1:], "n_segments", "n_intervals", "rules_version"),
+    "segments": ("lesson_id", *_SEGMENT_FIELDS, "text_pseudonymized"),
+    "intervals": ("lesson_id", "interval_index", "start_ms", "category"),
+    "matrix": ("lesson_id", "from_category", "to_category", "count"),
+    "indices": ("lesson_id", "index_id", "value", "reason", "numerator_count", "denominator_count", "validation_status"),
+    "qti_responses": ("lesson_id", "response_index", *(f"q{i}" for i in range(1, 25))),
+    "qti_results": ("lesson_id", "response_count", "displayable", *(f"oc{i}" for i in range(1, 9)), "agency", "communion"),
+    "mtss": ("lesson_id", "rule_id", "tier1_dimension", "framing", "validation_status", "rules_version"),
+    "recommendations": ("lesson_id", "recommendation_id", "rule_id", "validation_status"),
+    "triangulation": ("lesson_id", "pair_id", "fias_value", "qti_available", "qti_values"),
+}
+
 
 class ExportPrivacyError(ValueError):
     pass
@@ -83,7 +99,19 @@ def to_json(dataset: dict) -> str:
 
 
 def _cell(v):
-    return json.dumps(v, ensure_ascii=False) if isinstance(v, (list, dict)) else ("" if v is None else v)
+    """Serialização determinística de uma célula CSV (mesmo resultado em Web/Android):
+    bool -> "true"/"false" minúsculo; None -> célula vazia; list/dict -> JSON compacto
+    (ensure_ascii=False); float -> repr() (representação decimal mais curta que
+    recupera o valor exato); demais tipos, sem transformação."""
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if v is None:
+        return ""
+    if isinstance(v, (list, dict)):
+        return json.dumps(v, ensure_ascii=False)
+    if isinstance(v, float):
+        return repr(v)
+    return v
 
 
 def to_csv_files(dataset: dict) -> dict[str, str]:
@@ -91,10 +119,9 @@ def to_csv_files(dataset: dict) -> dict[str, str]:
     for t in TABLES:
         rows = dataset[t]
         buf = io.StringIO()
-        if rows:
-            w = csv.DictWriter(buf, fieldnames=list(rows[0]), lineterminator="\n")
-            w.writeheader()
-            w.writerows({k: _cell(v) for k, v in r.items()} for r in rows)
+        w = csv.DictWriter(buf, fieldnames=list(TABLE_FIELDS[t]), lineterminator="\n", restval="")
+        w.writeheader()
+        w.writerows({k: _cell(v) for k, v in r.items()} for r in rows)
         files[f"{t}.csv"] = buf.getvalue()
     return files
 

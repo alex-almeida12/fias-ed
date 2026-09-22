@@ -12,7 +12,11 @@
       "rule_id": "MTSS_EXPOSITIVE_PREDOMINANCE",
       "tier1_dimension": "Ensino explícito (modelagem)",
       "framing": "reflection",
-      "evidence": {"count_cat_5": 10}
+      "evidence": {"count_cat_5": 10},
+      "evidence_segments": [
+        {"segmento_id": "01926b3e-7a1c-7c3e-9f00-000000000018", "start_ms": 0, "end_ms": 3000}
+      ],
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
     }
   ],
   "rules_version": "1.0.0"

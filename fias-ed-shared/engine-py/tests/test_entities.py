@@ -48,6 +48,19 @@ def test_base_fields_required():
         validator("aula").validate(ex)
 
 
+def test_resultado_qti_accepts_zero_response_aggregate():
+    """M1: qti.aggregate() com 0 respostas emite octants como objeto com as
+    8 chaves nulas (não None), como resultado_qti.schema.json exige."""
+    from fias_ed_engine.qti import aggregate
+    from fias_ed_engine.rules import load_rules
+
+    agg = aggregate([], load_rules("qti_config"))
+    ex = _load(ENT / "examples" / "resultado_qti.json") | {
+        "response_count": agg["response_count"], "displayable": agg["displayable"],
+        "octants": agg["octants"], "agency": agg["agency"], "communion": agg["communion"]}
+    validator("resultado_qti").validate(ex)
+
+
 def test_no_sensitive_fields_anywhere():
     forbidden = {"student_name", "nome_aluno", "cpf", "email", "voice_embedding", "embedding", "audio_blob", "blob"}
     for p in ENT.glob("*.schema.json"):

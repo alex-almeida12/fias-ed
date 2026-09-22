@@ -87,6 +87,31 @@ def test_empty_export_rejected():
         build_dataset([], include_text=False, exported_at="2026-09-21T12:00:00Z")
 
 
+def test_bool_lowercase_in_csv():
+    ds = build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    files = to_csv_files(ds)
+    seg_rows = list(csv.DictReader(io.StringIO(files["segments.csv"])))
+    assert {r["uncertain"] for r in seg_rows} == {"false"}
+    qti_rows = list(csv.DictReader(io.StringIO(files["qti_results.csv"])))
+    assert qti_rows[0]["displayable"] == "true"
+    for name in ("segments.csv", "qti_results.csv"):
+        assert "True" not in files[name] and "False" not in files[name]
+
+
+def test_empty_table_has_header():
+    ds = {t: [] for t in TABLES}
+    files = to_csv_files(ds)
+    assert csv.DictReader(io.StringIO(files["lessons.csv"])).fieldnames == [
+        "lesson_id", "lesson_date", "disciplina", "turma_id", "duration_ms",
+        "transcript_source", "n_segments", "n_intervals", "rules_version"]
+    assert csv.DictReader(io.StringIO(files["qti_responses.csv"])).fieldnames == \
+        ["lesson_id", "response_index"] + [f"q{i}" for i in range(1, 25)]
+    assert csv.DictReader(io.StringIO(files["qti_results.csv"])).fieldnames == \
+        ["lesson_id", "response_count", "displayable"] + [f"oc{i}" for i in range(1, 9)] + ["agency", "communion"]
+    for t in TABLES:
+        assert files[f"{t}.csv"].splitlines()[0] != "" and len(files[f"{t}.csv"].splitlines()) == 1
+
+
 def test_csv_and_zip(tmp_path):
     ds = build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
     files = to_csv_files(ds)
