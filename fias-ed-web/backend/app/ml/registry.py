@@ -5,7 +5,6 @@ fontes de verdade que divergem em silêncio.
 """
 import hashlib
 import json
-import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -19,16 +18,20 @@ class ModeloInvalido(Exception):
 
 
 def _caminho_registro() -> Path:
-    return Path(os.environ.get("FIAS_ED_MODELS_REGISTRY") or get_settings().models_registry)
+    return get_settings().shared_dir / get_settings().models_registry_rel
 
 
-@lru_cache(maxsize=1)
-def carregar_registro() -> dict:
-    caminho = _caminho_registro()
+@lru_cache(maxsize=None)
+def _ler(caminho: Path) -> dict:
     try:
         return json.loads(caminho.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ModeloInvalido("MODELO_REGISTRO_ILEGIVEL", f"registro ilegível: {caminho}") from exc
+
+
+def carregar_registro() -> dict:
+    caminho = _caminho_registro()
+    return _ler(caminho)
 
 
 def entrada(model_id: str) -> dict:
