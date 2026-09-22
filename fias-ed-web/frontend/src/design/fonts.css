@@ -1,0 +1,8 @@
+@font-face { font-family: "Ubuntu"; font-weight: 400; font-style: normal; font-display: swap;
+  src: url("@shared/design-tokens/fonts/Ubuntu-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Ubuntu"; font-weight: 500; font-style: normal; font-display: swap;
+  src: url("@shared/design-tokens/fonts/Ubuntu-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Ubuntu"; font-weight: 700; font-style: normal; font-display: swap;
+  src: url("@shared/design-tokens/fonts/Ubuntu-Bold.woff2") format("woff2"); }
+@font-face { font-family: "Rokkitt"; font-weight: 100 900; font-style: normal; font-display: swap;
+  src: url("@shared/design-tokens/fonts/Rokkitt%5Bwght%5D.woff2") format("woff2"); }

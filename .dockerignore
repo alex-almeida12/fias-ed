@@ -1,0 +1,9 @@
+.git
+.superpowers
+**/.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+**/dist
+fias-ed-android
+fias-ed-web/.env

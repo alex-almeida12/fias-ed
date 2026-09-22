@@ -6,7 +6,7 @@ uma aula, as decisões de arquitetura já tomadas e o que fica para depois.
 
 ## 1. Visão geral dos fluxos
 
-### Web (subprojeto 2, a construir)
+### Web (subprojeto 2 — fatia W1 implementada)
 
 ```
 Navegador (React)
@@ -20,10 +20,22 @@ PostgreSQL  ◄────────────►  Pipeline local de áudio
  lógico de dados)             BERTimbau — pesos fora do Git)
 ```
 
-O FastAPI roda no PC local do pesquisador via Docker Compose, acessível pelo
-navegador na máquina ou na rede local, sem exposição à internet. O motor
+O FastAPI roda no PC local do pesquisador via Docker Compose, acessível só
+pelo navegador da própria máquina (`127.0.0.1:8080`), sem exposição à rede
+local nem à internet. O motor
 Python (`fias_ed_engine`) é importado diretamente pelo backend: ele não
 reimplementa nenhuma regra, apenas consome os arquivos de `fias-ed-shared/`.
+
+Na fatia W1, o Compose sobe cinco serviços: `web` (nginx não-root com o React
+compilado e os cabeçalhos de segurança; única porta publicada, em
+`127.0.0.1:8080`), `api` (FastAPI), `worker` (mesma imagem da API; consome a
+tabela `job` do PostgreSQL com `SELECT … FOR UPDATE SKIP LOCKED`), `db`
+(PostgreSQL 16 em rede interna, sem porta publicada) e `migrate` (roda o
+Alembic uma vez, com o usuário `fias_ed_migrator`). A API e o worker usam o
+usuário `fias_ed_app`, sem permissão de DDL. A sessão fica no servidor
+(cookie opaco + token CSRF), na mesma origem do frontend, sem CORS. O ciclo da
+aula em W1 vai de `DRAFT` a `AUDIO_VALIDATED`; W2 continua a partir daí.
+Detalhes: `docs/superpowers/specs/2026-09-22-fias-ed-web-w1-fundacao-design.md`.
 
 ### Android (subprojeto 3, a construir)
 
@@ -133,9 +145,9 @@ REPORT_READY
 
 Qualquer etapa pode transicionar para `ERROR` (com `error_code` e `note`)
 em caso de falha técnica; o professor pode retomar a partir do último
-estado consistente. Este fluxo e os nomes de estado vêm da spec do `shared`
-(§9, entidade `Aula`) — não existe, neste repositório, uma descrição do
-prompt original do pesquisador além do que está formalizado nesse enum.
+estado consistente. Este fluxo e os nomes de estado vêm do prompt mestre
+(`docs/PROMPT_MESTRE.md` §13 e §35) e da spec do `shared` (§9, entidade
+`Aula`).
 
 ## 4. Decisões de arquitetura tomadas
 

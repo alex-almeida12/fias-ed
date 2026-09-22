@@ -50,3 +50,8 @@ local.properties
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Ferramentas de agente instaladas no projeto (binários reinstaláveis, ~17 MB cada)
+.claude/
+.agent/
+.gemini/
