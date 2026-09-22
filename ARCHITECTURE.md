@@ -20,8 +20,9 @@ PostgreSQL  ◄────────────►  Pipeline local de áudio
  lógico de dados)             BERTimbau — pesos fora do Git)
 ```
 
-O FastAPI roda no PC local do pesquisador via Docker Compose, acessível pelo
-navegador na máquina ou na rede local, sem exposição à internet. O motor
+O FastAPI roda no PC local do pesquisador via Docker Compose, acessível só
+pelo navegador da própria máquina (`127.0.0.1:8080`), sem exposição à rede
+local nem à internet. O motor
 Python (`fias_ed_engine`) é importado diretamente pelo backend: ele não
 reimplementa nenhuma regra, apenas consome os arquivos de `fias-ed-shared/`.
 
