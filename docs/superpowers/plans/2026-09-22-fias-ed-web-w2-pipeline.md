@@ -1327,9 +1327,18 @@ def test_excluir_conta_apaga_transcricoes_das_aulas(cliente_admin, db, professor
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_revisao.py`
 Expected: FAIL — a exclusão da W1 não conhece as tabelas novas
 
-Estender `soft_delete_aula` em `app/aulas/service.py` para apagar fisicamente
-`ClassificacaoFIAS`, `IndicadorFIAS`, `Segmento`, `Falante` e `Transcricao` da
-aula, na ordem das chaves estrangeiras, e devolver os caminhos de arquivo como
+Estender `soft_delete_aula` em `app/aulas/service.py` respeitando a fronteira que
+o `PRIVACY.md` define: **exclusão física é para áudio e transcrição**; as demais
+entidades usam `deleted_at`, "preservando o histórico necessário à
+reprodutibilidade científica".
+
+- **Apagar fisicamente:** `Transcricao`, `Segmento`, `Falante` e
+  `ClassificacaoFIAS` — as três primeiras são a transcrição, e a quarta vai junto
+  por necessidade estrutural (`segmento_id` é NOT NULL).
+- **Soft delete:** `IndicadorFIAS`, que é índice agregado sem texto e sem nome,
+  ao lado de `Processamento`, que já seguia essa regra.
+
+Apagar na ordem das chaves estrangeiras, e devolver os caminhos de arquivo como
 já faz. `delete_conta` em `app/admin/routes.py` já chama `soft_delete_aula` por
 aula, então herda o comportamento.
 
