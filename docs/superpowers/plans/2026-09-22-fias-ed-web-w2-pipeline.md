@@ -39,7 +39,8 @@ Valem para todas as tasks. Copiadas do spec e do plano da W1.
 2. **`Falante` guarda papel, não voz.** A tabela tem `papel` (`PROFESSOR`/`ALUNO`) e nenhuma coluna de agrupamento por voz. Os rótulos do `pyannote` vivem só na memória do job de diarização e no payload da tela de escolha; depois da escolha, somem.
 3. **O alinhamento é função pura.** `align_segments_to_turns(segmentos, turnos)` não toca banco nem modelo, e é onde mora a lógica que mais erra. Testado sozinho, com casos construídos à mão.
 4. **A revisão salva por segmento, com `updated_at` otimista.** Duas abas editando o mesmo segmento: a segunda escrita recebe 409 e a tela recarrega aquele segmento, em vez de sobrescrever em silêncio.
-5. **A pseudonimização usa lista de nomes + heurística de maiúscula, não modelo.** Um modelo de NER seria um quarto modelo para carregar, e o §33 já veda depender de LLM. A decisão é conservadora: na dúvida, pseudonimiza (falso positivo troca uma palavra comum por `[NOME]` na versão exportada; falso negativo vaza o nome de um estudante).
+5. **A pseudonimização usa NER local unido a uma heurística conservadora.** O detector primário é um modelo de NER de português pequeno e de CPU (`pt_core_news_sm` do spaCy ou equivalente de licença aberta), na ordem de dezenas de MB — irrelevante ao lado dos 435 MB do BERTimbau que o registro já traz, e sem disputar VRAM. A heurística de maiúscula continua rodando **em união** com ele: qualquer um dos dois que aponte um nome, pseudonimiza. NER em fala transcrita rende menos que em texto limpo, e é por isso que a heurística fica — não para substituí-lo, para cobrir o que ele perde. O viés é deliberadamente conservador: um falso positivo troca uma palavra comum por `[NOME]` na versão exportada; um falso negativo vaza o nome de um estudante.
+   (O §33 veda LLM externo para pontuação e recomendação — não alcança um NER local usado para privacidade.)
 6. **A tela de padrões mostra tudo na mesma página**, por decisão registrada no spec §2.5. A matriz vai como tabela de números.
 
 ## Como rodar (referência para todas as tasks)
@@ -1022,7 +1023,10 @@ Item 4 do Review Focus. Um falso negativo aqui vaza o nome de um estudante para 
 - Test: `backend/tests/test_pseudonymize.py`
 
 **Interfaces:**
-- Produces: `pseudonimizar(texto: str) -> str` — troca nomes próprios por `[NOME]`.
+- Produces:
+  - `pseudonimizar(texto: str) -> str` — troca nomes próprios por `[NOME]`; união de NER e heurística
+  - `nomes_por_ner(texto: str) -> set[str]` — spans marcados como pessoa pelo modelo
+  - `nomes_por_heuristica(texto: str) -> set[str]` — a regra de maiúscula, mantida como rede
 
 - [ ] **Step 1: Escrever o teste que falha**
 
@@ -1068,6 +1072,18 @@ def test_sigla_em_caixa_alta_nao_vira_nome():
     assert pseudonimizar("a prova do ENEM") == "a prova do ENEM"
 
 
+def test_ner_pega_nome_que_a_heuristica_perde(monkeypatch):
+    # Nome no começo da frase: a heurística se cala de propósito, o NER não.
+    monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_ner", lambda t: {"Rafael"})
+    assert pseudonimizar("Rafael, vem ao quadro") == "[NOME], vem ao quadro"
+
+
+def test_sem_modelo_de_ner_a_heuristica_ainda_protege(monkeypatch):
+    """O modelo pode faltar no diretório; isso não pode virar vazamento silencioso."""
+    monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_ner", lambda t: set())
+    assert "[NOME]" in pseudonimizar("chamei a Ana no quadro")
+
+
 def test_texto_vazio():
     assert pseudonimizar("") == ""
 ```
@@ -1082,10 +1098,11 @@ Expected: FAIL com `ModuleNotFoundError: No module named 'app.pipeline'`
 ```python
 """Troca nomes próprios por [NOME] (PRIVACY.md, §48).
 
-Sem modelo de NER: seria um quarto modelo para carregar, e o §33 veda depender
-de LLM. A heurística é deliberadamente conservadora — na dúvida, pseudonimiza.
-Um falso positivo troca uma palavra comum por [NOME] na versão exportada; um
-falso negativo vaza o nome de um estudante.
+União de dois detectores: um NER local de português (CPU, dezenas de MB) e uma
+heurística de maiúscula. Qualquer um dos dois que aponte, pseudonimiza — NER em
+fala transcrita perde casos que a heurística pega, e vice-versa. O viés é
+deliberadamente conservador: um falso positivo troca uma palavra comum por
+[NOME] na versão exportada; um falso negativo vaza o nome de um estudante.
 """
 import re
 
@@ -1104,9 +1121,19 @@ NAO_SAO_NOMES = {
 _PALAVRA = re.compile(r"\b([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][a-záàâãéêíóôõúç]+)\b")
 
 
+def nomes_por_ner(texto: str) -> set[str]:
+    """Spans marcados como pessoa pelo modelo. Carregado uma vez, em CPU."""
+    nlp = _modelo()
+    if nlp is None:  # modelo ausente: a heurística sozinha ainda protege
+        return set()
+    return {ent.text for ent in nlp(texto).ents if ent.label_ in ("PER", "PERSON")}
+
+
 def pseudonimizar(texto: str) -> str:
     if not texto:
         return texto
+    for nome in sorted(nomes_por_ner(texto), key=len, reverse=True):
+        texto = texto.replace(nome, MARCADOR)
 
     def troca(m: re.Match) -> str:
         palavra = m.group(1)
