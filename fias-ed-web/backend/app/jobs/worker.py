@@ -1,5 +1,6 @@
 import logging
 import time
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,13 @@ from app.core.logging import configure_logging, log_event
 from app.jobs import handlers
 from app.jobs.queue import claim_next, recover_stale, retry_or_fail
 from app.models import Job
+
+
+HEARTBEAT_FILE = Path("/tmp/fias-ed-worker-heartbeat")  # nosec B108 - lido só pelo healthcheck do container
+
+
+def beat() -> None:
+    HEARTBEAT_FILE.touch()
 
 
 def run_once(db: Session) -> bool:
@@ -33,6 +41,7 @@ def main() -> None:
     configure_logging()
     log_event("worker_started")
     while True:
+        beat()
         with SessionLocal(bind=get_engine()) as db:
             worked = run_once(db)
         if not worked:

@@ -131,3 +131,27 @@ TCLE (professores e responsáveis por estudantes menores), TALE (estudantes),
 e termo específico de áudio para entrevistas (CEP l.168). Este documento não
 substitui nem resume os termos completos; ele apenas referencia onde cada
 prática de dado está prevista neles.
+
+## FIAS-ED Web (fatia W1)
+
+- **Onde ficam os dados:** volumes Docker `pgdata` (banco) e `audio_store`
+  (áudios originais) no PC do pesquisador. A única porta publicada é
+  `127.0.0.1:8080`; o banco fica numa rede interna sem porta publicada.
+  Nenhum dado é enviado a serviços externos.
+- **Contas:** professor entra com usuário e senha (hash Argon2id). Senhas
+  provisórias, criadas pelo administrador, precisam ser trocadas no primeiro
+  acesso.
+- **Acesso do pesquisador:** a conta `ADMIN_LOCAL` tem acesso total às aulas
+  dos professores (ler, ouvir o áudio, criar, alterar e excluir em nome do
+  professor). Toda leitura ou alteração feita em nome de um professor é
+  registrada na tabela interna `acesso_admin` (quem, qual professor, qual
+  recurso, qual ação, quando), e o professor vê na aula o aviso "Alterada pelo
+  administrador em <data>".
+- **Escolas:** cadastro comum a todos os professores (nome, município,
+  região), sem dado pessoal.
+- **Exclusão:** excluir uma aula apaga o arquivo de áudio na hora; os
+  registros ficam marcados como excluídos (`deleted_at`) e deixam de aparecer
+  em qualquer consulta. Excluir uma conta aplica a mesma regra a todas as
+  aulas do professor.
+- **Logs:** registram só identificadores, status, duração e códigos de erro;
+  nunca senha, token, nomes, nomes de arquivo ou conteúdo das aulas.
