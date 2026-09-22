@@ -7,6 +7,9 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 10001 app \
  && mkdir -p /data/audio && chown app:app /data/audio
+# pip-audit (Task 11) aponta CVEs corrigidas no próprio pip da imagem base; sem dependência
+# nenhuma em pyproject.toml, a correção é atualizar a ferramenta de instalação aqui.
+RUN pip install --upgrade "pip>=26.2"
 COPY fias-ed-shared /opt/fias-ed-shared
 # Editável: o motor localiza rules/ e schemas/ relativo ao próprio código.
 RUN pip install -e /opt/fias-ed-shared/engine-py
