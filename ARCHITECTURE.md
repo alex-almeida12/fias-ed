@@ -75,12 +75,16 @@ Android:
   é a implementação que o backend Web importa diretamente e o exemplo
   executável de como interpretar as regras.
 - **Motor Kotlin (a implementar no subprojeto 3)**: reimplementação das
-  mesmas funções (`segments_to_intervals`, `transition_matrix`,
-  `compute_indices`, `constrain_by_role`, `score_qti`, `triangulate`,
-  `evaluate_mtss`, `recommendations`), lendo os mesmos arquivos de `rules/`
-  e validado rodando os mesmos casos de `conformance/`. Enquanto esse motor
-  não existir, o subprojeto 3 não está liberado para gerar relatórios finais
-  no aparelho.
+  mesmas funções validadas por `conformance/` (`segments_to_intervals`,
+  `transition_matrix`, `compute_indices`, `constrain_by_role`,
+  `score_response`, `aggregate_qti`, `evaluate_mtss`, `triangulate` —
+  conjunto exato de `engine-py/tests/test_conformance.py::test_cases_exist_for_every_function`),
+  lendo os mesmos arquivos de `rules/` e validado rodando os mesmos casos de
+  `conformance/`. Outras funções do motor Python, como `recommendations`
+  (`fias_ed_engine.mtss`), também precisam ser portadas para o Kotlin, mas
+  hoje não têm casos de conformidade próprios. Enquanto o motor Kotlin não
+  existir, o subprojeto 3 não está liberado para gerar relatórios finais no
+  aparelho.
 - **Design tokens** (`design-tokens/tokens.json` → `tokens.css` para o Web,
   `FiasTokens.kt` para o Compose) e fontes locais (Ubuntu, Rokkitt), para
   que as duas interfaces compartilhem a mesma identidade visual.
