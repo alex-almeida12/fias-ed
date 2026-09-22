@@ -6,6 +6,7 @@ def test_detects_forbidden():
     assert sorted(find_forbidden("Seu desempenho foi ruim")) == ["desempenho", "ruim"]
     assert find_forbidden("Você fez errado") == ["errado"]
     assert find_forbidden("A aula está não conforme") == ["conforme", "não conforme"]
+    assert find_forbidden("Os resultados foram ruins") == ["ruim"]
 
 
 def test_word_boundaries():

@@ -3,7 +3,7 @@ import re
 
 FORBIDDEN_PATTERNS: list[tuple[str, str]] = [
     ("errado", r"\berrad[oa]s?\b"),
-    ("ruim", r"\bruim\b"),
+    ("ruim", r"\bru(im|ins)\b"),
     ("inadequado", r"\binadequad[oa]s?\b"),
     ("nota", r"\bnotas?\b"),
     ("desempenho", r"\bdesempenhos?\b"),
