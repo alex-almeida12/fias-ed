@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.errors import install_error_handlers
+from app.core.errors import CatchUnhandledMiddleware, install_error_handlers
 from app.core.logging import configure_logging, log_event
 
 health_router = APIRouter()
@@ -32,6 +32,9 @@ def create_app() -> FastAPI:
     configure_logging()
     app = FastAPI(title="FIAS-ED", docs_url=None, redoc_url=None, openapi_url=None)
     install_error_handlers(app)
+    # Ordem: o último adicionado fica por fora. request_log envolve o CatchUnhandled, então
+    # também registra as respostas 500 geradas por ele.
+    app.add_middleware(CatchUnhandledMiddleware)
     app.middleware("http")(request_log)
     app.include_router(health_router, prefix="/api")
 

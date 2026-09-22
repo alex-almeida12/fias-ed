@@ -41,6 +41,31 @@ def test_unhandled_error_hides_details():
     assert "segredo" not in r.text
 
 
+def test_unhandled_error_not_reraised_nor_logged(caplog, capsys):
+    """Ex.: IntegrityError do SQLAlchemy traz [parameters: {...}] (nomes, hashes) na mensagem.
+    A exceção não pode sair da aplicação (o uvicorn logaria o traceback) nem aparecer em log."""
+    caplog.set_level(logging.DEBUG)
+    app = create_app()
+    secret = "[parameters: {'display_name': 'Professora Sigilosa', 'password_hash': '$argon2id$x'}]"
+
+    @app.get("/api/_boom")
+    def boom():
+        raise RuntimeError(secret)
+
+    c = TestClient(app, raise_server_exceptions=True, base_url="https://testserver")
+    r = c.get("/api/_boom")  # não levanta: a exceção foi tratada sem ser relançada
+    assert r.status_code == 500
+    assert r.json() == {"error_code": "INTERNAL", "message": "Algo deu errado. Tente novamente."}
+    captured = capsys.readouterr()
+    everything = caplog.text + captured.out + captured.err + json.dumps(
+        [getattr(rec, "fields", {}) for rec in caplog.records], ensure_ascii=False)
+    for piece in ("Professora Sigilosa", "argon2id", "parameters", "Traceback"):
+        assert piece not in everything, piece
+    events = [getattr(rec, "fields", {}) for rec in caplog.records]
+    assert {"event": "unhandled_error", "error_type": "RuntimeError"} in events
+    assert any(e.get("event") == "request" and e.get("status_code") == "500" for e in events)
+
+
 def test_app_error_with_extra_fields():
     app = create_app()
 
