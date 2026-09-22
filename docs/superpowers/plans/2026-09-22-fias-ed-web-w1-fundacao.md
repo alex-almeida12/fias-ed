@@ -6974,11 +6974,11 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: telas das Tasks 13–15 rodando em `http://localhost:8080`.
 - Produces: telas revisadas; relatório com os achados do Impeccable, as correções e a tabela do §84.
 
-- [ ] **Step 1: Pré-requisito**
+- [x] **Step 1: Pré-requisito**
 
 Confirmar que o Impeccable está disponível na sessão (skill `impeccable` listada). Se não estiver, parar e reportar **BLOCKED — Impeccable não instalado** (o pesquisador instala com `npx impeccable install --global --providers=claude -y`). Não substituir a revisão por outra ferramenta.
 
-- [ ] **Step 2: Preparar dados de exemplo**
+- [x] **Step 2: Preparar dados de exemplo**
 
 Gerar um áudio de exemplo (de `fias-ed-web/`):
 ```bash
@@ -6987,7 +6987,7 @@ cp exemplo.wav exemplo-falso.mp3
 ```
 Com o sistema no ar (`docker compose up -d --build`), pela interface: entrar como admin, criar uma conta de professor, entrar como professor (trocando a senha provisória) e criar pelo menos três aulas — uma com `exemplo.wav` (fica conferida), uma com `exemplo-falso.mp3` (fica com erro) e uma sem áudio. Criar uma segunda conta sem aulas para ver o estado vazio. Não versionar `exemplo.wav` nem `exemplo-falso.mp3` (apagar ao fim da task).
 
-- [ ] **Step 3: Ciclo de revisão (prompt §2)**
+- [x] **Step 3: Ciclo de revisão (prompt §2)**
 
 Para cada tela — **Home**, **Minhas aulas** (vazia e com aulas), **Nova Aula** (incluindo "Cadastrar nova turma/escola" e o envio com barra de progresso), **Aula** (processando, com erro, conferida), em largura de 360 px e de 1280 px:
 1. Rodar a revisão do Impeccable sobre a tela real e os arquivos da tela.
@@ -6995,11 +6995,11 @@ Para cada tela — **Home**, **Minhas aulas** (vazia e com aulas), **Nova Aula**
 3. `cd frontend && npm test && npm run lint && npm run build`.
 4. Revisar de novo com o Impeccable até não haver achado relevante.
 
-- [ ] **Step 4: Critério visual final (prompt §84)**
+- [x] **Step 4: Critério visual final (prompt §84)**
 
 Responder no relatório: "Esta interface parece um produto criado especificamente para professores ou parece um template gerado por IA?" e preencher a tabela, com evidência (arquivo/tela) por item: hierarquia; espaçamento; tipografia; contraste; consistência; uso da paleta; uso correto de Ubuntu; uso editorial de Rokkitt; responsividade; densidade; legibilidade; ausência de gradientes; ausência de componentes decorativos desnecessários. Qualquer item reprovado volta ao Step 3.
 
-- [ ] **Step 5: Rebuild, aceitação e commit**
+- [x] **Step 5: Rebuild, aceitação e commit**
 
 Run: `docker compose up -d --build web` e `python scripts/smoke.py --admin-user <usuario>`
 Expected: `SMOKE OK`.
