@@ -1,11 +1,11 @@
-name: fias-ed-test
+name: fias-ed-web-test
 services:
   db-test:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: test-superuser
-      POSTGRES_DB: fias_ed
+      POSTGRES_DB: fias_ed_web_test
       FIAS_ED_MIGRATOR_PASSWORD: test-migrator
       FIAS_ED_APP_PASSWORD: test-app
     volumes:
@@ -13,7 +13,7 @@ services:
     tmpfs:
       - /var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d fias_ed"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fias_ed_web_test"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -23,8 +23,8 @@ services:
       dockerfile: fias-ed-web/backend/Dockerfile
       target: dev
     environment:
-      DATABASE_URL: postgresql+psycopg://fias_ed_app:test-app@db-test:5432/fias_ed
-      MIGRATOR_DATABASE_URL: postgresql+psycopg://fias_ed_migrator:test-migrator@db-test:5432/fias_ed
+      DATABASE_URL: postgresql+psycopg://fias_ed_app:test-app@db-test:5432/fias_ed_web_test
+      MIGRATOR_DATABASE_URL: postgresql+psycopg://fias_ed_migrator:test-migrator@db-test:5432/fias_ed_web_test
       AUDIO_STORE: /tmp/audio
     volumes:
       - ./backend:/app
