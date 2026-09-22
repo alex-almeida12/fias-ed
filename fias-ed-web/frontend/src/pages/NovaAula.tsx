@@ -3,12 +3,11 @@ import { useNavigate } from "react-router";
 import { api, ApiError, sendAndProcess } from "../api/client";
 import type { Aula, Disciplina, Turma } from "../api/types";
 import { AudioPicker } from "../app/AudioPicker";
+import { localDateInput } from "../app/format";
 import { Banner } from "../design/components/Banner";
 import { Button } from "../design/components/Button";
 import { SelectField, TextAreaField, TextField } from "../design/components/Field";
 import { NovaTurma } from "./NovaTurma";
-
-const today = () => new Date().toISOString().slice(0, 10);
 
 export function NovaAula() {
   const navigate = useNavigate();
@@ -17,7 +16,7 @@ export function NovaAula() {
   const [turmaId, setTurmaId] = useState("");
   const [disciplinaId, setDisciplinaId] = useState("");
   const [novaDisciplina, setNovaDisciplina] = useState("");
-  const [data, setData] = useState(today());
+  const [data, setData] = useState(() => localDateInput());
   const [nota, setNota] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState<number | null>(null);

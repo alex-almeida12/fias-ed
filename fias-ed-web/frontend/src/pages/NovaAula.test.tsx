@@ -15,7 +15,12 @@ const AULA = { id: "a1", lesson_date: "2026-09-22", status: "DRAFT", turma: { id
   disciplina: { id: "d1", name: "Ciências" }, note: null, error_code: null, error_message: null, audio: null,
   upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null };
 
-beforeEach(() => vi.mocked(sendAndProcess).mockReset());
+// Nota: chaves obrigatórias aqui — mockReset() retorna o próprio mock (uma função); uma
+// arrow sem chaves devolveria essa função ao runner, que a trataria como callback de
+// teardown do hook e a invocaria (sendAndProcess() sem argumentos) após cada teste.
+beforeEach(() => {
+  vi.mocked(sendAndProcess).mockReset();
+});
 
 test("preenche, seleciona o áudio e processa a aula", async () => {
   vi.mocked(sendAndProcess).mockResolvedValue({ ...AULA, status: "AUDIO_IMPORTED", job_ativo: true });
@@ -84,12 +89,8 @@ test("nova turma com escola duplicada oferece usar a existente", async () => {
 
 // Ruling P9: quando a aula já foi criada mas o upload/processar falha, a mensagem de erro
 // deve ser levada para a página da Aula via navigation state, não perdida.
-// Nota: usamos mockImplementationOnce (em vez de mockRejectedValue) porque, combinado com o
-// mockReset() do beforeEach, mockRejectedValue faz o Vitest reportar por engano essa rejeição
-// (que É devidamente capturada pelo try/catch de onSubmit) como "unhandled rejection".
 test("upload falha após criar a aula: mensagem aparece na página da aula", async () => {
-  vi.mocked(sendAndProcess).mockImplementationOnce(() =>
-    Promise.reject(new ApiError(413, "AUDIO_TOO_LARGE", "O arquivo é maior que o limite permitido.")));
+  vi.mocked(sendAndProcess).mockRejectedValue(new ApiError(413, "AUDIO_TOO_LARGE", "O arquivo é maior que o limite permitido."));
   mockApi({
     "GET /api/auth/me": () => jsonResponse(PROFESSORA),
     "GET /api/turmas": () => jsonResponse([TURMA]),
