@@ -39,6 +39,7 @@ coverage/
 # Android / Gradle
 .gradle/
 build/
+!fias-ed-shared/design-tokens/build/
 local.properties
 *.apk
 *.aab

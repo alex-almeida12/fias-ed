@@ -1,0 +1,48 @@
+{
+  "Ubuntu-Regular.ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ufl/ubuntu/Ubuntu-Regular.ttf",
+    "sha256": "3128df86a31805618436d0ae5651ba4285d0c9de0a39057d025f64ee33bceb64",
+    "size_bytes": 351884
+  },
+  "Ubuntu-Regular.woff2": {
+    "derived_from": "Ubuntu-Regular.ttf",
+    "sha256": "0b4921b37bde99404b6bd23fc8e6780884a84ce895d59c43fbbf1a126cb1a54d"
+  },
+  "Ubuntu-Medium.ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ufl/ubuntu/Ubuntu-Medium.ttf",
+    "sha256": "3cd952b8b52581e48a8fa95b31c8829c2baa41b635042a69587d57f98092961e",
+    "size_bytes": 339360
+  },
+  "Ubuntu-Medium.woff2": {
+    "derived_from": "Ubuntu-Medium.ttf",
+    "sha256": "0f98d5b6581d55c1485a13c0a8ebbc42c1ca64ad9c97fd34c1b7c7f997c554df"
+  },
+  "Ubuntu-Bold.ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ufl/ubuntu/Ubuntu-Bold.ttf",
+    "sha256": "679b5c1e09cab3156bb8ef529735f9382bf31ca7ac737382ab959297f8d82ad4",
+    "size_bytes": 331612
+  },
+  "Ubuntu-Bold.woff2": {
+    "derived_from": "Ubuntu-Bold.ttf",
+    "sha256": "99f83b25437a84576f5e1cacb898c8857808838313cf6709ee5fd07482656344"
+  },
+  "UFL.txt": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ufl/ubuntu/UFL.txt",
+    "sha256": "2f0015108d68627bd788d313f529c21ff4da2c2c42a5e1f3883acc83480f9002",
+    "size_bytes": 4673
+  },
+  "Rokkitt[wght].ttf": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/rokkitt/Rokkitt%5Bwght%5D.ttf",
+    "sha256": "737b2881d2e98f85424b473ab049da3216289a1f84266becb972c87664de2b40",
+    "size_bytes": 133344
+  },
+  "Rokkitt[wght].woff2": {
+    "derived_from": "Rokkitt[wght].ttf",
+    "sha256": "e4858705935b5f4047f13af3b6ade0ecb71d985768895507804a9c5a8fdba502"
+  },
+  "OFL-Rokkitt.txt": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/rokkitt/OFL.txt",
+    "sha256": "31501a9490dce395cdb40015237d3684186b79f81dd6a31442d669eb7da81066",
+    "size_bytes": 4483
+  }
+}
