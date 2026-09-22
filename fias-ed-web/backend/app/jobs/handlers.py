@@ -56,10 +56,19 @@ def handle_prepare_audio(db: Session, job: Job) -> None:
         finish_job(db, job)
         db.commit()
         return
+    # O professor precisa ver "Preparando sua aula…" durante a normalização, que
+    # numa aula de 90 min é o estágio mais demorado. Sem isto, PREPROCESSING não
+    # é usado por ninguém e a tela fica parada no status anterior.
+    aula.status = "PREPROCESSING"
+    db.commit()
     trabalho = work_path(aula.id)
     try:
         normalizar(abs_path(audio.path), trabalho)
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+        # fail_job é terminal: não há retry. Uma saída parcial do ffmpeg ficaria
+        # órfã para sempre — mais de 170 MB numa aula de 90 min. handle_validate_audio
+        # já faz a limpeza equivalente no seu caminho de erro.
+        trabalho.unlink(missing_ok=True)
         fail_job(db, job, "AUDIO_PREPARO_FALHOU")
         db.commit()
         log_event("audio_prepare_failed", aula_id=aula.id, job_id=job.id)

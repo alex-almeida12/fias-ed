@@ -1,9 +1,12 @@
+import subprocess
 import uuid
 
 import pytest
 
 from app.audio.prepare import chunks_dir, cortar, limpar_chunks, planejar_chunks, work_path
+from app.audio.probe import probe
 from app.audio.storage import ensure_dirs, store_root
+from app.jobs import handlers
 from app.jobs.handlers import HANDLERS
 from app.jobs.queue import enqueue
 from app.models import Audio
@@ -81,6 +84,17 @@ def test_limpar_chunks_e_silencioso_se_o_diretorio_nao_existe(tmp_path):
     limpar_chunks(tmp_path / "nao-existe")  # não levanta
 
 
+def test_cortar_produz_pedacos_com_a_duracao_planejada(tmp_path, wav_sintetico):
+    """Mede a duração real de cada .wav com ffprobe, em vez de ecoar o plano de
+    entrada: é a única forma de um erro em -ss/-t aparecer no teste."""
+    plano = [(0, 2_000), (2_000, 2_000), (4_000, 1_000)]
+    chunks = cortar(wav_sintetico, plano, tmp_path)
+    reais = [probe(c.caminho).duration_ms for c in chunks]
+    for real, (_, planejado) in zip(reais, plano):
+        assert abs(real - planejado) <= 50  # tolerância de um quadro
+    assert abs(sum(reais) - sum(d for _, d in plano)) <= 50
+
+
 # ---- handle_prepare_audio ------------------------------------------------------------
 
 @pytest.fixture
@@ -135,3 +149,44 @@ def test_prepare_audio_de_audio_ilegivel_vira_erro_com_mensagem_humana(db, aula_
     db.refresh(aula_com_audio_quebrado)
     assert aula_com_audio_quebrado.status == "ERROR"
     assert aula_com_audio_quebrado.error_code == "AUDIO_PREPARO_FALHOU"
+
+
+def test_prepare_audio_nao_deixa_arquivo_de_trabalho_orfao_ao_falhar(db, aula_validada, monkeypatch):
+    """fail_job é terminal — não há retry. Se o ffmpeg escreve saída parcial antes de
+    morrer (CalledProcessError depois de I/O parcial, ou TimeoutExpired), o arquivo em
+    work_path ficaria no disco para sempre — mais de 170 MB numa aula de 90 min.
+
+    O áudio corrompido de `aula_com_audio_quebrado` não serve para provar isto: o
+    ffmpeg rejeita o conteúdo de teste antes de abrir o arquivo de saída, então
+    work_path nunca chega a existir e o teste passaria mesmo sem o unlink() — sem
+    provar nada. Simulo a saída parcial diretamente."""
+    def normalizar_com_saida_parcial(origem, destino):
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(b"RIFF-parcial")
+        raise subprocess.CalledProcessError(1, ["ffmpeg"])
+
+    monkeypatch.setattr(handlers, "normalizar", normalizar_com_saida_parcial)
+    job = enqueue(db, aula_validada.id, "prepare_audio")
+    db.commit()
+    HANDLERS["prepare_audio"](db, job)
+    assert not work_path(aula_validada.id).exists()
+    db.refresh(aula_validada)
+    assert aula_validada.status == "ERROR" and aula_validada.error_code == "AUDIO_PREPARO_FALHOU"
+
+
+def test_prepare_audio_marca_preprocessing_antes_de_normalizar(db, aula_validada, monkeypatch):
+    """PREPROCESSING precisa estar commitado (visível a quem lê a aula) antes do
+    ffmpeg começar, que é o estágio mais demorado do preparo."""
+    capturado = {}
+
+    def normalizar_fake(origem, destino):
+        db.refresh(aula_validada)
+        capturado["status"] = aula_validada.status
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(b"RIFF")
+
+    monkeypatch.setattr(handlers, "normalizar", normalizar_fake)
+    job = enqueue(db, aula_validada.id, "prepare_audio")
+    db.commit()
+    HANDLERS["prepare_audio"](db, job)
+    assert capturado["status"] == "PREPROCESSING"
