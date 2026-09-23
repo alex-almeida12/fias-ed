@@ -261,13 +261,46 @@ docker compose -f docker-compose.test.yml run --rm api-test pip-audit --skip-edi
 npm --prefix frontend audit --audit-level=high
 ```
 
-Última execução (2026-09-22):
+Última execução (2026-09-23):
 
 | Ferramenta | Resultado |
 |---|---|
-| bandit (severidade alta) | `No issues identified.` |
-| pip-audit | `No known vulnerabilities found` (os pacotes editáveis `fias-ed-engine` e `fias-ed-web-api` são pulados, como esperado) |
+| bandit (severidade alta) | `No issues identified.` (2 achados médios, 0 altos) |
+| pip-audit | **7 vulnerabilidades conhecidas em 2 pacotes** — ver abaixo |
 | npm audit (alta ou crítica) | `found 0 vulnerabilities` |
+
+### pip-audit: achados em aberto
+
+Esta é a primeira execução do `pip-audit` sobre o conjunto de dependências de
+W2, que trouxe `torch`, `transformers`, `faster-whisper` e `pyannote.audio`.
+A execução anterior (W1) dizia `No known vulnerabilities found`; aquele
+resultado valia para um conjunto de dependências que não existe mais.
+
+| Pacote | Versão | ID | Severidade | O quê | Corrigido em |
+|---|---|---|---|---|---|
+| setuptools | 78.1.0 | CVE-2025-47273 (PYSEC-2025-49) | **HIGH** | Path traversal em `PackageIndex.download` → escrita de arquivo arbitrária | 78.1.1 |
+| setuptools | 78.1.0 | CVE-2026-59890 (PYSEC-2026-3447) | MODERATE | Bypass de exclusão do `MANIFEST.in` no sdist (macOS) | 83.0.0 |
+| transformers | 4.57.6 | CVE-2025-14929 (PYSEC-2025-217) | **HIGH** (CVSS 7.8) | — | sem versão corrigida publicada |
+| transformers | 4.57.6 | CVE-2026-1839 (PYSEC-2026-2288) | MODERATE | Execução de código arbitrário na classe `Trainer` | 5.0.0 |
+| transformers | 4.57.6 | CVE-2026-4372 (PYSEC-2026-2289) | **HIGH** | Execução remota de código | 5.3.0 |
+| transformers | 4.57.6 | CVE-2026-5241 (PYSEC-2026-2290) | **HIGH** | Execução de código no carregamento do modelo (caminho do LightGlue) | 5.5.0 |
+| transformers | 4.57.6 | CVE-2026-9856 (PYSEC-2026-3929) | **HIGH** | Path traversal em `save_pretrained` → escrita de arquivo arbitrária | 5.10.0 |
+
+**Nada foi tratado ainda: a decisão está em aberto.** As correções do
+`transformers` exigem a série 5.x, uma troca de versão maior, e por isso não
+são uma atualização de rotina. Até que a decisão seja tomada, fica registrado
+o que o produto de fato faz — o que reduz, mas não elimina, a exposição:
+
+- O produto **não treina** e **não chama `save_pretrained`**: `Trainer`
+  (CVE-2026-1839) e `save_pretrained` (CVE-2026-9856) não estão nos caminhos
+  de código usados.
+- O produto **carrega** modelo (`from_pretrained`), que é o caminho de
+  CVE-2026-4372 e CVE-2026-5241. Ele carrega só de `/models`, montado
+  somente leitura, com `local_files_only=True` e `HF_HUB_OFFLINE=1`, e depois
+  de `app/ml/registry.py` conferir SHA-256 de cada artefato e recusar o
+  diretório se houver `forbidden_files`. Nenhum peso vem da rede em execução.
+- `setuptools` é dependência de construção da imagem; `PackageIndex.download`
+  (CVE-2025-47273) não é chamado em execução.
 
 ## 7. Backup e restauração
 

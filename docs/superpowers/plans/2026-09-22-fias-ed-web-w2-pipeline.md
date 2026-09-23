@@ -3208,7 +3208,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: tudo.
 - Produces: evidência dos 13 critérios de aceite do spec §13, registrada no corpo do commit.
 
-- [ ] **Step 1: Suítes e auditorias**
+- [x] **Step 1: Suítes e auditorias**
 
 Run (de `fias-ed-web/`):
 ```bash
@@ -3228,7 +3228,17 @@ Expected: PASS.
 rodar o arquivo suspeito cinco vezes e contar. Um teste que falha em 1 de 5 é
 defeito de teste, não azar, e é corrigido nesta task.
 
-- [ ] **Step 2: Sistema no ar e fluxo completo**
+- [x] **Step 2: Sistema no ar e fluxo completo**
+
+> **BLOQUEADO na parte do fluxo completo**, pela mesma razão da Task 16 Step 6:
+> sem o peso do `pyannote`, a aula para em `ERROR`/`DIARIZACAO_FALHOU`. Com os
+> modelos reais, pela interface, o caminho vai de `AUDIO_VALIDATED` a
+> `TRANSCRIBED` (Whisper real) e falha ali. O `BERTimbau` também não está em
+> `/models`: `setup_models.py` baixa o `pyannote` antes de copiar o
+> classificador, então o 403 impediu os dois. A cadeia inteira até
+> `FIAS_COMPLETED` está provada com dublês em
+> `backend/tests/test_jobs.py::test_aula_validada_percorre_o_pipeline_ate_o_fim_sem_ajuda`.
+> O resto do Step (containers, portas, `id -u`) foi conferido e passa.
 
 Run:
 ```bash
@@ -3243,7 +3253,7 @@ Expected: todos `healthy` (`migrate` saiu com 0); só `web` publica, em
 Pela interface, levar uma aula de `AUDIO_VALIDATED` a `FIAS_COMPLETED` sem
 tocar no banco.
 
-- [ ] **Step 3: Fontes científicas intactas**
+- [x] **Step 3: Fontes científicas intactas**
 
 Run (da raiz do monorepo):
 ```bash
@@ -3256,11 +3266,11 @@ qualquer coisa: o snapshot cobre 856 arquivos de plumbing do git no
 `qti_system`, e `FETCH_HEAD` muda a cada `git fetch` sem conter conteúdo do
 projeto. Diferença fora de `.git/` é que é alteração de fonte científica.
 
-- [ ] **Step 4: Conferir os 13 critérios de aceite do spec §13, um a um**
+- [x] **Step 4: Conferir os 13 critérios de aceite do spec §13, um a um**
 
 Registrar, para cada um, o comando ou teste que o comprova.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add fias-ed-web/README.md
