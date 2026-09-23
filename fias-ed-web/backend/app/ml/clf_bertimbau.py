@@ -10,13 +10,20 @@ falante, token_type_ids sempre zero) também vem da pesquisa, não é
 escolha de implementação: ANALISE_MODELOS_EXISTENTES §2.3-§2.5. Mudar
 esse formato em relação ao treino degrada a qualidade em silêncio, do
 mesmo jeito que um mapa de categorias trocado.
+
+max_length e padding são lidos de fias_rules.classifier, nunca literais
+soltos aqui: o §2.6 mede que padding não é neutro sob quantização
+(diferença de até 0,156 nos logits) — uma segunda fonte de verdade que
+divergisse da usada no treino teria o mesmo efeito silencioso.
 """
 from pathlib import Path
+
+from fias_ed_engine.rules import load_rules
 
 from app.core.config import get_settings
 from app.ml.registry import entrada, verificar_artefatos
 
-MAX_LENGTH = 256
+FORMATO_ENTRADA_ESPERADO = "pair:previous_turn,current_turn"
 
 
 def categoria_de(logits: list[float], offset: int) -> int:
@@ -30,7 +37,20 @@ def montar_pares(textos: list[str]) -> list[tuple[str, str]]:
     return [("" if i == 0 else textos[i - 1], t) for i, t in enumerate(textos)]
 
 
-def _tokenizar(tok, pares: list[tuple[str, str]]) -> dict:
+def _parametros_tokenizacao() -> dict:
+    """Lê max_length, padding e input_format de fias_rules.classifier — nunca
+    literais aqui. Recusa alto e claro se input_format deixar de ser o par de
+    turnos que montar_pares() implementa (ANALISE_MODELOS_EXISTENTES §2.4):
+    classificar a aula inteira num formato de entrada que o código não
+    implementa de fato é pior do que uma exceção na hora.
+    """
+    classificador = load_rules("fias_rules")["classifier"]
+    if classificador["input_format"] != FORMATO_ENTRADA_ESPERADO:
+        raise ValueError(f"formato de entrada não suportado: {classificador['input_format']!r}")
+    return {"max_length": classificador["max_length"], "padding": classificador["padding"]}
+
+
+def _tokenizar(tok, pares: list[tuple[str, str]], max_length: int, padding: str) -> dict:
     """Constrói as entradas do modelo a partir do par (turno anterior, turno
     atual), em Python puro (sem tensores) para ser testável sem torch.
 
@@ -43,7 +63,7 @@ def _tokenizar(tok, pares: list[tuple[str, str]]) -> dict:
     """
     a = [p[0] for p in pares]
     b = [p[1] for p in pares]
-    entradas = tok(a, b, padding="max_length", truncation="longest_first", max_length=MAX_LENGTH)
+    entradas = tok(a, b, padding=padding, truncation="longest_first", max_length=max_length)
     if "token_type_ids" in entradas:
         entradas["token_type_ids"] = [[0] * len(seq) for seq in entradas["token_type_ids"]]
     return entradas
@@ -65,7 +85,8 @@ class BertimbauClassificador:
         if not pares:
             return []
         import torch
-        entradas = _tokenizar(self._tok, pares)
+        params = _parametros_tokenizacao()
+        entradas = _tokenizar(self._tok, pares, max_length=params["max_length"], padding=params["padding"])
         tensores = {k: torch.tensor(v) for k, v in entradas.items()}
         with torch.no_grad():
             saida = self._modelo(**tensores).logits
