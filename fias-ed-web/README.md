@@ -191,18 +191,21 @@ referência, lembrando que o `pyannote` roda em seguida.
 **Escolhido: `small`** (`ASR_SIZE=small`). É o maior dos três, fica em 0,17× a
 duração do áudio — bem abaixo do teto de 2× — e o pico de 1,14 GB ocupa 7% dos
 15,5 GB da máquina. Os dois menores são mais baratos, mas não há motivo para
-gastar o tamanho de modelo quando o maior cabe com folga dessa ordem.
+gastar o tamanho de modelo quando o maior cabe com folga dessa ordem. A
+conta com a diarização somada está fechada em "Custo da diarização", logo
+abaixo: 0,77x a duração do áudio e 16% da memória.
 
-Três limites do que está escrito aqui, para não valerem mais do que valem:
+Três ressalvas, para o que está escrito aqui não valer mais do que vale:
 
 - **Não há medição de acerto.** WER e DER exigiriam áudio real de aula com
   transcrição e diarização de referência, que o projeto não tem. Os dois
   seguem `PENDING_SCIENTIFIC_VALIDATION`. A fala do libflite tem pronúncia
   inglesa: serve para medir tempo de processamento, não para medir acerto.
-- **O orçamento de memória do `pyannote` é desconhecido.** Ele roda depois do
-  ASR, no mesmo worker, e hoje não dá para medi-lo: os repositórios dele são
-  *gated* no Hugging Face e os pesos não estão nesta máquina. A folga de 14 GB
-  é grande, mas a conta final só fecha quando ele for medido.
+- **O orçamento de memória do `pyannote` deixou de ser desconhecido.** Era o
+  buraco desta seção enquanto os repositórios dele eram *gated* e os pesos não
+  estavam nesta máquina. Estão, e a medição está em "Custo da diarização",
+  abaixo: ele cabe com folga, mas custa 3,6x o tempo do ASR — é a diarização, e
+  não o tamanho do Whisper, que manda no relógio de uma aula.
 - **`tiny` e `base` não são adotáveis como estão.** Eles têm revisão fixada em
   `scripts/setup_models.py` (para a medição), mas não têm entrada em
   `fias-ed-shared/scientific-config/models.json`, que este repositório não
@@ -215,6 +218,76 @@ Para baixar os pesos de um tamanho só (a medição precisa dos três em disco):
 docker compose --profile setup run --rm -e FIAS_ED_ASR_SIZE=tiny \
     setup-models python /app/scripts/setup_models.py --somente-asr
 ```
+
+### Custo da diarização
+
+O `pyannote` roda **depois** do ASR, no mesmo worker, e até aqui o custo dele
+era desconhecido: os repositórios são *gated* no Hugging Face e os pesos não
+estavam nesta máquina. Agora estão, e `scripts/medir_diarizacao.py` mede com o
+mesmo método de `medir_asr.py` — biblioteca padrão, `resource.getrusage`, um
+processo por célula, fala do libflite (cinco vozes):
+
+```bash
+docker compose -f docker-compose.test.yml run --rm \
+    -v fias-ed-web_models:/models:ro api-test python /app/scripts/medir_diarizacao.py
+```
+
+**A diferença que muda a conta:** o ASR vê o áudio em pedaços de 10 min
+(`JANELA_PADRAO_MS` em `app/audio/prepare.py`), então o pico dele é o do maior
+pedaço e não cresce com a aula. A diarização **não é cortada** —
+`handle_diarize` entrega o arquivo de trabalho inteiro ao pipeline. Numa aula
+de 90 min o pyannote recebe 90 min de uma vez. Por isso a linha de 90 min
+abaixo é **medida**, e não extrapolada de um ponto curto.
+
+**Medido** (uma execução por célula):
+
+| Duração do áudio | Carga do pipeline | Diarização | s por min de áudio | Pico de memória | Turnos | Vozes |
+|---|---|---|---|---|---|---|
+| 2,5 min | 6,2 s | 86,2 s | 34,5 | 2,41 GB | 49 | 5 |
+| 5 min | 7,3 s | 192,9 s | 38,6 | 2,41 GB | 99 | 5 |
+| 10 min | 9,1 s | 473,8 s | 47,4 | 2,43 GB | 203 | 5 |
+| 30 min | 5,7 s | 1036,8 s | 34,6 | 2,52 GB | 583 | 5 |
+| **90 min** | 7,0 s | **3226,1 s** | 35,8 | **2,58 GB** | 1741 | 5 |
+
+**O pico quase não cresce com a duração:** 2,41 → 2,58 GB, 1,07x para 36x de
+áudio. Quase tudo é o pipeline carregado — 0,64 GB sem áudio nenhum — mais o
+que ele aloca por janela; o arquivo inteiro não fica em memória. É o oposto do
+ASR, cujo pico sobe de 0,43 para 0,78 GB entre 2,5 e 10 min.
+
+**O tempo é ruidoso, e isto fica escrito para não valer mais do que vale.** A
+mesma célula de 10 min deu 473,8 s sozinha e 342,3 s logo depois de um ASR no
+mesmo processo: 1,38x entre duas execuções do mesmo trabalho, contra os 0,7%
+de repetibilidade que o ASR mostrou. Os dois pontos longos, 30 e 90 min — os
+que menos sofrem com custo fixo — concordam em ~35 s/min, e é deles que sai o
+número da conta.
+
+**A conta fechada**, numa aula de 90 min, na máquina de referência (16 CPUs,
+15,5 GB, sem GPU):
+
+| Estágio | Tempo | Em múltiplos da duração do áudio | Pico de memória |
+|---|---|---|---|
+| ASR (`small`) | ~15 min (9 x o chunk de 10 min medido) | 0,17x | 1,14 GB (medido) |
+| Diarização | ~54 min (medido: 3226 s) | 0,60x | 2,58 GB (medido) |
+| **Os dois, em sequência** | **~69 min** | **0,77x** | **2,53 GB** (medido num processo só) |
+
+O pico dos dois juntos **não é a soma dos dois picos**, e também não é o maior
+deles: o worker é um processo só (`app/jobs/worker.py`), o objeto do Whisper
+morre no fim do handler e o alocador reaproveita o que já pediu ao sistema.
+Somar daria um limite superior grosseiro; tomar o máximo daria um otimista. O
+número acima vem de um processo que roda o ASR e a diarização em sequência, que
+é a forma do worker: **2,53 GB, 16% dos 15,5 GB**. Sobram 12,9 GB.
+
+**Cabe com folga, e a escolha do `small` continua de pé.** O critério era tempo
+abaixo de 2x a duração do áudio e memória com folga na máquina de referência:
+deu 0,77x e 16%. **Mas a diarização custa 3,6x o tempo do ASR.** Trocar `small`
+por `tiny` economizaria ~13 dos ~69 min e a diarização continuaria mandando no
+relógio — se um dia o tempo total precisar cair, é nela que se mexe, não no
+tamanho do Whisper.
+
+**Não há medição de acerto**, pelo mesmo motivo do ASR: DER exigiria áudio real
+de aula com diarização de referência, que o projeto não tem. A fala do libflite
+serve para medir custo de processamento, não acerto. DER segue
+`PENDING_SCIENTIFIC_VALIDATION`.
 
 ### Tamanho máximo do áudio
 
