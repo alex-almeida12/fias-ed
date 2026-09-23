@@ -18,6 +18,25 @@ const NOME_POR_GRUPO: Record<FiasGrupo, string> = {
   "silêncio": "silêncio ou confusão",
 };
 
+// As quatro cores de grupo não se separam sozinhas: indireta (teal) contra
+// direta (navy) dá 2,32:1 e estudante (sky) contra silêncio (bege) dá 1,27:1 —
+// os dois abaixo dos 3:1 que o WCAG 1.4.11 exige de uma fronteira gráfica que
+// carrega informação, e são as duas adjacências mais comuns numa aula real
+// (o professor alternando indireta/direta; um turno de aluno seguido de
+// silêncio). Nenhum separador de cor única cobre as quatro cores ao mesmo
+// tempo (branco falha contra sky e bege; navy falha contra teal e contra si
+// mesmo) — por isso o contorno é por grupo, não uma cor fixa: os dois grupos
+// escuros (indireta/teal, direta/navy) recebem contorno branco (4,50:1 e
+// 10,44:1); os dois claros (estudante/sky, silêncio/bege) recebem contorno
+// navy (7,22:1 e 9,16:1). Assim toda fronteira entre dois grupos quaisquer
+// tem pelo menos um lado com contorno que contrasta com os dois vizinhos.
+const CONTORNO_POR_GRUPO: Record<FiasGrupo, string> = {
+  indireta: "var(--color-white)",
+  direta: "var(--color-white)",
+  estudante: "var(--color-navy)",
+  "silêncio": "var(--color-navy)",
+};
+
 // Cor nunca pode ser o único portador de significado (DESIGN.md): esta função
 // escreve em palavras a mesma distribuição que as barras mostram, para o
 // aria-label do gráfico — não uma legenda decorativa, é a alternativa textual.
@@ -44,6 +63,11 @@ export function FaixaDeTempo({ faixa }: Props) {
         role="img" aria-label={`Distribuição da fala ao longo da aula: ${resumoTextual(faixa)}.`}>
         {faixa.map((f) => (
           <rect key={f.inicio_ms} x={f.inicio_ms} y={0} width={Math.max(f.fim_ms - f.inicio_ms, 1)} height={1}
+            data-grupo={CLASSE_POR_GRUPO[f.grupo]} stroke={CONTORNO_POR_GRUPO[f.grupo]} strokeWidth={1}
+            // O viewBox está em milissegundos (eixo x) contra uma unidade só (eixo
+            // y) — vector-effect faz a espessura do contorno ficar em pixels de
+            // tela de verdade, e não distorcer com essa escala não uniforme.
+            vectorEffect="non-scaling-stroke"
             className={`faixa-tempo__seg faixa-tempo__seg--${CLASSE_POR_GRUPO[f.grupo]}`} />
         ))}
       </svg>
