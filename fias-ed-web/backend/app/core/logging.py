@@ -5,7 +5,7 @@ import sys
 ALLOWED_FIELDS = frozenset({
     "event", "aula_id", "processamento_id", "job_id", "professor_id", "admin_id",
     "status", "duration_ms", "error_code", "error_type", "method", "path",
-    "status_code", "attempt",
+    "status_code", "attempt", "n_segmentos",
 })
 
 logger = logging.getLogger("fias_ed")

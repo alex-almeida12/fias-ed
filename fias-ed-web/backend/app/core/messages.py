@@ -37,6 +37,7 @@ def error_message(code: str | None) -> str | None:
                             "áudio em MP3 ou M4A, que ocupam menos espaço."),
         "AUDIO_LOCKED": "A análise desta aula já começou. Para usar outro áudio, crie uma nova aula.",
         "AUDIO_PREPARO_FALHOU": "Não conseguimos preparar este áudio para análise. Tente enviar o arquivo de novo.",
+        "AUDIO_SEM_FALA": "Não conseguimos identificar fala neste áudio. Confira se o arquivo é mesmo o da aula.",
         "JOB_FAILED": ("Algo deu errado ao preparar sua aula. Tente processar novamente; "
                        "se continuar, avise o administrador."),
     }
