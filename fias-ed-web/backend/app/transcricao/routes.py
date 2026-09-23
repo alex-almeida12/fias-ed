@@ -22,8 +22,9 @@ from app.core.logging import log_event
 from app.core.messages import error_message
 from app.models import Falante
 from app.transcricao.service import (VozDesconhecida, atribuir_papeis, get_owned_segmento,
-                                     revisar_segmento, segmento_payload, segmentos_do_bloco,
-                                     total_blocos, transcricao_da_aula, vozes_da_aula)
+                                     precisa_reclassificar, revisar_segmento, segmento_payload,
+                                     segmentos_do_bloco, total_blocos, transcricao_da_aula,
+                                     vozes_da_aula)
 
 router = APIRouter()
 
@@ -85,15 +86,24 @@ def obter_transcricao(aula_id: uuid.UUID, bloco: int = 0, actor: Actor = Depends
 @router.patch("/segmentos/{segmento_id}")
 def editar_segmento(segmento_id: uuid.UUID, body: SegmentoPatch, actor: Actor = Depends(current_actor),
                     db: Session = Depends(get_db)):
-    seg, aula_id = get_owned_segmento(db, actor, segmento_id)
+    seg, aula = get_owned_segmento(db, actor, segmento_id)
     ok = revisar_segmento(db, seg, texto=body.texto, papel=body.papel, version_esperada=body.version)
     if not ok:
         raise AppError(409, "SEGMENTO_DESATUALIZADO", error_message("SEGMENTO_DESATUALIZADO"))
+    # spec §3: só uma mudança de conteúdo (texto ou papel) invalida a classificação
+    # já feita — confirmar um trecho como revisado sem alterar nada (PATCH só com
+    # `version`) não reabre nada, não há evidência nova para reclassificar.
+    houve_mudanca = body.texto is not None or body.papel is not None
+    reabriu = houve_mudanca and precisa_reclassificar(aula.status)
+    if reabriu:
+        aula.status, aula.error_code = "READY_FOR_FIAS", None
     audit(db, actor, "segmento", seg.id, "update")
     db.commit()
     db.refresh(seg)
     falante = db.get(Falante, seg.falante_id)
-    log_event("segmento_editado", aula_id=aula_id)
+    log_event("segmento_editado", aula_id=aula.id)
+    if reabriu:
+        log_event("revisao_reaberta", aula_id=aula.id)
     return segmento_payload(seg, falante.role)
 
 

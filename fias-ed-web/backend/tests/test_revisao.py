@@ -156,6 +156,24 @@ def aula_com_transcricao_longa(db):
     return aula
 
 
+@pytest.fixture
+def aula_classificada(db):
+    """A aula já passou pela classificação FIAS (Task 12, ainda não implementada
+    nesta fatia) — o cenário do spec §3: editar um trecho agora tem que devolver a
+    aula para reclassificar, porque a evidência (o texto) mudou sob um resultado
+    que já foi calculado."""
+    aula, transcricao, falante_prof, _ = _aula_com_falantes(db, "carla", "FIAS_COMPLETED")
+    db.add(Segmento(transcricao_id=transcricao.id, falante_id=falante_prof.id, start_ms=0, end_ms=1_000,
+                    texto_original_asr="oi turma", text_pseudonymized="oi turma"))
+    db.commit()
+    return aula
+
+
+def primeiro_segmento(db, aula) -> Segmento:
+    return (db.query(Segmento).join(Transcricao, Transcricao.id == Segmento.transcricao_id)
+           .filter(Transcricao.aula_id == aula.id).order_by(Segmento.start_ms).first())
+
+
 def test_transcricao_vem_paginada_em_blocos_de_cinco_minutos(client, aula_com_transcricao_longa):
     login(client, "carla")
     r = client.get(f"/api/aulas/{aula_com_transcricao_longa.id}/transcricao?bloco=0")
@@ -240,6 +258,42 @@ def test_trocar_papel_de_um_segmento(client, db, segmento_qualquer):
     db.refresh(segmento_qualquer)
     assert segmento_qualquer.falante_id == aluno.id
     assert db.query(Falante).filter_by(transcricao_id=segmento_qualquer.transcricao_id).count() == 2
+
+
+def test_editar_depois_do_fias_devolve_a_aula_para_reclassificar(client, db, aula_classificada):
+    """spec §3: evidência e resultado não podem ficar fora de sincronia. Sem isto,
+    a tela de padrões seguiria mostrando a classificação do texto antigo."""
+    login(client, "carla")
+    seg = primeiro_segmento(db, aula_classificada)
+    r = client.patch(f"/api/segmentos/{seg.id}", json={"texto": "corrigido", "version": seg.version})
+    assert r.status_code == 200
+    db.refresh(aula_classificada)
+    assert aula_classificada.status == "READY_FOR_FIAS"
+    assert aula_classificada.error_code is None
+
+
+def test_editar_antes_do_fias_nao_muda_o_status(client, db, aula_em_revisao):
+    """Só a aula já classificada volta atrás; a que ainda está em revisão fica
+    onde está — não é qualquer edição que reabre, é editar DEPOIS da classificação."""
+    login(client, "carla")
+    seg = primeiro_segmento(db, aula_em_revisao)
+    antes = aula_em_revisao.status
+    r = client.patch(f"/api/segmentos/{seg.id}", json={"texto": "x", "version": seg.version})
+    assert r.status_code == 200
+    db.refresh(aula_em_revisao)
+    assert aula_em_revisao.status == antes
+
+
+def test_confirmar_sem_editar_nao_reabre_a_classificacao(client, db, aula_classificada):
+    """Só uma mudança de conteúdo (texto ou papel) invalida a classificação —
+    marcar um trecho como revisado sem alterar nada (PATCH só com `version`) não
+    é evidência nova, não deveria mandar a aula de volta para reclassificar."""
+    login(client, "carla")
+    seg = primeiro_segmento(db, aula_classificada)
+    r = client.patch(f"/api/segmentos/{seg.id}", json={"version": seg.version})
+    assert r.status_code == 200
+    db.refresh(aula_classificada)
+    assert aula_classificada.status == "FIAS_COMPLETED"
 
 
 def test_concluir_a_revisao_leva_a_ready_for_fias(client, db, aula_em_revisao):

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.ml.protocols import SegmentoASR
-from app.models import Audio, Aula, Falante, Segmento, Transcricao
+from app.models import AULA_STATUS, Audio, Aula, Falante, Segmento, Transcricao
 from app.pipeline.align import MAX_AMOSTRAS, GrupoDeVoz
 from app.pipeline.pseudonymize import pseudonimizar
 
@@ -116,14 +116,14 @@ def segmento_payload(seg: Segmento, papel: str) -> dict:
             "revisado": seg.revisado}
 
 
-def get_owned_segmento(db: Session, actor, segmento_id: uuid.UUID) -> tuple[Segmento, uuid.UUID]:
+def get_owned_segmento(db: Session, actor, segmento_id: uuid.UUID) -> tuple[Segmento, Aula]:
     """Trecho de uma aula do professor autenticado (ou de quem o admin está agindo
     como) — 404 para trecho de aula de outro professor, nunca 403; mesmo padrão de
-    get_owned_aula (app.aulas.service). Devolve também o id da aula, só para
-    log_event — que nunca recebe texto de transcrição, nome de arquivo ou de
-    pessoa, então o segmento em si não é logado."""
+    get_owned_aula (app.aulas.service). Devolve também a própria Aula (não só o id):
+    quem chama precisa do `status` para decidir se a edição reabre a classificação
+    (precisa_reclassificar) — o segmento em si nunca é logado, só `aula_id`."""
     linha = db.execute(
-        select(Segmento, Aula.id)
+        select(Segmento, Aula)
         .join(Transcricao, Transcricao.id == Segmento.transcricao_id)
         .join(Aula, Aula.id == Transcricao.aula_id)
         .where(Segmento.id == segmento_id, Aula.professor_id == actor.effective_professor_id,
@@ -132,6 +132,29 @@ def get_owned_segmento(db: Session, actor, segmento_id: uuid.UUID) -> tuple[Segm
     if linha is None:
         raise AppError(404, "SEGMENTO_NAO_ENCONTRADO", "Trecho não encontrado.")
     return linha[0], linha[1]
+
+
+_INICIO_POS_CLASSIFICACAO = AULA_STATUS.index("FIAS_COMPLETED")
+_FIM_POS_CLASSIFICACAO = AULA_STATUS.index("REPORT_READY")
+# Toda posição do pipeline entre a primeira classificação e o relatório final,
+# calculada a partir de AULA_STATUS (não um valor fixo) — hoje só FIAS_COMPLETED é
+# alcançável nesta fatia, mas WAITING_QTI/QTI_COMPLETED/TRIANGULATED/
+# MTSS_INTERPRETED já existem no enum para as tasks seguintes (QTI, triangulação,
+# relatório) e passam a valer aqui sem tocar este arquivo de novo, contanto que
+# continuem sendo inseridas em AULA_STATUS na ordem do pipeline, como já são.
+# ERROR fica de fora de propósito: é um estado terminal alcançável de qualquer
+# estágio (inclusive antes da classificação), não uma posição no pipeline — incluí-lo
+# faria uma aula travada por erro de áudio, por exemplo, "reabrir" uma classificação
+# que nunca aconteceu.
+POS_CLASSIFICACAO = frozenset(AULA_STATUS[_INICIO_POS_CLASSIFICACAO:_FIM_POS_CLASSIFICACAO + 1])
+
+
+def precisa_reclassificar(status_atual: str) -> bool:
+    """spec §3: "se ele reabrir a revisão depois de FIAS_COMPLETED, a aula volta
+    para READY_FOR_FIAS e reclassifica — evidência e resultado nunca ficam fora de
+    sincronia". Vale para qualquer estágio depois da classificação, não só
+    FIAS_COMPLETED (ver POS_CLASSIFICACAO)."""
+    return status_atual in POS_CLASSIFICACAO
 
 
 def falante_do_papel(db: Session, seg: Segmento, papel: str) -> Falante:
