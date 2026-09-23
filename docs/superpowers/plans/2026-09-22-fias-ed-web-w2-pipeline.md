@@ -2141,6 +2141,14 @@ test("dá para seguir sem revisar nada", async () => {
   expect(spy.mock.calls.some(([u, i]) => String(u).endsWith("/concluir") && i?.method === "POST")).toBe(true);
 });
 
+test("cada trecho tem um controle de áudio do seu próprio momento", async () => {
+  mockApi({ /* … */ });
+  renderApp("/aulas/a1/transcricao");
+  const audio = await screen.findByLabelText(/áudio do trecho de 00:00/i);
+  expect(audio).toHaveAttribute("src", expect.stringContaining("inicio_ms=0"));
+  expect(audio).toHaveAttribute("preload", "none");
+});
+
 test("cada segmento é um grupo rotulado com o horário", async () => {
   mockApi({ /* … */ });
   renderApp("/aulas/a1/transcricao");
@@ -2156,6 +2164,14 @@ Expected: FAIL — a rota não existe
 Estrutura: um `<section>` por segmento, com `role="group"` e `aria-label` com o
 horário; alternância de falante como botão de dois estados com texto; `onBlur`
 dispara o `PATCH`; falha de versão mostra `Banner` e mantém o texto digitado.
+
+**Cada trecho tem um controle para ouvir o áudio daquele ponto.** O spec §8.3 é
+explícito sobre o porquê: "ouvir é como se conserta atribuição errada". Sem isso
+o professor precisa adivinhar, pelo texto, se aquele trecho foi dele ou de um
+aluno — que é exatamente a correção que a tela existe para permitir. Use
+`GET /api/aulas/{id}/audio?inicio_ms=&fim_ms=`, que recorta de verdade desde a
+Task 8, com `preload="none"` para não baixar centenas de trechos de uma vez, e
+nome acessível dizendo o horário.
 
 **O `PATCH` só sai quando o professor de fato mexeu no trecho** — texto alterado ou
 falante trocado. Qualquer `PATCH` bem-sucedido marca `Segmento.revisado` no banco, que
