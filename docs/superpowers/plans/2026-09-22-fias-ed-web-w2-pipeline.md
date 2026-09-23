@@ -1240,9 +1240,14 @@ def test_nome_que_e_prefixo_de_outra_palavra_nao_corta_a_palavra(monkeypatch):
     "Rafaela" viraria "[NOME]a"."""
     monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_ner", lambda t: {"Rafael"})
     assert pseudonimizar("o Rafael e a Rafaela chegaram") == "o [NOME] e a [NOME]a chegaram" or            pseudonimizar("o Rafael e a Rafaela chegaram") == "o [NOME] e a [NOME] chegaram"
-    # O que não pode, em nenhum caso, é a palavra longa virar "[NOME]a" por
-    # substring do nome curto quando ela própria não foi detectada:
+    # O que não pode, em nenhum caso, é a palavra longa virar "[NOME]polis" por
+    # substring do nome curto quando ela própria não foi detectada. Os DOIS
+    # detectores são isolados aqui de propósito: a heurística marca "Anapolis"
+    # por conta própria (maiúscula no meio da frase), o que é correto e
+    # conservador, mas mediria cobertura de detector em vez da propriedade de
+    # substituição que este teste promete.
     monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_ner", lambda t: {"Ana"})
+    monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_heuristica", lambda t: set())
     assert pseudonimizar("Fomos ao Anapolis") == "Fomos ao Anapolis"
 
 
