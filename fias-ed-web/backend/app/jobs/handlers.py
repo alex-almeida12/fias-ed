@@ -17,7 +17,7 @@ from app.ml.protocols import SegmentoASR
 from app.models import Audio, Aula, Job
 from app.pipeline.align import alinhar, criar_falantes_provisorios
 from app.transcricao.service import (criar_transcricao, falante_provisorio, gravar_segmentos,
-                                     segmentos_asr, transcricao_da_aula)
+                                     para_protocolo, segmentos_ordenados, transcricao_da_aula)
 
 
 def handle_validate_audio(db: Session, job: Job) -> None:
@@ -146,9 +146,13 @@ def handle_diarize(db: Session, job: Job) -> None:
         db.commit()
         log_event("diarizacao_falhou", aula_id=aula.id, job_id=job.id)
         return
-    segmentos = segmentos_asr(db, transcricao)
-    rotulos = alinhar(segmentos, turnos)
-    criar_falantes_provisorios(db, transcricao, segmentos, rotulos)
+    # Uma consulta só: as mesmas linhas alimentam o alinhamento (via
+    # para_protocolo) e o repontamento, para dois segmentos de start_ms igual
+    # não trocarem de voz por causa de duas consultas independentes
+    # desempatando a ordem de jeitos diferentes.
+    linhas = segmentos_ordenados(db, transcricao)
+    rotulos = alinhar([para_protocolo(linha) for linha in linhas], turnos)
+    criar_falantes_provisorios(db, transcricao, linhas, rotulos)
     aula.status, aula.error_code = "READY_FOR_SPEAKER_REVIEW", None
     finish_job(db, job)
     db.commit()

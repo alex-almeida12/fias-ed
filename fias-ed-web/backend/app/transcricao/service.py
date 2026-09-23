@@ -50,14 +50,30 @@ def transcricao_da_aula(db: Session, aula_id: uuid.UUID) -> Transcricao | None:
                                                 Transcricao.deleted_at.is_(None)))
 
 
+def segmentos_ordenados(db: Session, transcricao: Transcricao) -> list[Segmento]:
+    """As linhas de Segmento da transcrição, na ordem em que ocorrem na aula —
+    consulta única. Quem precisa tanto do protocolo do ASR (para alinhar())
+    quanto de repontar falante_id depois (criar_falantes_provisorios) usa esta
+    função uma vez só e converte com para_protocolo; duas consultas
+    independentes, ambas ORDER BY start_ms sem chave de desempate, podem
+    devolver ordens diferentes entre si quando dois segmentos têm o mesmo
+    start_ms — e aí o repontamento por posição troca a voz de um trecho pela
+    do outro em silêncio."""
+    return list(db.scalars(select(Segmento).where(Segmento.transcricao_id == transcricao.id)
+                           .order_by(Segmento.start_ms)).all())
+
+
+def para_protocolo(linha: Segmento) -> SegmentoASR:
+    """Traduz uma linha gravada (start_ms/end_ms) para o protocolo do ASR
+    (inicio_ms/fim_ms) — a mesma tradução que segmentos_asr fazia inline."""
+    return SegmentoASR(inicio_ms=linha.start_ms, fim_ms=linha.end_ms, texto=linha.texto_original_asr)
+
+
 def segmentos_asr(db: Session, transcricao: Transcricao) -> list[SegmentoASR]:
     """Relê os segmentos gravados no formato do protocolo do ASR (inicio_ms/fim_ms),
     na ordem em que ocorrem na aula. Devolve o texto bruto do ASR — quem precisa do
     texto revisado quando houver usa texto_efetivo por segmento."""
-    linhas = db.scalars(select(Segmento).where(Segmento.transcricao_id == transcricao.id)
-                        .order_by(Segmento.start_ms)).all()
-    return [SegmentoASR(inicio_ms=linha.start_ms, fim_ms=linha.end_ms, texto=linha.texto_original_asr)
-            for linha in linhas]
+    return [para_protocolo(linha) for linha in segmentos_ordenados(db, transcricao)]
 
 
 def texto_efetivo(segmento: Segmento) -> str:

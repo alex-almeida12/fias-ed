@@ -60,17 +60,22 @@ def resumo_por_voz(segmentos: list[SegmentoASR], rotulos: list[str | None]) -> l
     return sorted(grupos, key=lambda g: g.tempo_total_ms, reverse=True)
 
 
-def criar_falantes_provisorios(db: Session, transcricao: Transcricao, segmentos: list[SegmentoASR],
+def criar_falantes_provisorios(db: Session, transcricao: Transcricao, linhas: list[Segmento],
                                rotulos: list[str | None]) -> None:
     """Cria um Falante (role=UNASSIGNED) por voz detectada, repontando cada
     segmento para o falante da sua voz, e apaga o falante provisório
     "pendente" que a Task 5 criou — mas só quando ele ficar sem segmentos.
     Um segmento sem rótulo (sem sobreposição com turno algum) permanece no
-    provisório de propósito, então ele nem sempre pode ser apagado aqui."""
-    linhas = db.scalars(select(Segmento).where(Segmento.transcricao_id == transcricao.id)
-                        .order_by(Segmento.start_ms)).all()
-    if len(linhas) != len(segmentos) or len(segmentos) != len(rotulos):
-        raise ValueError("segmentos e rótulos precisam estar alinhados 1:1 com os segmentos já gravados")
+    provisório de propósito, então ele nem sempre pode ser apagado aqui.
+
+    Recebe as linhas do banco (de segmentos_ordenados), não refaz a consulta:
+    casar duas consultas independentes por posição — ambas ORDER BY start_ms,
+    sem chave de desempate — deixa dois trechos com start_ms idêntico
+    trocarem de voz em silêncio. `linhas` é a mesma lista que alimentou
+    alinhar() (via para_protocolo), então a correspondência com `rotulos` é
+    por identidade de objeto, não por uma segunda leitura do banco."""
+    if len(linhas) != len(rotulos):
+        raise ValueError("linhas e rótulos precisam ter o mesmo tamanho, na mesma ordem")
     provisorio = db.scalar(select(Falante).where(Falante.transcricao_id == transcricao.id,
                                                  Falante.diarization_label == "pendente"))
     falantes_por_rotulo: dict[str, Falante] = {}

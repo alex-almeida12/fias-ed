@@ -2,42 +2,20 @@
 separador de vozes devolve, repontando cada segmento para o falante da sua
 voz. Falha do separador é erro de produto (§48 exige mensagem humana, não
 degradação silenciosa); uma única voz detectada não é erro — pode ser uma
-aula expositiva legítima."""
-import uuid
+aula expositiva legítima.
 
+A fixture aula_transcrita vive em conftest.py — é compartilhada com
+test_align.py, que também precisa do estado "pós-transcrição, pré-diarização"
+para testar o repontamento contra o banco de verdade."""
 import pytest
 
 from app.jobs import handlers
 from app.jobs.handlers import HANDLERS
 from app.jobs.queue import enqueue
 from app.ml.fakes import DiarizadorFalso
-from app.ml.protocols import SegmentoASR, TurnoDiar
-from app.models import Audio, Falante, Segmento
-from app.transcricao.service import criar_transcricao, falante_provisorio, gravar_segmentos, transcricao_da_aula
-from tests.helpers import make_aula, make_user
-
-DURACAO_MS = 9_000
-
-
-@pytest.fixture
-def aula_transcrita(db):
-    """Simula o estado em que handle_transcribe (Task 5) deixa a aula: um
-    falante provisório (role=UNASSIGNED, diarization_label="pendente") ao qual
-    todos os segmentos apontam, status DIARIZING."""
-    prof = make_user(db, "carla")
-    aula = make_aula(db, prof, status="DIARIZING")
-    audio = Audio(aula_id=aula.id, original_filename="aula.wav", internal_filename=f"{uuid.uuid4()}.wav",
-                 path="original/aula.wav", mime_type="audio/wav", size_bytes=1, duration_ms=DURACAO_MS,
-                 sha256="0" * 64, channels=1, sample_rate=16000, is_original=True, derived_from_audio_id=None)
-    db.add(audio)
-    db.flush()
-    transcricao = criar_transcricao(db, aula, audio, "fake-asr")
-    provisorio = falante_provisorio(db, transcricao)
-    segmentos = [SegmentoASR(0, 4_500, "professor explicando"),
-                SegmentoASR(4_500, 9_000, "aluno perguntando")]
-    gravar_segmentos(db, transcricao, segmentos, provisorio)
-    db.commit()
-    return aula
+from app.ml.protocols import TurnoDiar
+from app.models import Falante, Segmento
+from app.transcricao.service import transcricao_da_aula
 
 
 @pytest.fixture

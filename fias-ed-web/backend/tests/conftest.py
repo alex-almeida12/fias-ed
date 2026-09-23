@@ -1,4 +1,5 @@
 import os
+import uuid
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,10 @@ from sqlalchemy import create_engine, text
 from app.core.config import get_settings
 from app.core.db import SessionLocal, get_engine
 from app.main import create_app
-from app.models import Base
+from app.ml.protocols import SegmentoASR
+from app.models import Audio, Base
+from app.transcricao.service import criar_transcricao, falante_provisorio, gravar_segmentos
+from tests.helpers import make_aula, make_user
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -69,3 +73,25 @@ def _clean_tables(migrator_engine):
 def db():
     with SessionLocal(bind=get_engine()) as session:
         yield session
+
+
+@pytest.fixture
+def aula_transcrita(db):
+    """Simula o estado em que handle_transcribe (Task 5) deixa a aula: um
+    falante provisório (role=UNASSIGNED, diarization_label="pendente") ao qual
+    todos os segmentos apontam, status DIARIZING. Compartilhado entre
+    test_align.py (repontamento) e test_job_diarize.py (o job inteiro)."""
+    prof = make_user(db, "carla")
+    aula = make_aula(db, prof, status="DIARIZING")
+    audio = Audio(aula_id=aula.id, original_filename="aula.wav", internal_filename=f"{uuid.uuid4()}.wav",
+                 path="original/aula.wav", mime_type="audio/wav", size_bytes=1, duration_ms=9_000,
+                 sha256="0" * 64, channels=1, sample_rate=16000, is_original=True, derived_from_audio_id=None)
+    db.add(audio)
+    db.flush()
+    transcricao = criar_transcricao(db, aula, audio, "fake-asr")
+    provisorio = falante_provisorio(db, transcricao)
+    segmentos = [SegmentoASR(0, 4_500, "professor explicando"),
+                SegmentoASR(4_500, 9_000, "aluno perguntando")]
+    gravar_segmentos(db, transcricao, segmentos, provisorio)
+    db.commit()
+    return aula
