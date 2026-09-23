@@ -1236,18 +1236,17 @@ def test_sem_modelo_de_ner_a_heuristica_ainda_protege(monkeypatch):
 
 def test_nome_que_e_prefixo_de_outra_palavra_nao_corta_a_palavra(monkeypatch):
     """A substituição final precisa de fronteira de palavra. Sem ela, um nome
-    detectado que seja prefixo de outra palavra não detectada corrompe o texto:
-    "Rafaela" viraria "[NOME]a"."""
-    monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_ner", lambda t: {"Rafael"})
-    assert pseudonimizar("o Rafael e a Rafaela chegaram") == "o [NOME] e a [NOME]a chegaram" or            pseudonimizar("o Rafael e a Rafaela chegaram") == "o [NOME] e a [NOME] chegaram"
-    # O que não pode, em nenhum caso, é a palavra longa virar "[NOME]polis" por
-    # substring do nome curto quando ela própria não foi detectada. Os DOIS
-    # detectores são isolados aqui de propósito: a heurística marca "Anapolis"
-    # por conta própria (maiúscula no meio da frase), o que é correto e
-    # conservador, mas mediria cobertura de detector em vez da propriedade de
-    # substituição que este teste promete.
+    detectado que seja prefixo de outra palavra NÃO detectada corrompe o texto:
+    "Anapolis" viraria "[NOME]polis".
+
+    Os dois detectores são isolados de propósito. Com a heurística rodando de
+    verdade ela marca "Anapolis" sozinha (maiúscula no meio da frase, a mesma
+    regra que pega "Vitória" e "Paz") — o que é correto e conservador, mas faria
+    o teste medir cobertura de detector em vez da propriedade de substituição,
+    e passar com ou sem a fronteira.
+    """
     monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_ner", lambda t: {"Ana"})
-    monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_heuristica", lambda t: set())
+    monkeypatch.setattr("app.pipeline.pseudonymize.nomes_por_heuristica", lambda t: {"Ana"})
     assert pseudonimizar("Fomos ao Anapolis") == "Fomos ao Anapolis"
 
 
