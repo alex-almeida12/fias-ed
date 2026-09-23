@@ -2741,6 +2741,19 @@ test("nenhum índice aparece com veredito", async () => {
   expect(screen.queryByText(/abaixo do esperado|bom|ruim|meta/i)).not.toBeInTheDocument();
 });
 
+test("cada segmento da faixa tem contorno que contrasta com os vizinhos", async () => {
+  // As quatro cores de grupo não se separam sozinhas: indireta x direta dá
+  // 2,32:1 e estudante x silêncio dá 1,27:1, abaixo dos 3:1 do WCAG 1.4.11.
+  mockApi({ /* faixa com os quatro grupos */ });
+  renderApp("/aulas/a1/padroes");
+  const faixa = await screen.findByRole("img", { name: /distribuição da fala/i });
+  const escuros = faixa.querySelectorAll('[data-grupo="direta"], [data-grupo="indireta"]');
+  const claros = faixa.querySelectorAll('[data-grupo="estudante"], [data-grupo="silencio"]');
+  expect(escuros.length + claros.length).toBeGreaterThan(0);
+  escuros.forEach((s) => expect(s).toHaveAttribute("stroke", "var(--color-white)"));
+  claros.forEach((s) => expect(s).toHaveAttribute("stroke", "var(--color-navy)"));
+});
+
 test("a faixa de tempo tem alternativa textual", async () => {
   // Cor não pode ser o único portador de significado (DESIGN.md).
   mockApi({ /* … */ });
@@ -2757,7 +2770,21 @@ Expected: FAIL
 `FaixaDeTempo.tsx` desenha as barras com as quatro cores de `fias_groups`
 (`--color-fias-indirect`, `--color-fias-direct`, `--color-fias-student`,
 `--color-fias-silence`), com `role="img"` e `aria-label` descrevendo a
-distribuição em palavras. A matriz é `<table className="table">` com
+distribuição em palavras.
+
+**As quatro cores sozinhas não separam os segmentos.** Medido: influência
+indireta contra influência direta dá 2,32:1 e fala do estudante contra silêncio
+dá 1,27:1 — os dois abaixo dos 3:1 que o WCAG 1.4.11 exige para fronteira
+gráfica que carrega informação. E os dois pares são adjacências comuns numa aula
+real, não casos de esquina.
+
+Nenhum separador de cor única resolve (branco falha contra sky e bege; navy
+falha contra teal e contra si mesmo). A solução que fica dentro da paleta
+fechada é **contorno por grupo**: os dois grupos escuros (indireta, direta)
+recebem contorno branco; os dois claros (estudante, silêncio) recebem contorno
+navy. Assim toda fronteira tem uma linha que contrasta com os dois lados —
+verificado: branco contra teal 4,50:1 e contra navy 10,44:1; navy contra sky
+7,22:1 e contra bege 9,16:1. A matriz é `<table className="table">` com
 `<caption>`. Os índices vêm em lista, com nome por extenso e o que cada um mede
 — nunca ao lado de um limiar.
 
