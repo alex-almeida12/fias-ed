@@ -135,3 +135,25 @@
    mas dá para alinhá-lo à medida do bloco em vez de deixá-lo flutuando. */
 .audio-area audio { display: block; width: 100%; max-width: 32rem; margin-bottom: var(--space-3); }
 progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--color-teal); }
+
+/* Revisão da transcrição (Task 10). Cada trecho é uma linha de leitura, não um
+   card: mesma linha de 1px em Papel Milimetrado que separa os itens de `.list`,
+   sem fundo próprio — centenas de trechos com fundo bege virariam ruído, e bege
+   é reservado para "aqui se lê e se reflete" (blocos únicos), não para item
+   repetido em lista. */
+.segmentos { border-top: var(--border-hairline) solid var(--color-border); }
+.segmento { padding: var(--space-4) var(--space-1); border-bottom: var(--border-hairline) solid var(--color-border);
+  display: flex; flex-direction: column; gap: var(--space-2); }
+.segmento__cabecalho { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.segmento__cabecalho .meta { margin: 0; }
+/* O rótulo do campo de texto existe para leitor de tela (a Regra do Rótulo Sempre
+   Visível continua valendo — o rótulo existe), mas fica escondido visualmente
+   porque o horário ao lado já cumpre esse papel para quem vê a tela. */
+.segmento .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.segmento .field { margin-bottom: 0; }
+
+/* Navegação entre blocos de cinco minutos: mesmo par de botões secundários com
+   uma legenda de contagem entre eles — sem inventar um componente novo de
+   paginação. */
+.bloco-nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  flex-wrap: wrap; margin: var(--space-5) 0; }

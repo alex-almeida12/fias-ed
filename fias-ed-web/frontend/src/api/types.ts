@@ -50,6 +50,24 @@ export interface Voz {
   amostras: VozAmostra[];
 }
 
+export type Papel = "PROFESSOR" | "ALUNO";
+
+export interface Segmento {
+  id: string;
+  start_ms: number;
+  end_ms: number;
+  texto: string;
+  papel: Papel;
+  version: number;
+  revisado: boolean;
+}
+
+export interface TranscricaoBloco {
+  bloco: number;
+  blocos: number;
+  segmentos: Segmento[];
+}
+
 export interface Conta {
   id: string;
   username: string;
