@@ -1708,7 +1708,11 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces:
   - `GET /api/aulas/{id}/vozes` → `{"vozes": [{"rotulo": "voz-1", "tempo_total_ms": 0, "n_segmentos": 0, "amostras": [{"inicio_ms": 0, "fim_ms": 0}]}]}`
   - `POST /api/aulas/{id}/vozes/escolher` com `{"rotulo": "voz-1"}` → detalhe da aula
-  - `GET /api/aulas/{id}/audio?inicio_ms=&fim_ms=` — trecho para ouvir
+  - `GET /api/aulas/{id}/audio?inicio_ms=&fim_ms=` — trecho para ouvir. **A rota existe desde a
+    W1 mas ignora os dois parâmetros e devolve o áudio inteiro**; o recorte de verdade é
+    trabalho desta task, senão cada amostra tocaria a aula inteira desde o começo. O corte
+    síncrono com ffmpeg no handler segue a ruling P16 do projeto (bloqueante aceito por ser
+    single-user local), e o arquivo temporário é apagado depois da resposta.
   - `vozes_da_aula(db, aula) -> list[GrupoDeVoz]` — lê os rótulos provisórios e resume
   - `atribuir_papeis(db, aula, rotulo: str) -> None` — cria os dois `Falante`, liga cada segmento
     ao papel certo e apaga os rótulos provisórios; levanta `VozDesconhecida`
@@ -1860,7 +1864,7 @@ export function EscolhaVoz() {
   return (
     <>
       <h1>Qual destas vozes é você?</h1>
-      <p>Ouça os trechos e aponte qual voz é a sua. As outras vozes da aula ficam como ALUNO.</p>
+      <p>Ouça os trechos e aponte qual voz é a sua. As demais vozes da aula passam a ser tratadas em conjunto.</p>
       <ul className="list">
         {vozes?.map((v, i) => (
           <li key={v.rotulo} className="list__item">
