@@ -10,7 +10,7 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.ml.protocols import TurnoDiar
-from app.ml.registry import entrada
+from app.ml.registry import entrada_adotavel
 
 
 def _permitir_globais_dos_checkpoints() -> None:
@@ -49,7 +49,9 @@ class PyannoteDiarizador:
         # declarado no registro; a integridade do arquivo é do huggingface_hub,
         # contra a revisão fixada que o próprio registro declara (integrity.repos)
         # e que scripts/setup_models.py lê de lá no download.
-        entrada(s.diar_model_id)
+        # `entrada_adotavel`: o registro também guarda modelo que existe só pela
+        # procedência de uma medição (§21), e esse não pode ser carregado.
+        entrada_adotavel(s.diar_model_id)
         config = Path(s.models_dir) / "pyannote" / "config.yaml"
         if not config.is_file():
             raise FileNotFoundError(f"pipeline de diarização ausente: {config}")

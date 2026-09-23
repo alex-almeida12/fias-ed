@@ -21,7 +21,7 @@ from pathlib import Path
 from fias_ed_engine.rules import load_rules
 
 from app.core.config import get_settings
-from app.ml.registry import entrada, verificar_artefatos
+from app.ml.registry import entrada_adotavel, verificar_artefatos
 
 FORMATO_ENTRADA_ESPERADO = "pair:previous_turn,current_turn"
 
@@ -74,7 +74,7 @@ class BertimbauClassificador:
         s = get_settings()
         base = Path(s.models_dir)
         verificar_artefatos(s.clf_model_id, base)
-        art = {a["role"]: a["relative_path"] for a in entrada(s.clf_model_id)["artifacts"]}
+        art = {a["role"]: a["relative_path"] for a in entrada_adotavel(s.clf_model_id)["artifacts"]}
         diretorio = (base / art["weights"]).parent
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
         self._tok = AutoTokenizer.from_pretrained(diretorio, local_files_only=True)

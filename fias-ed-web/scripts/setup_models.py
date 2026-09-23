@@ -40,6 +40,15 @@ Com `--somente-asr` baixa só os pesos do Whisper do tamanho pedido, sem o
 pyannote e sem o BERTimbau. É o que `scripts/medir_asr.py` precisa para medir
 tamanhos que o produto não usa hoje — e continua sendo aqui, e não no script de
 medição, que a rede é tocada.
+
+**Baixável não é adotável.** `faster-whisper-tiny` e `faster-whisper-base` têm
+entrada no registro pela procedência da medição do §21 (é onde o pino de versão
+daqueles pesos mora), com `validation_status: PENDING_SCIENTIFIC_VALIDATION`.
+Baixá-los com `--somente-asr` para repetir a medição é legítimo, e o script
+avisa o que eles são. O setup completo, não: ele instala o que o produto vai
+carregar, e `app/ml/asr_whisper.py` recusa um modelo nesse estado — pedir
+`FIAS_ED_ASR_SIZE=tiny` sem `--somente-asr` para aqui, com a razão, em vez de
+baixar os pesos para o produto quebrar na primeira transcrição.
 """
 import os
 import shutil
@@ -93,6 +102,24 @@ def revisao_fixada(repo_id: str) -> str:
         " O pino de versão é o que torna a instalação reprodutível e é fato científico:"
         " ele vive no registro, não neste script."
         f" Declare lá o commit de https://huggingface.co/{repo_id} e rode de novo.")
+
+
+def _recusa_de_adocao(tamanho: str) -> str | None:
+    """A recusa que `app/ml/asr_whisper.py` daria a este tamanho, ou None.
+
+    Pergunta ao mesmo `app.ml.registry` que o produto usa, em vez de reler o
+    `validation_status` por conta própria: o critério de adoção é um só, e o
+    setup não pode ter uma opinião própria sobre ele.
+
+    Exige `_sem_banco()` antes, como `revisao_fixada`.
+    """
+    from app.ml.registry import ModeloInvalido, entrada_adotavel
+
+    try:
+        entrada_adotavel(MODEL_ID_ASR.format(tamanho=tamanho))
+    except ModeloInvalido as erro:
+        return str(erro)
+    return None
 
 
 def _baixar(repo_id: str, arquivo: str, destino: Path, token: str, cache: Path) -> Path:
@@ -210,13 +237,13 @@ def _passo(nome: str, funcao, falhas: list[tuple[str, str]]) -> None:
 
 def passo_pyannote(base: Path, token: str) -> None:
     print("baixando o pyannote…", flush=True)
-    from app.ml.registry import entrada
+    from app.ml.registry import entrada_adotavel
 
     destino = baixar_pyannote(base, token)
     _exigir((destino / "config.yaml",
              destino / "segmentation-3.0" / "pytorch_model.bin",
              destino / "wespeaker-voxceleb-resnet34-LM" / "pytorch_model.bin"))
-    entrada(MODEL_ID_DIAR)
+    entrada_adotavel(MODEL_ID_DIAR)
 
 
 def passo_bertimbau(base: Path, experimentos: Path) -> None:
@@ -237,12 +264,19 @@ def passo_bertimbau(base: Path, experimentos: Path) -> None:
 
 
 def passo_whisper(base: Path, tamanho: str, token: str) -> None:
+    """Instala o peso que o produto vai carregar, e por isso exige adoção.
+
+    `entrada_adotavel`, e não `entrada`: um tamanho que está no registro só pela
+    procedência da medição do §21 seria recusado por `app/ml/asr_whisper.py` na
+    primeira transcrição. `main` já barra isso antes de tocar a rede; aqui a
+    checagem fica de segunda tranca, para quem chamar o passo direto.
+    """
     print(f"baixando o faster-whisper ({tamanho})…", flush=True)
-    from app.ml.registry import entrada
+    from app.ml.registry import entrada_adotavel
 
     whisper = baixar_whisper(base, tamanho, token)
     _exigir(tuple(whisper / a for a in ARQUIVOS_ASR))
-    entrada(MODEL_ID_ASR.format(tamanho=tamanho))
+    entrada_adotavel(MODEL_ID_ASR.format(tamanho=tamanho))
 
 
 def _exigir(caminhos: tuple[Path, ...]) -> None:
@@ -262,11 +296,21 @@ def _exigir_ambiente(nome: str, dica: str) -> str:
 def somente_asr(base: Path, tamanho: str, token: str) -> int:
     """Só os pesos do Whisper, para a medição do §21.
 
-    Sem conferência de artefato contra o registro: ele declara
-    `faster-whisper-small` e mais nada. A garantia de integridade aqui é a mesma
-    do resto do script — a revisão fixada que o registro declara, conferida pelo
-    huggingface_hub no download. Tamanho sem pino lá não baixa (veja `main`).
+    Sem conferência de artefato contra o registro: nenhum dos tamanhos tem
+    sha256 lá. A garantia de integridade aqui é a mesma do resto do script — a
+    revisão fixada que o registro declara, conferida pelo huggingface_hub no
+    download. Tamanho sem pino lá não baixa (veja `main`).
+
+    Aqui o tamanho não precisa ser adotável: medir é justamente o que se faz com
+    um peso que ninguém adotou, e foi assim que as linhas `tiny` e `base` da
+    tabela do §21 nasceram. O que o script não pode é deixar a diferença
+    implícita — quem baixa por este caminho ouve o que está levando.
     """
+    recusa = _recusa_de_adocao(tamanho)
+    if recusa:
+        print(f"aviso: {recusa}", flush=True)
+        print("       Baixando assim mesmo: --somente-asr serve à medição, não à instalação"
+              " do produto.", flush=True)
     try:
         whisper = baixar_whisper(base, tamanho, token)
         _exigir(tuple(whisper / a for a in ARQUIVOS_ASR))
@@ -300,6 +344,19 @@ def main(argv: list[str] | None = None) -> int:
     if "--somente-asr" in argumentos:
         print(f"baixando o faster-whisper ({tamanho})…", flush=True)
         return somente_asr(base, tamanho, token)
+
+    # O setup completo instala o que o produto vai carregar. Um tamanho que está
+    # no registro só pela procedência da medição do §21 seria recusado por
+    # `app/ml/asr_whisper.py` na primeira transcrição: melhor parar aqui, dizendo
+    # o porquê e para onde ir, do que baixar os pesos para o produto quebrar
+    # depois. Ainda é configuração, e não modelo, então `SystemExit`.
+    recusa = _recusa_de_adocao(tamanho)
+    if recusa:
+        raise SystemExit(
+            f"FIAS_ED_ASR_SIZE={tamanho}: {recusa}\n"
+            "O setup completo instala o modelo que o produto vai carregar, e"
+            " app/ml/asr_whisper.py recusaria este tamanho na primeira transcrição.\n"
+            "Para baixar estes pesos e repetir a medição do §21, rode com --somente-asr.")
 
     experimentos = Path(_exigir_ambiente(
         "FIAS_ED_EXPERIMENTS_DIR",

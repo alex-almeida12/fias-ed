@@ -206,23 +206,31 @@ Três ressalvas, para o que está escrito aqui não valer mais do que vale:
   estavam nesta máquina. Estão, e a medição está em "Custo da diarização",
   abaixo: ele cabe com folga, mas custa 3,6x o tempo do ASR — é a diarização, e
   não o tamanho do Whisper, que manda no relógio de uma aula.
-- **`tiny` e `base` não são adotáveis, e hoje nem baixáveis.** Os números
-  acima foram medidos quando `scripts/setup_models.py` guardava a própria
-  revisão fixada dos dois. Não guarda mais: o pino de versão é fato científico
-  e vive só em `fias-ed-shared/scientific-config/models.json`
-  (`integrity.repos`), de onde o script o lê. `tiny` e `base` não têm entrada
-  lá — e `app/ml/asr_whisper.py` já recusava carregar um modelo que o registro
-  não declare. Sem pino declarado o script para com a mensagem dizendo isso, em
-  vez de baixar `main` e produzir uma instalação que ninguém reproduz. Repetir a
-  medição com eles exige a entrada no registro primeiro.
+- **`tiny` e `base` estão no registro pela procedência, não pela adoção.** As
+  seis linhas deles acima continuam reproduzíveis: a revisão fixada dos pesos
+  que as produziram está em `fias-ed-shared/scientific-config/models.json`, nas
+  entradas `faster-whisper-tiny` e `faster-whisper-base` (`integrity.repos`),
+  que é também de onde `scripts/setup_models.py` lê o pino ao baixar. Essas
+  entradas dizem **qual peso foi medido**; elas não autorizam o uso, e trazem
+  `validation_status: PENDING_SCIENTIFIC_VALIDATION` para dizer isso.
+  `app/ml/asr_whisper.py` recusa carregar um modelo nesse estado, com a
+  mensagem explicando que ele existe para a procedência de uma medição, e
+  `FIAS_ED_ASR_SIZE=tiny` no setup completo para pelo mesmo motivo, antes de
+  tocar a rede. Adotar um dos dois exige validar o tamanho cientificamente
+  primeiro: aqui só o custo deles foi medido, nunca o acerto.
 
-Para baixar os pesos de um tamanho só (a medição precisa dos três em disco), com
-o tamanho declarado no registro:
+Para baixar os pesos de um tamanho só (a medição precisa dos três em disco):
 
 ```bash
-docker compose --profile setup run --rm -e FIAS_ED_ASR_SIZE=small \
+docker compose --profile setup run --rm -e FIAS_ED_ASR_SIZE=tiny \
     setup-models python /app/scripts/setup_models.py --somente-asr
 ```
+
+`--somente-asr` aceita `tiny` e `base`: medir é justamente o que se faz com um
+peso que ninguém adotou, e foi assim que a tabela acima nasceu. Ele avisa, antes
+de baixar, que o tamanho não é adotável. O mesmo comando **sem** `--somente-asr`
+para com a razão — ali o que se pede é o modelo que o produto vai carregar, e
+esse continua sendo o `small`.
 
 ### Custo da diarização
 

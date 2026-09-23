@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 
 from app.core.config import get_settings
-from app.ml.registry import ModeloInvalido, _ler, entrada, verificar_artefatos
+from app.ml.registry import (
+    STATUS_ADOTAVEIS,
+    ModeloInvalido,
+    _ler,
+    entrada,
+    entrada_adotavel,
+    verificar_artefatos,
+)
 
 
 def _escrever(caminho: Path, conteudo: bytes) -> str:
@@ -141,3 +148,122 @@ def test_cache_por_caminho_com_registros_diferentes(tmp_path, monkeypatch):
     # Limpar cache na saída
     get_settings.cache_clear()
     _ler.cache_clear()
+
+
+# --- Adoção: estar no registro deixou de bastar ---------------------------
+#
+# O registro guarda dois tipos de modelo desde que a medição do §21 recuperou a
+# procedência que tinha perdido: o que o produto usa e o que só produziu números
+# publicados. `faster-whisper-tiny` e `faster-whisper-base` estão lá porque o
+# pino de versão deles é a única coisa que torna aquelas seis linhas de tabela
+# recuperáveis — não porque alguém os adotou. A diferença entre as duas coisas é
+# `validation_status`, e é `entrada_adotavel` quem a cobra.
+
+
+def _registro_de(**status_por_modelo: str) -> dict:
+    return {"registry_version": "1.0.0",
+            "models": [{"model_id": mid, "artifacts": [], "validation_status": st}
+                       for mid, st in status_por_modelo.items()]}
+
+
+@pytest.fixture()
+def registro_de_estados(tmp_path, monkeypatch):
+    """Instala um registro com um modelo por estado de validação."""
+    get_settings.cache_clear()
+    _ler.cache_clear()
+
+    def instalar(**status_por_modelo: str) -> None:
+        caminho = tmp_path / "scientific-config" / "models.json"
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        caminho.write_text(json.dumps(_registro_de(**status_por_modelo)), encoding="utf-8")
+        monkeypatch.setenv("SHARED_DIR", str(tmp_path))
+        get_settings.cache_clear()
+        _ler.cache_clear()
+
+    yield instalar
+
+    get_settings.cache_clear()
+    _ler.cache_clear()
+
+
+def test_modelo_de_procedencia_e_recusado_ao_carregar(registro_de_estados):
+    """O estado novo recusa, e a mensagem diz por que ele existe."""
+    registro_de_estados(medido="PENDING_SCIENTIFIC_VALIDATION")
+
+    with pytest.raises(ModeloInvalido) as exc:
+        entrada_adotavel("medido")
+
+    assert exc.value.code == "MODELO_NAO_ADOTAVEL"
+    mensagem = str(exc.value)
+    assert "medido" in mensagem, "não disse qual modelo foi recusado"
+    assert "PENDING_SCIENTIFIC_VALIDATION" in mensagem, "não disse em que estado ele está"
+    assert "procedência" in mensagem and "não para autorizar o uso" in mensagem, \
+        "recusou sem explicar que a entrada existe para a procedência de uma medição"
+    # E continua legível como declaração: a procedência não some junto com a recusa.
+    assert entrada("medido")["validation_status"] == "PENDING_SCIENTIFIC_VALIDATION"
+
+
+def test_os_estados_adotados_continuam_carregando(registro_de_estados):
+    registro_de_estados(**{st: st for st in STATUS_ADOTAVEIS})
+
+    for status in STATUS_ADOTAVEIS:
+        assert entrada_adotavel(status)["model_id"] == status
+
+
+def test_estado_desconhecido_entra_recusado(registro_de_estados):
+    """Lista de permitidos: o vocabulário de `validation_status` é do shared e
+    pode crescer sem que este repositório saiba. Um estado que ninguém aqui
+    examinou não pode virar adoção por omissão."""
+    registro_de_estados(novo="draft_pending_researcher_review", sem_estado_nenhum="")
+
+    for model_id in ("novo", "sem_estado_nenhum"):
+        with pytest.raises(ModeloInvalido) as exc:
+            entrada_adotavel(model_id)
+        assert exc.value.code == "MODELO_NAO_ADOTAVEL"
+
+
+def test_o_asr_recusa_carregar_um_tamanho_que_so_tem_procedencia(monkeypatch):
+    """O caminho de produção de verdade, contra o registro de verdade.
+
+    `WhisperASR.__init__` é o ponto onde um tamanho vira o modelo do produto.
+    Com `tiny` — que está no registro pela medição do §21 — ele para antes de
+    tocar em peso nenhum (não há peso em disco nesta suíte, e o teste passa
+    justamente porque a recusa vem antes).
+    """
+    get_settings.cache_clear()
+    _ler.cache_clear()
+    monkeypatch.setenv("ASR_MODEL_ID", "faster-whisper-tiny")
+    get_settings.cache_clear()
+    try:
+        from app.ml.asr_whisper import WhisperASR
+
+        with pytest.raises(ModeloInvalido) as exc:
+            WhisperASR()
+    finally:
+        get_settings.cache_clear()
+        _ler.cache_clear()
+
+    assert exc.value.code == "MODELO_NAO_ADOTAVEL"
+    assert "faster-whisper-tiny" in str(exc.value)
+    assert "procedência" in str(exc.value), "recusou sem dizer para que a entrada serve"
+
+
+def test_tiny_e_base_tem_procedencia_no_registro_e_nao_sao_adotaveis():
+    """As duas metades do conserto, contra o registro de verdade.
+
+    A medição do §21 publica seis linhas feitas com `tiny` e `base`. Sem entrada
+    no registro, o pino daqueles pesos não existia em lugar nenhum e a medição
+    deixava de ser reproduzível; com entrada e sem estado que os recuse, o
+    registro estaria declarando adotável um tamanho que ninguém validou.
+    """
+    get_settings.cache_clear()
+    _ler.cache_clear()
+    for model_id in ("faster-whisper-tiny", "faster-whisper-base"):
+        m = entrada(model_id)
+        repos = m["integrity"]["repos"]
+        assert [r for r in repos if len(r.get("revision", "")) == 40], \
+            f"{model_id} está no registro sem revisão fixada: a medição volta a não ser reproduzível"
+        assert m["validation_status"] not in STATUS_ADOTAVEIS, \
+            f"{model_id} virou adotável sem validação científica do tamanho"
+        with pytest.raises(ModeloInvalido):
+            entrada_adotavel(model_id)

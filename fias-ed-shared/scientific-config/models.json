@@ -76,6 +76,54 @@
       "validation_status": "engineering_decision"
     },
     {
+      "model_id": "faster-whisper-tiny",
+      "name": "faster-whisper tiny (CTranslate2, int8 em CPU) — medido, não adotado",
+      "task": "speech_to_text",
+      "base_model": "openai/whisper-tiny",
+      "platform": "web",
+      "format": "ctranslate2",
+      "artifacts": [],
+      "integrity": {
+        "note": "Entrada de procedência, não de adoção. Estes pesos produziram as três linhas 'tiny' da tabela de medição do §21 (fias-ed-web/README.md, 'Escolha do modelo de ASR'), e o que torna aqueles números recuperáveis é o pino em repos[].revision abaixo: sem ele não há como saber qual peso foi medido. Como no small, não há sha256 por artefato — este registro é enraizado em FIAS_ED_EXPERIMENTS_DIR (campo base_dir_env) e recusa artefato .bin (engine-py/tests/test_models_registry.py), e os pesos vêm do Hugging Face para FIAS_ED_MODELS_DIR, fora dessa raiz. fias-ed-web/scripts/setup_models.py lê o pino daqui (revisao_fixada) e o passa em revision= ao huggingface_hub, que confere o hash de cada arquivo no download.",
+        "install_dir_env": "FIAS_ED_MODELS_DIR",
+        "install_relative_path": "faster-whisper-tiny/",
+        "repos": [{"repo_id": "Systran/faster-whisper-tiny", "role": "weights", "revision": "d90ca5fe260221311c53c58e660288d3deb8d356"}]
+      },
+      "license": {"weights_base": "MIT (Systran/faster-whisper-tiny, conversão CTranslate2 do openai/whisper-tiny, que é Apache-2.0)", "code": "MIT (faster-whisper, CTranslate2)", "training_data": "Não divulgado pela OpenAI (≈680 mil horas de áudio da web, multilíngue). Sem cláusula não comercial conhecida."},
+      "limitations": [
+        "Não adotável em produção: o validation_status PENDING_SCIENTIFIC_VALIDATION diz que este tamanho está aqui pela procedência de uma medição publicada, e não por uma decisão que alguém sustentou. fias-ed-web/backend/app/ml/asr_whisper.py recusa carregar um modelo neste estado, dizendo isso.",
+        "Nenhuma medição de acerto: o §21 mede tempo e pico de memória sobre fala sintetizada (libflite, pronúncia inglesa). Adotar tiny no lugar de small trocaria custo conhecido por qualidade desconhecida — WER em áudio de sala de aula brasileira segue não medido.",
+        "O critério do §21 é o maior tamanho que caiba no orçamento da máquina de referência, e o escolhido foi o small; tiny entrou na comparação como piso de custo, e é só isso que os números dele sustentam."
+      ],
+      "forbidden_files": [],
+      "source_reference": "fias-ed-web/README.md §21, tabela 'Medido' da seção 'Escolha do modelo de ASR'; https://huggingface.co/Systran/faster-whisper-tiny (revisão d90ca5fe260221311c53c58e660288d3deb8d356)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
+      "model_id": "faster-whisper-base",
+      "name": "faster-whisper base (CTranslate2, int8 em CPU) — medido, não adotado",
+      "task": "speech_to_text",
+      "base_model": "openai/whisper-base",
+      "platform": "web",
+      "format": "ctranslate2",
+      "artifacts": [],
+      "integrity": {
+        "note": "Entrada de procedência, não de adoção. Estes pesos produziram as três linhas 'base' da tabela de medição do §21 (fias-ed-web/README.md, 'Escolha do modelo de ASR'), e o que torna aqueles números recuperáveis é o pino em repos[].revision abaixo: sem ele não há como saber qual peso foi medido. Como no small, não há sha256 por artefato — este registro é enraizado em FIAS_ED_EXPERIMENTS_DIR (campo base_dir_env) e recusa artefato .bin (engine-py/tests/test_models_registry.py), e os pesos vêm do Hugging Face para FIAS_ED_MODELS_DIR, fora dessa raiz. fias-ed-web/scripts/setup_models.py lê o pino daqui (revisao_fixada) e o passa em revision= ao huggingface_hub, que confere o hash de cada arquivo no download.",
+        "install_dir_env": "FIAS_ED_MODELS_DIR",
+        "install_relative_path": "faster-whisper-base/",
+        "repos": [{"repo_id": "Systran/faster-whisper-base", "role": "weights", "revision": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66"}]
+      },
+      "license": {"weights_base": "MIT (Systran/faster-whisper-base, conversão CTranslate2 do openai/whisper-base, que é Apache-2.0)", "code": "MIT (faster-whisper, CTranslate2)", "training_data": "Não divulgado pela OpenAI (≈680 mil horas de áudio da web, multilíngue). Sem cláusula não comercial conhecida."},
+      "limitations": [
+        "Não adotável em produção: o validation_status PENDING_SCIENTIFIC_VALIDATION diz que este tamanho está aqui pela procedência de uma medição publicada, e não por uma decisão que alguém sustentou. fias-ed-web/backend/app/ml/asr_whisper.py recusa carregar um modelo neste estado, dizendo isso.",
+        "Nenhuma medição de acerto: o §21 mede tempo e pico de memória sobre fala sintetizada (libflite, pronúncia inglesa). Adotar base no lugar de small trocaria custo conhecido por qualidade desconhecida — WER em áudio de sala de aula brasileira segue não medido.",
+        "O critério do §21 é o maior tamanho que caiba no orçamento da máquina de referência, e o escolhido foi o small; base entrou na comparação como ponto intermediário, e é só isso que os números dele sustentam."
+      ],
+      "forbidden_files": [],
+      "source_reference": "fias-ed-web/README.md §21, tabela 'Medido' da seção 'Escolha do modelo de ASR'; https://huggingface.co/Systran/faster-whisper-base (revisão ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66)",
+      "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+    },
+    {
       "model_id": "pyannote-speaker-diarization-3.1",
       "name": "pyannote speaker-diarization 3.1",
       "task": "speaker_diarization",

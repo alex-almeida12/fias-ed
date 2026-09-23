@@ -16,9 +16,19 @@ não é a baixada. Agora o pino mora só no registro; estes testes provam que o
 script lê de lá — mudando o pino no registro, muda o que ele baixa — e que não
 sobrou cópia velha em lugar nenhum.
 
+A terceira metade veio do estrago que a segunda fez sem querer. Tirar o
+dicionário do script apagou do repositório inteiro os pinos de `tiny` e `base`,
+que só existiam lá — e são os pesos das seis linhas de `tiny`/`base` da tabela
+de medição do §21 do README. A medição deixou de ser reproduzível em silêncio,
+porque nenhum teste exigia que um repositório baixável tivesse pino. Agora os
+dois têm entrada no registro, pela procedência e não pela adoção, e os testes
+abaixo travam as duas pontas: o que o script sabe baixar tem pino, e um tamanho
+que está lá só pela procedência não vira o modelo do produto.
+
 Nada aqui toca a rede nem o disco de verdade: os três passos são substituídos,
 e onde o download é o próprio objeto do teste, quem sai é o `hf_hub_download`.
 """
+import ast
 import importlib.util
 import json
 import re
@@ -29,6 +39,10 @@ import pytest
 # O script não é módulo do pacote `app`: mora em scripts/, que o
 # docker-compose.test.yml monta em /app/scripts, ao lado de tests/.
 CAMINHO = Path(__file__).resolve().parents[1] / "scripts" / "setup_models.py"
+# Quem sabe quais tamanhos de Whisper este projeto baixa é o script de medição:
+# são os tamanhos que a tabela do §21 compara, e é por eles que
+# `setup_models.py --somente-asr` é chamado.
+CAMINHO_MEDIR = CAMINHO.parent / "medir_asr.py"
 
 
 @pytest.fixture(scope="module")
@@ -239,12 +253,31 @@ def test_sem_pino_no_registro_o_script_recusa_baixar(setup_models, downloads, re
 
 
 def test_tamanho_de_asr_sem_pino_para_antes_de_tentar(setup_models, ambiente, passos, monkeypatch):
-    """`tiny` não tem pino no registro, e por isso deixou de ser baixável.
+    """Um tamanho que o registro não declara não baixa, e o script diz onde declarar.
 
-    Era o outro lado da duplicação: `tiny` e `base` tinham revisão só no script,
-    sem entrada em `scientific-config/models.json` — pesos sem procedência
-    declarada. Adotar um deles exige a entrada no registro primeiro, que é o que
-    `app/ml/asr_whisper.py` já cobrava de quem tentasse usá-los em produção.
+    `medium` não está no registro — nem como modelo do produto, nem como
+    procedência de medição nenhuma. Sem pino não há instalação reprodutível, e
+    baixar `main` produziria pesos que ninguém consegue recuperar depois.
+    """
+    monkeypatch.setenv("FIAS_ED_ASR_SIZE", "medium")
+    rodaram = passos()
+
+    with pytest.raises(SystemExit) as erro:
+        setup_models.main([])
+
+    assert "medium" in str(erro.value) and "models.json" in str(erro.value), \
+        "não explicou que o que falta é o pino no registro"
+    assert rodaram == [], "tentou baixar um tamanho sem revisão declarada"
+
+
+def test_tamanho_so_de_procedencia_nao_vira_o_modelo_do_produto(setup_models, ambiente, passos,
+                                                                monkeypatch):
+    """`tiny` tem pino, e ainda assim o setup completo recusa instalá-lo.
+
+    É a diferença entre baixável e adotável. A entrada de `tiny` no registro
+    existe para dizer qual peso produziu a medição do §21; `app/ml/asr_whisper.py`
+    recusaria carregá-lo na primeira transcrição, então o script para antes de
+    tocar a rede, com o motivo e a saída (`--somente-asr`).
     """
     monkeypatch.setenv("FIAS_ED_ASR_SIZE", "tiny")
     rodaram = passos()
@@ -252,9 +285,77 @@ def test_tamanho_de_asr_sem_pino_para_antes_de_tentar(setup_models, ambiente, pa
     with pytest.raises(SystemExit) as erro:
         setup_models.main([])
 
-    assert "tiny" in str(erro.value) and "models.json" in str(erro.value), \
-        "não explicou que o que falta é o pino no registro"
-    assert rodaram == [], "tentou baixar um tamanho sem revisão declarada"
+    mensagem = str(erro.value)
+    assert "tiny" in mensagem, "não disse qual tamanho foi recusado"
+    assert "procedência" in mensagem, \
+        "recusou sem dizer que a entrada existe para a procedência de uma medição"
+    assert "asr_whisper" in mensagem, "não disse quem recusaria o modelo depois"
+    assert "--somente-asr" in mensagem, "recusou sem dizer por onde repetir a medição"
+    assert rodaram == [], "começou a instalar um tamanho que o produto não pode carregar"
+
+
+def test_somente_asr_baixa_o_tamanho_de_procedencia_avisando(setup_models, ambiente, downloads,
+                                                             registro_real, monkeypatch, capsys):
+    """Medir é justamente o que se faz com um peso que ninguém adotou.
+
+    `--somente-asr` continua baixando `tiny` — foi assim que a tabela do §21
+    nasceu, e sem isso ela não é repetível —, mas quem baixa ouve o que está
+    levando. O pino que vai ao Hugging Face é o do registro.
+    """
+    monkeypatch.setenv("FIAS_ED_ASR_SIZE", "tiny")
+    declarado = {r["repo_id"]: r["revision"]
+                 for m in registro_real["models"]
+                 for r in m.get("integrity", {}).get("repos", [])}
+
+    codigo = setup_models.main(["--somente-asr"])
+
+    saida = capsys.readouterr().out
+    assert codigo == 0, "recusou baixar um tamanho que o registro declara"
+    assert downloads == [("Systran/faster-whisper-tiny",
+                          declarado["Systran/faster-whisper-tiny"])] * len(setup_models.ARQUIVOS_ASR)
+    assert "aviso" in saida and "procedência" in saida, \
+        "baixou sem avisar que o tamanho não é adotável em produção"
+
+
+def _tamanhos_da_medicao() -> list[str]:
+    """Os tamanhos de Whisper que `scripts/medir_asr.py` mede, lidos do fonte dele.
+
+    Lido, e não copiado: uma lista própria aqui seria a mesma duplicação que
+    começou esta história. É o default de `--tamanhos`, que é o que roda quando
+    a medição do §21 é repetida.
+    """
+    arvore = ast.parse(CAMINHO_MEDIR.read_text(encoding="utf-8"))
+    for no in ast.walk(arvore):
+        if (isinstance(no, ast.Call) and getattr(no.func, "attr", "") == "add_argument"
+                and no.args and getattr(no.args[0], "value", None) == "--tamanhos"):
+            for kw in no.keywords:
+                if kw.arg == "default":
+                    return [ast.literal_eval(e) for e in kw.value.elts]
+    raise AssertionError("scripts/medir_asr.py não declara mais o default de --tamanhos:"
+                         " este teste perdeu a lista do que o script sabe baixar")
+
+
+def test_todo_repositorio_que_o_script_sabe_baixar_tem_pino_no_registro(setup_models, ambiente):
+    """A ausência que causou o defeito não pode voltar a passar despercebida.
+
+    `tiny` e `base` eram baixáveis e não tinham entrada no registro: quando a
+    cópia do pino saiu do script, a procedência das seis linhas de tabela do §21
+    sumiu do repositório inteiro. O que o script sabe baixar — os três tamanhos
+    da medição e os três repositórios do pyannote — tem de ter pino declarado.
+    """
+    setup_models._sem_banco()
+    repos = [setup_models.REPO_ASR.format(tamanho=t) for t in _tamanhos_da_medicao()]
+    repos += [setup_models.REPO_DIAR, setup_models.REPO_SEGMENTACAO, setup_models.REPO_EMBEDDING]
+
+    sem_pino = []
+    for repo_id in repos:
+        try:
+            assert len(setup_models.revisao_fixada(repo_id)) == 40
+        except setup_models.FalhaDeModelo:
+            sem_pino.append(repo_id)
+
+    assert sem_pino == [], \
+        f"o script baixa estes repositórios e o registro não declara a revisão: {sem_pino}"
 
 
 def test_o_script_nao_guarda_commit_fixado(setup_models):

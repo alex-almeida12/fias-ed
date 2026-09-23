@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.ml.protocols import SegmentoASR
-from app.ml.registry import entrada
+from app.ml.registry import entrada_adotavel
 
 
 def diretorio_do_modelo(models_dir: str, tamanho: str) -> Path:
@@ -31,7 +31,13 @@ class WhisperASR:
         # declarado no registro; a integridade do arquivo é do huggingface_hub,
         # contra a revisão fixada que o próprio registro declara (integrity.repos)
         # e que scripts/setup_models.py lê de lá no download.
-        entrada(s.asr_model_id)
+        #
+        # `entrada_adotavel`, e não `entrada`: estar no registro deixou de bastar.
+        # `faster-whisper-tiny` e `faster-whisper-base` estão lá pela procedência
+        # da medição do §21 — é onde o pino de versão daqueles pesos mora —, com
+        # validation_status PENDING_SCIENTIFIC_VALIDATION, e é aqui que a
+        # diferença entre "medido" e "adotado" vira recusa.
+        entrada_adotavel(s.asr_model_id)
         # device="cpu": não há GPU no alvo, e "auto" trocaria o backend conforme a
         # máquina — dois computadores dariam textos diferentes para a mesma aula.
         self._modelo = WhisperModel(str(diretorio_do_modelo(s.models_dir, s.asr_size)),

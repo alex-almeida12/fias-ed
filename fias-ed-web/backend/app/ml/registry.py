@@ -2,6 +2,15 @@
 
 A lista de hashes é do shared, não daqui: manter uma cópia local criaria duas
 fontes de verdade que divergem em silêncio.
+
+Estar no registro deixou de ser o mesmo que poder rodar. O registro também
+guarda modelo que existe só pela **procedência de uma medição publicada** — os
+pesos `tiny` e `base` do §21 do README, cujo pino de versão é a única coisa que
+torna aquelas linhas de tabela recuperáveis. Eles precisam de entrada (senão a
+revisão fixada não mora em lugar nenhum), e não podem ser carregados: ninguém
+validou o tamanho. Quem carrega peso em produção chama `entrada_adotavel`, que
+lê `validation_status` e recusa o que não foi adotado; quem só lê procedência
+para bookkeeping continua em `entrada`.
 """
 import hashlib
 import json
@@ -39,6 +48,37 @@ def entrada(model_id: str) -> dict:
         if m.get("model_id") == model_id:
             return m
     raise ModeloInvalido("MODELO_NAO_REGISTRADO", f"modelo fora do registro: {model_id}")
+
+
+#: Os estados de validação que autorizam um modelo a rodar em produção.
+#: Lista de permitidos, e não de recusados, de propósito: o vocabulário de
+#: `validation_status` é do shared (engine-py/src/fias_ed_engine/traceability.py)
+#: e pode ganhar estados novos sem que este repositório saiba. Um estado que
+#: ninguém aqui examinou entra recusado, não adotado por omissão.
+STATUS_ADOTAVEIS = ("validated", "engineering_decision")
+
+
+def entrada_adotavel(model_id: str) -> dict:
+    """A entrada do registro, exigindo que o modelo seja adotável em produção.
+
+    É o que separa "declarado" de "aprovado". `faster-whisper-tiny` e
+    `faster-whisper-base` estão no registro porque a medição do §21 foi feita
+    com eles e o pino de versão é fato científico que não pode se perder — não
+    porque alguém decidiu usá-los. Sem esta checagem, acrescentar a procedência
+    de uma medição passaria a autorizar o uso do peso medido, que é exatamente
+    o contrário do que a entrada quer dizer.
+    """
+    m = entrada(model_id)
+    status = m.get("validation_status")
+    if status not in STATUS_ADOTAVEIS:
+        raise ModeloInvalido(
+            "MODELO_NAO_ADOTAVEL",
+            f"modelo não adotável em produção: {model_id} (validation_status={status!r})."
+            " A entrada dele no registro científico existe para a procedência de uma medição"
+            " publicada — dizer qual peso produziu aqueles números —, não para autorizar o uso."
+            " Adotá-lo exige validação científica registrada"
+            f" (validation_status em {', '.join(STATUS_ADOTAVEIS)}).")
+    return m
 
 
 def _sha256(caminho: Path) -> str:
