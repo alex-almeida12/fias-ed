@@ -160,3 +160,38 @@ progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--co
    paginação. */
 .bloco-nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
   flex-wrap: wrap; margin: var(--space-5) 0; }
+
+/* Padrões de interação (Task 13). A faixa de tempo é um SVG com viewBox
+   proporcional à duração da aula (preserveAspectRatio="none") — a largura de
+   cada trecho é geometria SVG (atributo `width`, não `style`), então nenhum
+   valor de dado entra por atributo `style` inline (proibido no design system).
+   As quatro cores são as que tokens.json já reserva para os grupos FIAS. */
+.faixa-tempo { width: 100%; height: 28px; display: block; border-radius: var(--radius-sm); }
+.faixa-tempo__seg--indireta { fill: var(--color-fias-indirect); }
+.faixa-tempo__seg--direta { fill: var(--color-fias-direct); }
+.faixa-tempo__seg--estudante { fill: var(--color-fias-student); }
+.faixa-tempo__seg--silencio { fill: var(--color-fias-silence); }
+/* Legenda textual ao lado das cores: cor nunca é o único portador de
+   significado (DESIGN.md) — o aria-label do svg já descreve a distribuição em
+   palavras, esta legenda repete a associação cor→grupo para quem enxerga. */
+.faixa-tempo-legenda { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: flex; gap: var(--space-4); flex-wrap: wrap; }
+.faixa-tempo-legenda__item { display: flex; align-items: center; gap: var(--space-1); font-size: var(--type-caption-size); color: var(--color-text-muted); }
+.faixa-tempo-legenda__marca { width: 12px; height: 12px; border-radius: var(--radius-sm); display: inline-block; }
+.faixa-tempo-legenda__marca--indireta { background: var(--color-fias-indirect); }
+.faixa-tempo-legenda__marca--direta { background: var(--color-fias-direct); }
+.faixa-tempo-legenda__marca--estudante { background: var(--color-fias-student); }
+.faixa-tempo-legenda__marca--silencio { background: var(--color-fias-silence); }
+
+/* Observações: cada uma é um item de lista com o texto e, abaixo, os trechos
+   reais que a sustentam — a evidência nunca fica escondida atrás de um clique. */
+.observacao { flex-direction: column; align-items: flex-start; }
+.observacao__evidencias { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.observacao__evidencias .meta { margin: 0; }
+.observacao__evidencias blockquote { margin: 0; padding-left: var(--space-3); border-left: var(--border-strong) solid var(--color-border);
+  quotes: "\201C" "\201D"; }
+.observacao__evidencias blockquote::before { content: open-quote; }
+.observacao__evidencias blockquote::after { content: close-quote; }
+
+/* Índices: nome por extenso, o que medem, e o valor — nunca um limiar ao lado. */
+.indice { align-items: flex-start; gap: var(--space-4); }
+.indice__valor { font-weight: 700; white-space: nowrap; }

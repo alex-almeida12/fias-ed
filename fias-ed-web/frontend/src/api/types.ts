@@ -68,6 +68,39 @@ export interface TranscricaoBloco {
   segmentos: Segmento[];
 }
 
+export type FiasGrupo = "indireta" | "direta" | "estudante" | "silêncio";
+
+export interface FaixaIntervalo {
+  inicio_ms: number;
+  fim_ms: number;
+  grupo: FiasGrupo;
+}
+
+export interface Evidencia {
+  segmento_id: string;
+  inicio_ms: number;
+  trecho: string;
+}
+
+export interface Observacao {
+  texto: string;
+  evidencias: Evidencia[];
+}
+
+export interface Indice {
+  codigo: string;
+  nome: string;
+  valor: number | null;
+  descricao: string;
+}
+
+export interface Padroes {
+  faixa: FaixaIntervalo[];
+  observacoes: Observacao[];
+  matriz: number[][];
+  indices: Indice[];
+}
+
 export interface Conta {
   id: string;
   username: string;
