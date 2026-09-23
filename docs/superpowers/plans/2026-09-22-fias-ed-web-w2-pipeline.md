@@ -17,7 +17,7 @@ Valem para todas as tasks. Copiadas do spec e do plano da W1.
 - Tudo em `fias-ed-web/`. **Não alterar** `artigos selecionados\` nem `avalie-seu-professor\`. `fias-ed-shared/` é somente leitura nesta fatia, com uma exceção: a Task 2 pode acrescentar entradas a `scientific-config/models.json` para o ASR e a diarização, seguindo o formato que já existe.
 - Nenhuma regra científica é implementada no backend Web. FIAS sai de `fias_ed_engine` (`constrain_by_role`, `segments_to_intervals`, `transition_matrix`, `compute_indices`). A matemática do FIAS **não é retestada** aqui.
 - A categoria FIAS sai de `fias_rules.json` → `classifier.logit_index_offset`. **Nenhum código lê `id2label` do checkpoint** (`ANALISE_MODELOS_EXISTENTES.md` §2.2: o `config.json` grava só `LABEL_0..LABEL_9`).
-- Entrada do classificador é **par de turnos**: `tokenizer(text_a, text_b)`, WordPiece cased, `max_length=256`, truncation `LongestFirst` à direita, padding `"max_length"`, sem lowercasing e sem prefixo de falante no texto.
+- Entrada do classificador é **par de turnos**, e todos os parâmetros vêm de `fias_rules.json` → `classifier`, não de literais no código: `input_format`, `max_length`, `padding`, `token_type_ids` e `uncertain_below`. **`token_type_ids` é `"zeros"`** — o treino nunca passou segmentos reais, e usar os do tokenizer custa acurácia medida (0,7773 contra 0,7915, `ANALISE_MODELOS_EXISTENTES.md` §2.5). Ao consultar documentos de pesquisa, **leia a seção inteira**, não só o parágrafo citado: foi assim que este requisito passou despercebido.
 - Nenhum peso de modelo no Git. Os artefatos são conferidos contra `fias-ed-shared/scientific-config/models.json` (SHA-256 por artefato) e a carga é recusada se algum `forbidden_files` (`training_args.bin`, `optimizer.pt`, `rng_state.pth`, `scaler.pt`, `scheduler.pt`) estiver no diretório.
 - Execução offline: `HF_HUB_OFFLINE=1` e `TRANSFORMERS_OFFLINE=1` nos containers `api` e `worker`. Nenhuma chamada de rede em tempo de execução. O download do `pyannote` acontece uma vez, no setup, fora do fluxo do produto.
 - ASR com idioma fixado e decodificação determinística (`temperature=0`), porque o §44 exige que a mesma aula reprocessada dê o mesmo texto. Atenção aos dois valores: o `faster-whisper` recebe `language="pt"` (código que ele conhece), enquanto a coluna `Transcricao.language` guarda `"pt-BR"`, o único valor que o enum do shared aceita.
@@ -2413,6 +2413,32 @@ def test_classificacao_leva_a_fias_completed(db, aula_revisada, classificador_fa
     assert aula_revisada.status == "FIAS_COMPLETED"
 
 
+def test_guarda_a_predicao_crua_e_a_restrita_por_papel(db, aula_revisada, classificador_falso_categoria_8):
+    """As duas colunas existem para rastreabilidade: o que o modelo disse, e o
+    que sobrou depois da restrição por papel. Guardar só a segunda apagaria a
+    evidência de que houve restrição."""
+    job = enqueue(db, aula_revisada.id, "classify_fias")
+    HANDLERS["classify_fias"](db, job)
+    de_aluno = classificacoes_de_papel(db, aula_revisada, "ALUNO")
+    assert all(c.pred_raw == 8 for c in de_aluno)          # o que o modelo disse
+    assert all(c.pred_role_constrained in (8, 9) for c in de_aluno)
+    assert all(c.confidence_raw > 0 and c.confidence > 0 for c in de_aluno)
+
+
+def test_marca_uncertain_abaixo_do_limiar_do_shared(db, aula_revisada, classificador_falso_indeciso):
+    """uncertain_below está em fias_rules.classifier; quem decide é o motor."""
+    job = enqueue(db, aula_revisada.id, "classify_fias")
+    HANDLERS["classify_fias"](db, job)
+    assert any(c.uncertain for c in classificacoes_de(db, aula_revisada))
+
+
+def test_transcript_source_reflete_se_o_professor_revisou(db, aula_revisada_parcialmente, classificador_falso):
+    job = enqueue(db, aula_revisada_parcialmente.id, "classify_fias")
+    HANDLERS["classify_fias"](db, job)
+    fontes = {c.transcript_source for c in classificacoes_de(db, aula_revisada_parcialmente)}
+    assert fontes == {"ASR_ORIGINAL", "TRANSCRICAO_REVISADA"}
+
+
 def test_a_categoria_respeita_o_papel_do_falante(db, aula_revisada, classificador_falso_categoria_8):
     """constrain_by_role é do motor do shared: uma categoria de fala docente num
     segmento de ALUNO tem de ser corrigida antes de virar intervalo."""
@@ -2464,12 +2490,24 @@ def classificar_aula(db, aula) -> None:
     apagar_resultado_anterior(db, aula)
     codificados = []
     for seg, logits in zip(segmentos, lotes):
+        # constrain_by_role devolve um RolePrediction com EXATAMENTE as cinco
+        # colunas que ClassificacaoFIAS exige, já com o deslocamento e o limiar
+        # `uncertain_below` aplicados. Persistir o que o motor decidiu; não
+        # recalcular nada aqui, e não descartar a predição crua — ela é a
+        # rastreabilidade de o que o modelo disse antes da restrição por papel.
         predicao = constrain_by_role(logits, seg.falante.role, regras)
-        categoria = categoria_de(predicao.logits, offset)
-        db.add(ClassificacaoFIAS(aula_id=aula.id, segmento_id=seg.id, categoria=categoria,
-                                 confianca=predicao.confidence, modelo_ia_id=modelo_id(db),
-                                 rules_version=regras["rules_version"]))
-        codificados.append(CodedSegment(start_ms=seg.start_ms, end_ms=seg.end_ms, category=categoria))
+        db.add(ClassificacaoFIAS(
+            segmento_id=seg.id,
+            transcript_source="TRANSCRICAO_REVISADA" if seg.texto_revisado else "ASR_ORIGINAL",
+            pred_raw=predicao.pred_raw,
+            pred_role_constrained=predicao.pred_role_constrained,
+            confidence_raw=predicao.confidence_raw,
+            confidence=predicao.confidence,
+            uncertain=predicao.uncertain,
+            model_id=get_settings().clf_model_id,
+            rules_version=regras["rules_version"]))
+        codificados.append(CodedSegment(start_ms=seg.start_ms, end_ms=seg.end_ms,
+                                        category=predicao.pred_role_constrained))
 
     intervalos = segments_to_intervals(codificados, total_ms=duracao(db, aula), rules=regras)
     matriz = transition_matrix(intervalos, regras)
