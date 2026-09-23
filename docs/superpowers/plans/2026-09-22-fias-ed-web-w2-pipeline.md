@@ -1045,7 +1045,9 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: `Chunk`, `cortar`, `planejar_chunks` (Task 4); `obter_asr()` (Task 3); `SegmentoASR` (Task 3); `pseudonimizar` (Task 6).
 - Produces:
   - `criar_transcricao(db, aula, audio, asr_model_id) -> Transcricao`
-  - `gravar_segmentos(db, transcricao, segmentos: list[SegmentoASR], falante_id) -> None`
+  - `falante_provisorio(db, transcricao) -> Falante` — cria a linha `role="UNASSIGNED"`,
+    `diarization_label="pendente"`, à qual todos os segmentos são ligados até a diarização
+  - `gravar_segmentos(db, transcricao, segmentos: list[SegmentoASR], falante: Falante) -> None`
   - `transcricao_da_aula(db, aula_id) -> Transcricao | None`
   - `segmentos_asr(db, transcricao) -> list[SegmentoASR]` — relê do banco no formato do protocolo
   - `texto_efetivo(segmento) -> str` — `texto_revisado` quando houver, senão `texto_original_asr`
@@ -1068,6 +1070,18 @@ def test_transcricao_soma_o_deslocamento_de_cada_chunk(db, aula_preparada, asr_f
     segmentos = db.query(Segmento).filter_by(transcricao_id=t.id).order_by(Segmento.ordem).all()
     assert [s.start_ms for s in segmentos] == [0, 1_000, 600_000, 601_000]
     assert all(s.end_ms <= duracao_do_audio(db, t) for s in segmentos)
+
+
+def test_segmentos_nascem_ligados_a_um_falante_nao_atribuido(db, aula_preparada, asr_falso_por_chunk):
+    """falante_id é NOT NULL; antes da diarização todos apontam para a mesma
+    linha com role=UNASSIGNED."""
+    job = enfileirar(db, aula_preparada.id, "transcribe")
+    HANDLERS["transcribe"](db, job)
+    t = db.query(Transcricao).filter_by(aula_id=aula_preparada.id).one()
+    segmentos = db.query(Segmento).filter_by(transcricao_id=t.id).all()
+    assert all(s.falante_id is not None for s in segmentos)
+    assert len({s.falante_id for s in segmentos}) == 1
+    assert db.query(Falante).filter_by(transcricao_id=t.id).one().role == "UNASSIGNED"
 
 
 def test_transcricao_leva_a_diarizing(db, aula_preparada, asr_falso_por_chunk):
@@ -1121,7 +1135,10 @@ def handle_transcribe(db: Session, job: Job) -> None:
         log_event("transcricao_sem_fala", aula_id=aula.id, job_id=job.id)
         return
     transcricao = criar_transcricao(db, aula, audio, get_settings().asr_model_id)
-    gravar_segmentos(db, transcricao, segmentos, falante_id=None)
+    # Segmento.falante_id é NOT NULL: o schema do shared resolve "ainda não se
+    # sabe quem falou" com role=UNASSIGNED, não com FK nula. A diarização (Task 7)
+    # troca este falante provisório pelos falantes por voz.
+    gravar_segmentos(db, transcricao, segmentos, falante_provisorio(db, transcricao))
     aula.status, aula.error_code = "DIARIZING", None
     enqueue(db, aula.id, "diarize")
     finish_job(db, job)
@@ -1400,8 +1417,12 @@ Item 2 do Review Focus. O alinhamento é função pura e é onde a lógica mais 
   - `alinhar(segmentos: list[SegmentoASR], turnos: list[TurnoDiar]) -> list[str | None]` — um rótulo de voz por segmento, na mesma ordem; `None` quando não há sobreposição alguma.
   - `resumo_por_voz(segmentos, rotulos) -> list[GrupoDeVoz]`
   - `@dataclass(frozen=True) GrupoDeVoz(rotulo: str, tempo_total_ms: int, n_segmentos: int, amostras: list[tuple[int, int]])`
-  - `criar_falantes_provisorios(db, transcricao, rotulos: list[str | None]) -> dict[str, uuid.UUID]` —
-    cria um `Falante` por voz com `role="UNASSIGNED"` e devolve rótulo → id
+  - `criar_falantes_provisorios(db, transcricao, segmentos, rotulos: list[str | None]) -> None` —
+    cria um `Falante` por voz com `role="UNASSIGNED"` e o `diarization_label` do
+    diarizador, **repointa cada segmento** para o falante da sua voz, e apaga o
+    falante provisório `"pendente"` que a Task 5 criou. Segmento sem rótulo
+    (nenhuma sobreposição com turno algum) fica no provisório, que por isso só é
+    apagado quando ficar sem segmentos
   - `handle_diarize(db, job)`
 
 - [ ] **Step 1: Escrever o teste que falha**
@@ -1593,7 +1614,7 @@ def handle_diarize(db: Session, job: Job) -> None:
         return
     segmentos = segmentos_asr(db, transcricao)
     rotulos = alinhar(segmentos, turnos)
-    criar_falantes_provisorios(db, transcricao, rotulos)
+    criar_falantes_provisorios(db, transcricao, segmentos, rotulos)
     aula.status, aula.error_code = "READY_FOR_SPEAKER_REVIEW", None
     finish_job(db, job)
     db.commit()
