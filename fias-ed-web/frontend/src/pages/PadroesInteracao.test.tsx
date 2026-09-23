@@ -31,12 +31,16 @@ const PADROES = {
   ],
 };
 
-const FAIXA_QUATRO_GRUPOS = [
-  { inicio_ms: 0, fim_ms: 3000, grupo: "indireta" as const },
-  { inicio_ms: 3000, fim_ms: 6000, grupo: "direta" as const },
-  { inicio_ms: 6000, fim_ms: 9000, grupo: "estudante" as const },
-  { inicio_ms: 9000, fim_ms: 12000, grupo: "silêncio" as const },
-];
+// Uma aula de 45 minutos como o backend a entrega: um item por intervalo de
+// codificação FIAS (3s, fixados em fias_rules.json), 900 itens, com o grupo
+// mudando a cada 45s — nada de uma faixa de brinquedo com quatro itens.
+const GRUPOS_EM_ORDEM = ["indireta", "direta", "estudante", "silêncio"] as const;
+const INTERVALOS_POR_BLOCO = 15;
+const FAIXA_45_MIN = Array.from({ length: 900 }, (_, i) => ({
+  inicio_ms: i * 3000,
+  fim_ms: (i + 1) * 3000,
+  grupo: GRUPOS_EM_ORDEM[Math.floor(i / INTERVALOS_POR_BLOCO) % 4],
+}));
 
 function mockPadrao(extra: Record<string, () => Response> = {}) {
   return mockApi({
@@ -79,17 +83,26 @@ test("nenhum índice aparece com veredito", async () => {
   expect(screen.queryByText(/abaixo do esperado|bom|ruim|meta/i)).not.toBeInTheDocument();
 });
 
-test("cada segmento da faixa tem contorno que contrasta com os vizinhos", async () => {
-  // As quatro cores de grupo não se separam sozinhas: indireta x direta dá
-  // 2,32:1 e estudante x silêncio dá 1,27:1, abaixo dos 3:1 do WCAG 1.4.11.
-  mockPadrao({ "GET /api/aulas/a1/padroes": () => jsonResponse({ ...PADROES, faixa: FAIXA_QUATRO_GRUPOS }) });
+test("uma aula de 45 minutos vira um retângulo por trecho, não um por intervalo de 3s", async () => {
+  mockPadrao({ "GET /api/aulas/a1/padroes": () => jsonResponse({ ...PADROES, faixa: FAIXA_45_MIN }) });
   renderApp("/aulas/a1/padroes");
   const faixa = await screen.findByRole("img", { name: /distribuição da fala/i });
-  const escuros = faixa.querySelectorAll('[data-grupo="direta"], [data-grupo="indireta"]');
-  const claros = faixa.querySelectorAll('[data-grupo="estudante"], [data-grupo="silencio"]');
-  expect(escuros.length + claros.length).toBeGreaterThan(0);
-  escuros.forEach((s) => expect(s).toHaveAttribute("stroke", "var(--color-white)"));
-  claros.forEach((s) => expect(s).toHaveAttribute("stroke", "var(--color-navy)"));
+  const rects = [...faixa.querySelectorAll("rect")];
+
+  // 900 intervalos, 60 trechos: o contorno cai nas 59 mudanças de grupo reais e
+  // em nenhum lugar a mais. Com um retângulo por intervalo, a faixa afirmaria
+  // 899 fronteiras que o dado não tem.
+  expect(rects).toHaveLength(900 / INTERVALOS_POR_BLOCO);
+  expect(new Set(rects.map((r) => r.getAttribute("data-grupo"))).size).toBe(4);
+
+  // E a largura tem que sobrar para o contorno. Num celular de 360px a faixa
+  // tem ~328px; o contorno de 1px é centrado na aresta e come 0,5px de cada
+  // lado, então um retângulo mais estreito que 2px vira contorno puro e a cor
+  // do grupo some da tela.
+  const duracaoMs = Number(faixa.getAttribute("viewBox")!.split(" ")[2]);
+  const larguraNoCelular = (r: Element) => (Number(r.getAttribute("width")) / duracaoMs) * 328;
+  const maisEstreito = Math.min(...rects.map(larguraNoCelular));
+  expect(maisEstreito).toBeGreaterThan(2);
 });
 
 test("a faixa de tempo tem alternativa textual", async () => {

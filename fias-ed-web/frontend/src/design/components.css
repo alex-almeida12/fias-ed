@@ -167,20 +167,44 @@ progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--co
    valor de dado entra por atributo `style` inline (proibido no design system).
    As quatro cores são as que tokens.json já reserva para os grupos FIAS. */
 .faixa-tempo { width: 100%; height: 28px; display: block; border-radius: var(--radius-sm); }
-.faixa-tempo__seg--indireta { fill: var(--color-fias-indirect); }
-.faixa-tempo__seg--direta { fill: var(--color-fias-direct); }
-.faixa-tempo__seg--estudante { fill: var(--color-fias-student); }
-.faixa-tempo__seg--silencio { fill: var(--color-fias-silence); }
+/* As quatro cores de grupo não se separam sozinhas: indireta (teal) contra
+   direta (navy) dá 2,32:1 e estudante (sky) contra silêncio (bege) dá 1,27:1 —
+   as duas abaixo dos 3:1 que o WCAG 1.4.11 exige de uma fronteira gráfica que
+   carrega informação, e são as duas adjacências mais comuns numa aula real.
+   Nenhum separador de cor única cobre as quatro cores ao mesmo tempo (branco
+   falha contra sky e bege; navy falha contra teal e contra si mesmo) — por
+   isso o contorno é por grupo: os dois grupos escuros (indireta/teal,
+   direta/navy) recebem contorno branco (4,50:1 e 10,44:1) e os dois claros
+   (estudante/sky, silêncio/bege) recebem contorno navy (7,22:1 e 9,16:1).
+   Assim toda fronteira entre dois grupos quaisquer tem pelo menos um lado com
+   contorno que contrasta com os dois vizinhos. O contorno só é legível porque
+   FaixaDeTempo junta intervalos vizinhos do mesmo grupo num retângulo só: com
+   um retângulo por intervalo de 3s, a espessura de 1px cobriria a largura
+   inteira da barra e engoliria o preenchimento.
+   O viewBox está em milissegundos (eixo x) contra uma unidade só (eixo y):
+   vector-effect mantém a espessura em pixels de tela de verdade, em vez de
+   esticar com essa escala não uniforme. */
+.faixa-tempo__seg { stroke-width: var(--border-hairline); vector-effect: non-scaling-stroke; }
+.faixa-tempo__seg--indireta { fill: var(--color-fias-indirect); stroke: var(--color-white); }
+.faixa-tempo__seg--direta { fill: var(--color-fias-direct); stroke: var(--color-white); }
+.faixa-tempo__seg--estudante { fill: var(--color-fias-student); stroke: var(--color-navy); }
+.faixa-tempo__seg--silencio { fill: var(--color-fias-silence); stroke: var(--color-navy); }
 /* Legenda textual ao lado das cores: cor nunca é o único portador de
    significado (DESIGN.md) — o aria-label do svg já descreve a distribuição em
    palavras, esta legenda repete a associação cor→grupo para quem enxerga. */
 .faixa-tempo-legenda { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: flex; gap: var(--space-4); flex-wrap: wrap; }
 .faixa-tempo-legenda__item { display: flex; align-items: center; gap: var(--space-1); font-size: var(--type-caption-size); color: var(--color-text-muted); }
-.faixa-tempo-legenda__marca { width: 12px; height: 12px; border-radius: var(--radius-sm); display: inline-block; }
-.faixa-tempo-legenda__marca--indireta { background: var(--color-fias-indirect); }
-.faixa-tempo-legenda__marca--direta { background: var(--color-fias-direct); }
-.faixa-tempo-legenda__marca--estudante { background: var(--color-fias-student); }
-.faixa-tempo-legenda__marca--silencio { background: var(--color-fias-silence); }
+/* O mesmo contorno por grupo da faixa, pela mesma razão e com um motivo a
+   mais: contra a superfície branca, sky dá 1,45:1 e bege dá 1,14:1 — sem
+   contorno, dois dos quatro quadradinhos simplesmente não existem para quem
+   olha. Com ele, os quatro se veem e a legenda continua descrevendo o que
+   está desenhado na faixa, contorno inclusive. */
+.faixa-tempo-legenda__marca { width: 12px; height: 12px; border-radius: var(--radius-sm); display: inline-block;
+  border: var(--border-hairline) solid transparent; }
+.faixa-tempo-legenda__marca--indireta { background: var(--color-fias-indirect); border-color: var(--color-white); }
+.faixa-tempo-legenda__marca--direta { background: var(--color-fias-direct); border-color: var(--color-white); }
+.faixa-tempo-legenda__marca--estudante { background: var(--color-fias-student); border-color: var(--color-navy); }
+.faixa-tempo-legenda__marca--silencio { background: var(--color-fias-silence); border-color: var(--color-navy); }
 
 /* Observações: cada uma é um item de lista com o texto e, abaixo, os trechos
    reais que a sustentam — a evidência nunca fica escondida atrás de um clique. */
