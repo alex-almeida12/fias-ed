@@ -188,14 +188,23 @@ progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--co
    direta/navy) recebem contorno branco (4,50:1 e 10,44:1) e os dois claros
    (estudante/sky, silêncio/bege) recebem contorno navy (7,22:1 e 9,16:1).
    Assim toda fronteira entre dois grupos quaisquer tem pelo menos um lado com
-   contorno que contrasta com os dois vizinhos. O contorno só é legível porque
-   FaixaDeTempo junta intervalos vizinhos do mesmo grupo num retângulo só: com
-   um retângulo por intervalo de 3s, a espessura de 1px cobriria a largura
-   inteira da barra e engoliria o preenchimento.
+   contorno que contrasta com os dois vizinhos. Os seis pares continuam todos
+   possíveis depois que FaixaDeTempo resume a aula em trechos de tempo (o
+   dominante de um trecho pode ser qualquer grupo, e o do trecho seguinte
+   também), então o raciocínio acima vale inteiro, sem adjacência nova a
+   verificar — o que muda é que agora todo retângulo tem pelo menos 4px, e o
+   contorno de 1px deixa 2px de preenchimento visível em vez de engolir o
+   bloco.
    O viewBox está em milissegundos (eixo x) contra uma unidade só (eixo y):
    vector-effect mantém a espessura em pixels de tela de verdade, em vez de
    esticar com essa escala não uniforme. */
 .faixa-tempo__seg { stroke-width: var(--border-hairline); vector-effect: non-scaling-stroke; }
+/* Quando a faixa mostra o grupo dominante de cada trecho de tempo em vez do
+   grupo de cada instante, ela precisa dizer isso: esta é a frase que conta ao
+   professor a que pedaço de aula cada cor se refere. Medida de leitura curta,
+   como o resto do texto corrido do produto. */
+.faixa-tempo__nota { margin: var(--space-2) 0 0; max-width: 68ch;
+  font-size: var(--type-caption-size); color: var(--color-text-muted); }
 .faixa-tempo__seg--indireta { fill: var(--color-fias-indirect); stroke: var(--color-white); }
 .faixa-tempo__seg--direta { fill: var(--color-fias-direct); stroke: var(--color-white); }
 .faixa-tempo__seg--estudante { fill: var(--color-fias-student); stroke: var(--color-navy); }

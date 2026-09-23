@@ -3,7 +3,15 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import type { FaixaIntervalo, FiasGrupo } from "../../api/types";
-import { agruparConsecutivos, CLASSE_POR_GRUPO } from "./FaixaDeTempo";
+import {
+  agruparConsecutivos,
+  arredondarJanelaMs,
+  CLASSE_POR_GRUPO,
+  dizerDuracao,
+  janelaNecessariaMs,
+  janelarPorDominante,
+  LARGURA_MINIMA_BLOCO_PX,
+} from "./FaixaDeTempo";
 
 // Estes testes leem o CSS de verdade em vez de repetir as cores aqui: um teste
 // que compara uma constante do módulo com a mesma constante copiada para o
@@ -179,4 +187,204 @@ test("juntar não muda a duração total nem a duração de cada grupo", () => {
     return [...soma].sort();
   };
   expect(somaPorGrupo(agruparConsecutivos(faixa))).toEqual(somaPorGrupo(faixa));
+});
+
+// ---- Resumir a aula em trechos de tempo quando o bloco não cabe na tela.
+//
+// A medição que motivou isto foi feita em Chrome de verdade, rasterizando o
+// SVG e lendo o pixel central de cada retângulo: jsdom não faz layout e não
+// prova nada sobre geometria. O que se testa aqui é a REGRA — qual grupo cada
+// trecho afirma, e que largura cada trecho terá numa dada largura de faixa.
+
+const FAIXA_PX_CELULAR = 328; // 360px de celular menos o respiro de .page
+// Medido em Chrome, rasterizando o SVG: a 2,90px o pixel central de um bloco
+// ainda sai na cor de outro grupo; a partir de 3,00px acerta sempre. É um
+// número de fora do código — comparar a geometria com LARGURA_MINIMA_BLOCO_PX
+// seria comparar a constante com ela mesma, e baixá-la não quebraria nada.
+const JOELHO_MEDIDO_PX = 3;
+const FAIXA_PX_DESKTOP = 1120; // .page tem max-width 72rem menos o mesmo respiro
+
+/**
+ * Uma aula de 47min20 com a forma de aula de verdade: trechos expositivos
+ * longos entremeados de pergunta, resposta e silêncio curtos. Gerador
+ * determinista — é a MESMA aula usada na medição em navegador (947 intervalos
+ * de 3s que viram 93 blocos, o menor com 0,346px numa faixa de 328px).
+ */
+function aulaRealista(): FaixaIntervalo[] {
+  const passo = 3000;
+  const totalMs = 2840 * 1000;
+  const quantosIntervalos = Math.ceil(totalMs / passo);
+  let semente = 1;
+  const sorteia = () => ((semente = (semente * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const duracao: Record<FiasGrupo, [number, number]> = {
+    direta: [4, 34], indireta: [1, 8], estudante: [1, 10], "silêncio": [1, 6],
+  };
+  const proximo: Record<FiasGrupo, FiasGrupo[]> = {
+    direta: ["direta", "indireta", "silêncio", "estudante"],
+    indireta: ["estudante", "estudante", "direta", "silêncio"],
+    estudante: ["indireta", "direta", "estudante", "silêncio"],
+    "silêncio": ["direta", "indireta", "estudante", "direta"],
+  };
+  const categorias: FiasGrupo[] = [];
+  let grupo: FiasGrupo = "direta";
+  while (categorias.length < quantosIntervalos) {
+    const [min, max] = duracao[grupo];
+    const quantos = min + Math.floor(sorteia() * (max - min + 1));
+    for (let i = 0; i < quantos && categorias.length < quantosIntervalos; i += 1) categorias.push(grupo);
+    grupo = proximo[grupo][Math.floor(sorteia() * 4)];
+  }
+  return categorias.map((g, i) => ({ inicio_ms: i * passo, fim_ms: Math.min((i + 1) * passo, totalMs), grupo: g }));
+}
+
+const duracaoTotalDe = (faixa: FaixaIntervalo[]) => faixa.reduce((max, f) => Math.max(max, f.fim_ms), 0);
+
+/** O que a tela desenharia numa dada largura, pelas mesmas contas do componente. */
+function desenhado(faixa: FaixaIntervalo[], larguraPx: number): FaixaIntervalo[] {
+  const blocos = agruparConsecutivos(faixa);
+  const janela = janelaNecessariaMs(blocos, duracaoTotalDe(faixa), larguraPx);
+  return janela > 0 ? agruparConsecutivos(janelarPorDominante(faixa, janela)) : blocos;
+}
+
+function fracaoPorGrupo(faixa: FaixaIntervalo[]): Map<FiasGrupo, number> {
+  const total = faixa.reduce((soma, f) => soma + (f.fim_ms - f.inicio_ms), 0);
+  const fracao = new Map<FiasGrupo, number>();
+  for (const f of faixa) fracao.set(f.grupo, (fracao.get(f.grupo) ?? 0) + (f.fim_ms - f.inicio_ms) / total);
+  return fracao;
+}
+
+test("o trecho é de tempo, não de contagem de blocos: a largura de cada trecho é previsível", () => {
+  // Blocos de durações muito diferentes. Agregar "de 3 em 3 blocos" daria
+  // trechos de 9s e de 114s lado a lado — a largura em tela voltaria a ser
+  // imprevisível, que é justamente o defeito. Com trecho de tempo, todo
+  // retângulo tem a mesma duração.
+  const faixa: FaixaIntervalo[] = [
+    { inicio_ms: 0, fim_ms: 3000, grupo: "direta" },
+    { inicio_ms: 3000, fim_ms: 6000, grupo: "estudante" },
+    { inicio_ms: 6000, fim_ms: 120000, grupo: "direta" },
+    { inicio_ms: 120000, fim_ms: 123000, grupo: "silêncio" },
+    { inicio_ms: 123000, fim_ms: 150000, grupo: "indireta" },
+  ];
+  const trechos = janelarPorDominante(faixa, 30000);
+  expect(trechos.map((t) => t.fim_ms - t.inicio_ms)).toEqual([30000, 30000, 30000, 30000, 30000]);
+});
+
+test("o grupo do trecho é o de maior duração — não o primeiro, não o último, não o mais frequente", () => {
+  // Estudante aparece 4 vezes (8s no total), direta aparece 1 vez (12s) e
+  // silêncio fecha o trecho (2s). Quem domina o TEMPO é direta, que não é nem a
+  // primeira, nem a última, nem a mais frequente em contagem.
+  const faixa: FaixaIntervalo[] = [
+    { inicio_ms: 0, fim_ms: 2000, grupo: "estudante" },
+    { inicio_ms: 2000, fim_ms: 4000, grupo: "estudante" },
+    { inicio_ms: 4000, fim_ms: 6000, grupo: "estudante" },
+    { inicio_ms: 6000, fim_ms: 8000, grupo: "estudante" },
+    { inicio_ms: 8000, fim_ms: 20000, grupo: "direta" },
+    { inicio_ms: 20000, fim_ms: 22000, grupo: "silêncio" },
+  ];
+  expect(janelarPorDominante(faixa, 30000).map((t) => t.grupo)).toEqual(["direta"]);
+});
+
+test("empate vai para quem começou antes dentro do trecho, mesmo fora de ordem na lista", () => {
+  // earliest_start é o mesmo desempate que fias_rules.json fixa para
+  // transformar turnos em intervalos. Dois grupos com exatamente 6s cada: vence
+  // o que começou antes NO TEMPO — e o terceiro caso mostra que é o tempo que
+  // manda, não a ordem em que os itens chegaram na lista.
+  const emOrdem: FaixaIntervalo[] = [
+    { inicio_ms: 0, fim_ms: 6000, grupo: "direta" },
+    { inicio_ms: 6000, fim_ms: 12000, grupo: "estudante" },
+  ];
+  expect(janelarPorDominante(emOrdem, 30000).map((t) => t.grupo)).toEqual(["direta"]);
+  const trocado: FaixaIntervalo[] = [
+    { inicio_ms: 0, fim_ms: 6000, grupo: "estudante" },
+    { inicio_ms: 6000, fim_ms: 12000, grupo: "direta" },
+  ];
+  expect(janelarPorDominante(trocado, 30000).map((t) => t.grupo)).toEqual(["estudante"]);
+  const foraDeOrdem: FaixaIntervalo[] = [
+    { inicio_ms: 6000, fim_ms: 12000, grupo: "estudante" },
+    { inicio_ms: 0, fim_ms: 6000, grupo: "direta" },
+  ];
+  expect(janelarPorDominante(foraDeOrdem, 30000).map((t) => t.grupo)).toEqual(["direta"]);
+});
+
+test("um buraco na linha do tempo continua sem tinta depois de resumir", () => {
+  // Nada foi dito entre 10s e 50s, e nada depois de 1min. O vão não pode ganhar
+  // cor, e — de propósito — as pontas do que foi dito não caem nas bordas dos
+  // trechos: o retângulo tem que ir de onde o dado começa até onde o dado acaba,
+  // nunca até a borda do trecho, senão a faixa pinta tempo sobre o qual o motor
+  // não disse nada (inclusive depois do fim da aula, no último trecho).
+  const faixa: FaixaIntervalo[] = [
+    { inicio_ms: 0, fim_ms: 10000, grupo: "direta" },
+    { inicio_ms: 50000, fim_ms: 70000, grupo: "estudante" },
+  ];
+  expect(janelarPorDominante(faixa, 30000)).toEqual([
+    { inicio_ms: 0, fim_ms: 10000, grupo: "direta" },
+    { inicio_ms: 50000, fim_ms: 60000, grupo: "estudante" },
+    { inicio_ms: 60000, fim_ms: 70000, grupo: "estudante" },
+  ]);
+});
+
+test("todo retângulo desenhado tem pelo menos a largura mínima medida em navegador", () => {
+  // O joelho medido em Chrome é 3,00px (o pixel do meio ainda erra a cor a
+  // 2,90px); LARGURA_MINIMA_BLOCO_PX é 4. Este teste guarda que a conta do
+  // componente entrega o que a medição exige, em toda largura plausível.
+  expect(LARGURA_MINIMA_BLOCO_PX).toBeGreaterThanOrEqual(JOELHO_MEDIDO_PX);
+  const faixa = aulaRealista();
+  const total = duracaoTotalDe(faixa);
+  for (const larguraPx of [FAIXA_PX_CELULAR, 480, 788, FAIXA_PX_DESKTOP]) {
+    const maisEstreito = desenhado(faixa, larguraPx)
+      .map((b) => ((b.fim_ms - b.inicio_ms) / total) * larguraPx)
+      .reduce((min, px) => Math.min(min, px), Infinity);
+    expect(maisEstreito, `faixa de ${larguraPx}px`).toBeGreaterThanOrEqual(JOELHO_MEDIDO_PX);
+  }
+});
+
+test("nenhum grupo com fatia relevante da aula some da faixa", () => {
+  // Resumir por dominante pode calar um grupo que só aparece em rajadas curtas.
+  // A exigência: quem ocupa 5% ou mais da aula continua aparecendo na tela.
+  const faixa = aulaRealista();
+  const relevantes = [...fracaoPorGrupo(faixa)].filter(([, f]) => f >= 0.05).map(([grupo]) => grupo);
+  expect(relevantes.length, "a aula de teste precisa ter vários grupos relevantes").toBeGreaterThan(2);
+  for (const larguraPx of [FAIXA_PX_CELULAR, FAIXA_PX_DESKTOP]) {
+    const naTela = new Set(desenhado(faixa, larguraPx).map((b) => b.grupo));
+    const sumiram = relevantes.filter((grupo) => !naTela.has(grupo));
+    expect(sumiram, `grupos relevantes que somem numa faixa de ${larguraPx}px`).toEqual([]);
+  }
+});
+
+test("resumir não inventa grupo que a aula não teve", () => {
+  const faixa = aulaRealista().filter((f) => f.grupo !== "indireta");
+  const existentes = new Set(faixa.map((f) => f.grupo));
+  for (const b of desenhado(faixa, FAIXA_PX_CELULAR)) expect(existentes.has(b.grupo)).toBe(true);
+});
+
+test("numa tela em que todo bloco já cabe, a faixa não resume nada", () => {
+  // Afirmar o grupo de cada instante é a afirmação mais forte: só se abre mão
+  // dela quando a tela não a comporta.
+  const cabe: FaixaIntervalo[] = [
+    { inicio_ms: 0, fim_ms: 60000, grupo: "direta" },
+    { inicio_ms: 60000, fim_ms: 120000, grupo: "estudante" },
+  ];
+  expect(janelaNecessariaMs(agruparConsecutivos(cabe), 120000, FAIXA_PX_CELULAR)).toBe(0);
+  // E sem largura medida (primeira pintura, e jsdom, que não faz layout)
+  // também não se resume nada: só se resume o que se mediu.
+  expect(janelaNecessariaMs(agruparConsecutivos(aulaRealista()), 2840000, 0)).toBe(0);
+});
+
+test("a duração do trecho é arredondada para cima, nunca para baixo", () => {
+  // Arredondar para baixo devolveria trechos abaixo da largura mínima — o
+  // defeito de volta, por um erro de arredondamento.
+  for (const ms of [1, 4999, 10100, 34630, 59000, 60001, 130000]) {
+    expect(arredondarJanelaMs(ms), `${ms}ms`).toBeGreaterThanOrEqual(ms);
+  }
+  expect(arredondarJanelaMs(34630)).toBe(35000);
+  expect(arredondarJanelaMs(10140)).toBe(15000);
+});
+
+test("a frase da tela diz a duração em português, sem jargão", () => {
+  expect(dizerDuracao(35000)).toBe("35 segundos");
+  expect(dizerDuracao(60000)).toBe("1 minuto");
+  expect(dizerDuracao(90000)).toBe("1 minuto e 30 segundos");
+  expect(dizerDuracao(120000)).toBe("2 minutos");
+  for (const ms of [15000, 45000, 90000, 300000]) {
+    expect(dizerDuracao(ms)).not.toMatch(/pixel|janela|agrega|renderiz|avalia|nota|desempenho|ranking/i);
+  }
 });
