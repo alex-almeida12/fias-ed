@@ -13,7 +13,9 @@ function proximoPapel(papel: Papel): Papel {
 
 type CamposEditaveis = Partial<{ texto: string; papel: Papel }>;
 
-function SegmentoLinha({ seg, onSalvo }: { seg: Segmento; onSalvo: (atualizado: Segmento) => void }) {
+type SegmentoLinhaProps = { seg: Segmento; aulaId: string; onSalvo: (atualizado: Segmento) => void };
+
+function SegmentoLinha({ seg, aulaId, onSalvo }: SegmentoLinhaProps) {
   const [texto, setTexto] = useState(seg.texto);
   const [erro, setErro] = useState<string | null>(null);
   const horario = formatTimestamp(seg.start_ms);
@@ -35,6 +37,12 @@ function SegmentoLinha({ seg, onSalvo }: { seg: Segmento; onSalvo: (atualizado: 
     <section className="segmento" role="group" aria-label={`Trecho de ${horario}`}>
       <div className="segmento__cabecalho">
         <p className="meta">{horario}</p>
+        {/* spec §8.3: "ouvir é como se conserta atribuição errada" — o professor decide
+           quem falou pelo áudio, não adivinhando pelo texto do ASR. `preload="none"`
+           porque um bloco de cinco minutos tem dezenas de trechos: sem isto o navegador
+           baixaria (e o servidor recortaria com ffmpeg) todos eles ao abrir a página. */}
+        <audio controls preload="none" aria-label={`Áudio do trecho de ${horario}`}
+          src={`/api/aulas/${aulaId}/audio?inicio_ms=${seg.start_ms}&fim_ms=${seg.end_ms}`} />
         <Button variant="secondary" aria-pressed={seg.papel === "ALUNO"}
           onClick={() => void salvar({ papel: proximoPapel(seg.papel) })}>
           {seg.papel === "PROFESSOR" ? "Você — marcar como ALUNO" : "ALUNO — marcar como você"}
@@ -123,7 +131,7 @@ export function RevisaoTranscricao() {
 
           <div className="segmentos">
             {dados.segmentos.map((seg) => (
-              <SegmentoLinha key={seg.id} seg={seg} onSalvo={aoSalvarSegmento} />
+              <SegmentoLinha key={seg.id} seg={seg} aulaId={id} onSalvo={aoSalvarSegmento} />
             ))}
           </div>
         </>

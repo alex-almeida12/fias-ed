@@ -91,6 +91,18 @@ test("trocar o falante de um segmento", async () => {
   expect(JSON.parse(String(patch![1]!.body))).toMatchObject({ papel: "ALUNO" });
 });
 
+test("cada trecho tem um controle de áudio do seu próprio momento", async () => {
+  // spec §8.3: "ouvir é como se conserta atribuição errada" — o professor decide quem
+  // falou pelo áudio, não adivinhando pelo texto do ASR (a evidência mais fraca).
+  mockPadrao();
+  renderApp("/aulas/a1/transcricao");
+  const audio = await screen.findByLabelText(/áudio do trecho de 0:00/i);
+  expect(audio).toHaveAttribute("src", "/api/aulas/a1/audio?inicio_ms=0&fim_ms=2000");
+  // Um bloco de cinco minutos tem dezenas de trechos: sem isto o navegador baixaria
+  // (e o servidor recortaria com ffmpeg) todos eles ao abrir a página.
+  expect(audio).toHaveAttribute("preload", "none");
+});
+
 test("navega entre blocos de cinco minutos", async () => {
   mockApi({
     "GET /api/auth/me": () => jsonResponse(PROFESSORA),

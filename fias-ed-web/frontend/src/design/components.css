@@ -146,6 +146,9 @@ progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--co
   display: flex; flex-direction: column; gap: var(--space-2); }
 .segmento__cabecalho { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
 .segmento__cabecalho .meta { margin: 0; }
+/* O controle nativo de áudio não pode dominar a linha do horário e do botão de
+   falante numa tela onde ele se repete dezenas de vezes por bloco. */
+.segmento__cabecalho audio { height: 32px; max-width: 16rem; flex: 1 1 auto; }
 /* O rótulo do campo de texto existe para leitor de tela (a Regra do Rótulo Sempre
    Visível continua valendo — o rótulo existe), mas fica escondido visualmente
    porque o horário ao lado já cumpre esse papel para quem vê a tela. */
