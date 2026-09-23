@@ -1103,6 +1103,20 @@ def test_chunks_sao_apagados_ao_fim(db, aula_preparada, asr_falso_por_chunk, dir
     job = enfileirar(db, aula_preparada.id, "transcribe")
     HANDLERS["transcribe"](db, job)
     assert list(dir_chunks.glob("chunk_*.wav")) == []
+
+
+def test_chunks_sao_apagados_quando_o_asr_levanta(db, aula_preparada, dir_chunks, monkeypatch):
+    """A exceção sobe até o worker, que faz rollback e retry. Sem finally, os
+    pedaços já cortados ficariam no disco — centenas de MB numa aula de 90 min."""
+    class ASRQueFalha:
+        def transcrever(self, caminho, deslocamento_ms):
+            raise RuntimeError("modelo indisponível")
+
+    monkeypatch.setattr(handlers, "obter_asr", lambda: ASRQueFalha())
+    job = enfileirar(db, aula_preparada.id, "transcribe")
+    with pytest.raises(RuntimeError):
+        HANDLERS["transcribe"](db, job)
+    assert list(dir_chunks.glob("chunk_*.wav")) == []
 ```
 
 - [ ] **Step 2: Rodar e confirmar que falha**
@@ -1121,13 +1135,18 @@ def handle_transcribe(db: Session, job: Job) -> None:
         db.commit()
         return
     trabalho, dir_chunks = work_path(aula.id), chunks_dir(aula.id)
-    plano = planejar_chunks(audio.duration_ms)
-    chunks = cortar(trabalho, plano, dir_chunks)
-    asr = obter_asr()
-    segmentos: list[SegmentoASR] = []
-    for chunk in chunks:
-        segmentos.extend(asr.transcrever(chunk.caminho, chunk.inicio_ms))
-    limpar_chunks(dir_chunks)
+    # try/finally: se cortar() ou transcrever() levantar, a exceção sobe até o
+    # worker, que faz rollback e retry — mas os pedaços já cortados ficariam no
+    # disco para sempre. Numa aula de 90 min são centenas de MB por falha.
+    try:
+        plano = planejar_chunks(audio.duration_ms)
+        chunks = cortar(trabalho, plano, dir_chunks)
+        asr = obter_asr()
+        segmentos: list[SegmentoASR] = []
+        for chunk in chunks:
+            segmentos.extend(asr.transcrever(chunk.caminho, chunk.inicio_ms))
+    finally:
+        limpar_chunks(dir_chunks)
     if not segmentos:
         aula.status, aula.error_code = "ERROR", "AUDIO_SEM_FALA"
         fail_job(db, job, "AUDIO_SEM_FALA")
@@ -2358,6 +2377,10 @@ def classificar_aula(db, aula) -> None:
     regras = load_rules("fias_rules")
     offset = regras["classifier"]["logit_index_offset"]
     segmentos = segmentos_ordenados(db, aula)
+    # texto_efetivo, NUNCA texto_original_asr: usar o texto bruto aqui desfaria
+    # em silêncio a revisão que o professor fez na Task 10. `segmentos_asr` do
+    # service devolve o bruto de propósito (a diarização não usa texto) — não é
+    # a função a chamar aqui.
     lotes = obter_classificador().logits(montar_pares([texto_efetivo(s) for s in segmentos]))
 
     apagar_resultado_anterior(db, aula)
