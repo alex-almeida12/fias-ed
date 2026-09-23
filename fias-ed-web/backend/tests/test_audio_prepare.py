@@ -9,7 +9,7 @@ from app.audio.storage import ensure_dirs, store_root
 from app.jobs import handlers
 from app.jobs.handlers import HANDLERS
 from app.jobs.queue import enqueue
-from app.models import Audio
+from app.models import Audio, Job
 from tests.audio_fixtures import make_audio
 from tests.helpers import make_aula, make_user
 
@@ -138,8 +138,25 @@ def test_prepare_audio_leva_a_preprocessing_e_nao_toca_o_original(db, aula_valid
     db.commit()
     HANDLERS["prepare_audio"](db, job)
     db.refresh(aula_validada)
-    assert aula_validada.status == "TRANSCRIBING"
+    assert aula_validada.status == "PREPROCESSING"
     assert wav_sintetico.read_bytes() == original_antes
+
+
+def test_aula_com_transcricao_na_fila_ainda_nao_esta_transcrevendo(db, aula_validada):
+    """O preparo termina e deixa o job de transcrição na fila — atrás de quantas
+    outras aulas houver, com um worker só. Enquanto esse job não é puxado, não há
+    transcrição acontecendo, e dizer TRANSCRIBING aqui faria a tela do professor
+    afirmar "Transformando áudio em texto…" sobre trabalho que não começou.
+
+    Este teste olha o status no intervalo entre os dois estágios, não no fim de um
+    deles: é o único jeito de distinguir "marcou ao começar" de "marcou ao enfileirar"."""
+    job = enqueue(db, aula_validada.id, "prepare_audio")
+    db.commit()
+    HANDLERS["prepare_audio"](db, job)
+    db.refresh(aula_validada)
+    na_fila = db.query(Job).filter_by(aula_id=aula_validada.id, type="transcribe", status="queued").one()
+    assert na_fila.locked_at is None and na_fila.attempts == 0
+    assert aula_validada.status != "TRANSCRIBING"
 
 
 def test_prepare_audio_de_audio_ilegivel_vira_erro_com_mensagem_humana(db, aula_com_audio_quebrado):

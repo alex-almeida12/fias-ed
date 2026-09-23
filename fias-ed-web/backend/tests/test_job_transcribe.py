@@ -7,12 +7,13 @@ import uuid
 import pytest
 
 from app.audio.prepare import chunks_dir, work_path
+from app.core.db import SessionLocal, get_engine
 from app.jobs import handlers
 from app.jobs.handlers import HANDLERS
 from app.jobs.queue import enqueue
 from app.ml.fakes import ASRFalso
 from app.ml.protocols import SegmentoASR
-from app.models import Audio, Falante, Segmento, Transcricao
+from app.models import Audio, Aula, Falante, Job, Segmento, Transcricao
 from app.transcricao.service import segmentos_asr, texto_efetivo, transcricao_da_aula
 from tests.audio_fixtures import make_audio
 from tests.helpers import make_aula, make_user
@@ -25,9 +26,11 @@ DURACAO_MS = 620_000
 @pytest.fixture
 def aula_preparada(db, app_instance):
     """Simula o estado em que handle_prepare_audio (Task 4) deixa a aula: cópia
-    de trabalho normalizada já em disco, status TRANSCRIBING."""
+    de trabalho normalizada já em disco, status PREPROCESSING — o preparo acabou e
+    o job de transcrição está na fila, ainda sem ter começado. Quem marca
+    TRANSCRIBING é este handler, ao começar."""
     prof = make_user(db, "carla")
-    aula = make_aula(db, prof, status="TRANSCRIBING")
+    aula = make_aula(db, prof, status="PREPROCESSING")
     trabalho = work_path(aula.id)
     trabalho.parent.mkdir(parents=True, exist_ok=True)
     make_audio(trabalho, seconds=DURACAO_MS / 1000)
@@ -89,10 +92,38 @@ def test_segmentos_nascem_ligados_a_um_falante_nao_atribuido(db, aula_preparada,
     assert falante.diarization_label == "pendente"
 
 
-def test_transcricao_leva_a_diarizing(db, aula_preparada, asr_falso_por_chunk):
+def test_transcricao_leva_a_transcribed_com_a_diarizacao_na_fila(db, aula_preparada, asr_falso_por_chunk):
+    """TRANSCRIBED é o estado de repouso entre os dois estágios: a transcrição
+    acabou, a diarização está enfileirada e ainda não começou. DIARIZING aqui
+    afirmaria um trabalho que só handle_diarize faz."""
     _rodar(db, aula_preparada)
     db.refresh(aula_preparada)
-    assert aula_preparada.status == "DIARIZING"
+    assert aula_preparada.status == "TRANSCRIBED"
+    assert db.query(Job).filter_by(aula_id=aula_preparada.id, type="diarize", status="queued").count() == 1
+
+
+def test_transcribing_so_existe_enquanto_a_transcricao_acontece(db, aula_preparada, monkeypatch):
+    """Um teste que só olha o status no fim do handler não distingue "marcou ao
+    começar" de "marcou ao terminar". Este olha nos três momentos: com o job na
+    fila (PREPROCESSING), dentro de cada chamada ao ASR (TRANSCRIBING, lido por
+    outra sessão — ou seja, já commitado, que é o que a tela do professor enxerga)
+    e no fim (TRANSCRIBED)."""
+    visto: list[str] = []
+
+    class ASREspiao:
+        def transcrever(self, caminho, deslocamento_ms):
+            with SessionLocal(bind=get_engine()) as outra:
+                visto.append(outra.get(Aula, aula_preparada.id).status)
+            return [SegmentoASR(deslocamento_ms, deslocamento_ms + 1_000, "oi")]
+
+    monkeypatch.setattr(handlers, "obter_asr", lambda: ASREspiao())
+    job = enqueue(db, aula_preparada.id, "transcribe")
+    db.commit()
+    assert db.get(Aula, aula_preparada.id).status == "PREPROCESSING"
+    HANDLERS["transcribe"](db, job)
+    assert visto == ["TRANSCRIBING", "TRANSCRIBING"]
+    db.refresh(aula_preparada)
+    assert aula_preparada.status == "TRANSCRIBED"
 
 
 def test_audio_sem_fala_vira_erro_com_mensagem_humana(db, aula_preparada, asr_falso_vazio):

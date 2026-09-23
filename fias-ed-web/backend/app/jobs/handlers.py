@@ -72,7 +72,9 @@ def handle_prepare_audio(db: Session, job: Job) -> None:
     # O professor precisa ver "Preparando sua aula…" durante a normalização, que
     # numa aula de 90 min é o estágio mais demorado. Sem isto, PREPROCESSING não
     # é usado por ninguém e a tela fica parada no status anterior.
-    aula.status = "PREPROCESSING"
+    # Quem marca o estágio é o handler que faz o trabalho, no momento em que
+    # começa: é a regra dos três handlers deste arquivo.
+    aula.status, aula.error_code = "PREPROCESSING", None
     db.commit()
     trabalho = work_path(aula.id)
     try:
@@ -86,7 +88,10 @@ def handle_prepare_audio(db: Session, job: Job) -> None:
         db.commit()
         log_event("audio_prepare_failed", aula_id=aula.id, job_id=job.id)
         return
-    aula.status, aula.error_code = "TRANSCRIBING", None
+    # A aula fica em PREPROCESSING com o job de transcrição na fila. Marcar
+    # TRANSCRIBING aqui diria ao professor "transformando áudio em texto…" com o
+    # job ainda parado atrás de quantas outras aulas houver, e um worker só.
+    # O enqueue vai na mesma transação que fecha o job (lição da Task 12).
     enqueue(db, aula.id, "transcribe")
     finish_job(db, job)
     db.commit()
@@ -100,6 +105,15 @@ def handle_transcribe(db: Session, job: Job) -> None:
         finish_job(db, job)
         db.commit()
         return
+    # TRANSCRIBING é marcado aqui, no começo do trabalho, e não por quem
+    # enfileirou este job: entre o enqueue e esta linha a aula pode passar horas
+    # na fila, e dizer "transformando áudio em texto…" nesse tempo é falso.
+    # Commitado antes do ASR porque o estágio dura o áudio inteiro — a tela do
+    # professor precisa dele agora, não no fim. Repetir a marcação num retry é
+    # inofensivo: o handler reprocessa o estágio do início e nenhum caminho aqui
+    # depende do status anterior.
+    aula.status, aula.error_code = "TRANSCRIBING", None
+    db.commit()
     trabalho, dir_chunks = work_path(aula.id), chunks_dir(aula.id)
     # try/finally: se cortar() ou transcrever() levantar, a exceção sobe até o
     # worker, que faz rollback e retry — mas os pedaços já cortados ficariam no
@@ -129,7 +143,10 @@ def handle_transcribe(db: Session, job: Job) -> None:
     # quem falou" com role=UNASSIGNED, não com FK nula. A diarização (Task 7) troca
     # este falante provisório pelos falantes por voz.
     gravar_segmentos(db, transcricao, segmentos, falante_provisorio(db, transcricao))
-    aula.status, aula.error_code = "DIARIZING", None
+    # TRANSCRIBED é o estado de repouso entre "a transcrição terminou" e "a
+    # diarização começou" — o spec nomeia os dois (transcribe → TRANSCRIBING →
+    # TRANSCRIBED). Quem marca DIARIZING é handle_diarize, ao começar.
+    aula.status, aula.error_code = "TRANSCRIBED", None
     enqueue(db, aula.id, "diarize")
     finish_job(db, job)
     db.commit()
@@ -143,6 +160,11 @@ def handle_diarize(db: Session, job: Job) -> None:
         finish_job(db, job)
         db.commit()
         return
+    # Mesmo motivo do TRANSCRIBING: a aula chega aqui em TRANSCRIBED e só vira
+    # DIARIZING quando o separador de vozes realmente começa. Reprocessar o
+    # estágio depois de um retry regrava o mesmo status, sem efeito colateral.
+    aula.status, aula.error_code = "DIARIZING", None
+    db.commit()
     try:
         turnos = obter_diarizador().turnos(work_path(aula.id))
     except Exception:  # noqa: BLE001 - qualquer falha do separador de vozes vira erro de produto

@@ -9,12 +9,13 @@ test_align.py, que também precisa do estado "pós-transcrição, pré-diarizaç
 para testar o repontamento contra o banco de verdade."""
 import pytest
 
+from app.core.db import SessionLocal, get_engine
 from app.jobs import handlers
 from app.jobs.handlers import HANDLERS
 from app.jobs.queue import enqueue
 from app.ml.fakes import DiarizadorFalso
 from app.ml.protocols import TurnoDiar
-from app.models import Falante, Segmento
+from app.models import Aula, Falante, Segmento
 from app.transcricao.service import transcricao_da_aula
 
 
@@ -45,6 +46,30 @@ def _rodar(db, aula):
     job = enqueue(db, aula.id, "diarize")
     db.commit()
     HANDLERS["diarize"](db, job)
+
+
+def test_diarizing_so_existe_enquanto_a_diarizacao_acontece(db, aula_transcrita, monkeypatch):
+    """A aula chega aqui em TRANSCRIBED e continua assim enquanto o job estiver na
+    fila — atrás de outras aulas, com um worker só. DIARIZING é marcado por este
+    handler ao começar, e é visível de outra sessão (já commitado) durante o
+    trabalho, que é o que a tela do professor lê. Olhar só o status final não
+    distinguiria isto de marcar no fim do handler anterior."""
+    visto: list[str] = []
+
+    class DiarizadorEspiao:
+        def turnos(self, caminho):
+            with SessionLocal(bind=get_engine()) as outra:
+                visto.append(outra.get(Aula, aula_transcrita.id).status)
+            return [TurnoDiar(0, 9_000, "SPEAKER_00")]
+
+    monkeypatch.setattr(handlers, "obter_diarizador", lambda: DiarizadorEspiao())
+    job = enqueue(db, aula_transcrita.id, "diarize")
+    db.commit()
+    assert db.get(Aula, aula_transcrita.id).status == "TRANSCRIBED"
+    HANDLERS["diarize"](db, job)
+    assert visto == ["DIARIZING"]
+    db.refresh(aula_transcrita)
+    assert aula_transcrita.status == "READY_FOR_SPEAKER_REVIEW"
 
 
 def test_diarize_leva_a_escolha_de_voz(db, aula_transcrita, diarizador_falso_duas_vozes):

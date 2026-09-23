@@ -80,10 +80,11 @@ def db():
 def aula_transcrita(db):
     """Simula o estado em que handle_transcribe (Task 5) deixa a aula: um
     falante provisório (role=UNASSIGNED, diarization_label="pendente") ao qual
-    todos os segmentos apontam, status DIARIZING. Compartilhado entre
+    todos os segmentos apontam, status TRANSCRIBED — a transcrição terminou e o
+    job de diarização está na fila, ainda sem ter começado. Compartilhado entre
     test_align.py (repontamento) e test_job_diarize.py (o job inteiro)."""
     prof = make_user(db, "carla")
-    aula = make_aula(db, prof, status="DIARIZING")
+    aula = make_aula(db, prof, status="TRANSCRIBED")
     audio = Audio(aula_id=aula.id, original_filename="aula.wav", internal_filename=f"{uuid.uuid4()}.wav",
                  path="original/aula.wav", mime_type="audio/wav", size_bytes=1, duration_ms=9_000,
                  sha256="0" * 64, channels=1, sample_rate=16000, is_original=True, derived_from_audio_id=None)
