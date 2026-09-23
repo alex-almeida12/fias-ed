@@ -7,15 +7,19 @@ aqui. `Segmento` usa start_ms/end_ms (schema do fias-ed-shared); o protocolo
 do ASR usa inicio_ms/fim_ms — a tradução entre os dois nomes é o único papel
 deste módulo além de gravar.
 """
+import math
 import uuid
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError
 from app.ml.protocols import SegmentoASR
 from app.models import Audio, Aula, Falante, Segmento, Transcricao
 from app.pipeline.align import MAX_AMOSTRAS, GrupoDeVoz
 from app.pipeline.pseudonymize import pseudonimizar
+
+BLOCO_MS = 300_000
 
 
 def criar_transcricao(db: Session, aula: Aula, audio: Audio, asr_model_id: str) -> Transcricao:
@@ -81,6 +85,89 @@ def texto_efetivo(segmento: Segmento) -> str:
     """texto_revisado quando o professor já revisou o segmento, senão o texto
     bruto do ASR."""
     return segmento.texto_revisado if segmento.texto_revisado is not None else segmento.texto_original_asr
+
+
+def total_blocos(duracao_ms: int) -> int:
+    """Quantos blocos de cinco minutos cabem no áudio da aula — o mesmo tamanho
+    de página que segmentos_do_bloco usa para filtrar. Uma aula sem duração
+    conhecida (áudio desvinculado) não tem blocos."""
+    return math.ceil(duracao_ms / BLOCO_MS) if duracao_ms > 0 else 0
+
+
+def segmentos_do_bloco(db: Session, transcricao: Transcricao, bloco: int) -> list[tuple[Segmento, str]]:
+    """Os segmentos de um bloco de cinco minutos (0-based), cada um já com o
+    papel (role) do falante resolvido numa única consulta — uma aula de 50
+    minutos tem centenas de trechos; a tela busca um bloco por vez, não a
+    transcrição inteira."""
+    inicio, fim = bloco * BLOCO_MS, (bloco + 1) * BLOCO_MS
+    linhas = db.execute(
+        select(Segmento, Falante.role)
+        .join(Falante, Falante.id == Segmento.falante_id)
+        .where(Segmento.transcricao_id == transcricao.id, Segmento.start_ms >= inicio,
+               Segmento.start_ms < fim)
+        .order_by(Segmento.start_ms)
+    ).all()
+    return [(seg, papel) for seg, papel in linhas]
+
+
+def segmento_payload(seg: Segmento, papel: str) -> dict:
+    return {"id": str(seg.id), "start_ms": seg.start_ms, "end_ms": seg.end_ms,
+            "texto": texto_efetivo(seg), "papel": papel, "version": seg.version}
+
+
+def get_owned_segmento(db: Session, actor, segmento_id: uuid.UUID) -> tuple[Segmento, uuid.UUID]:
+    """Trecho de uma aula do professor autenticado (ou de quem o admin está agindo
+    como) — 404 para trecho de aula de outro professor, nunca 403; mesmo padrão de
+    get_owned_aula (app.aulas.service). Devolve também o id da aula, só para
+    log_event — que nunca recebe texto de transcrição, nome de arquivo ou de
+    pessoa, então o segmento em si não é logado."""
+    linha = db.execute(
+        select(Segmento, Aula.id)
+        .join(Transcricao, Transcricao.id == Segmento.transcricao_id)
+        .join(Aula, Aula.id == Transcricao.aula_id)
+        .where(Segmento.id == segmento_id, Aula.professor_id == actor.effective_professor_id,
+               Aula.deleted_at.is_(None))
+    ).first()
+    if linha is None:
+        raise AppError(404, "SEGMENTO_NAO_ENCONTRADO", "Trecho não encontrado.")
+    return linha[0], linha[1]
+
+
+def falante_do_papel(db: Session, seg: Segmento, papel: str) -> Falante:
+    """A linha de Falante (PROFESSOR ou ALUNO) da mesma transcrição do segmento.
+    Trocar o falante de um trecho é apontar para a outra linha, não criar uma
+    nova — Falante tem exatamente duas linhas depois da escolha da voz (Task 8)."""
+    falante = db.scalar(select(Falante).where(Falante.transcricao_id == seg.transcricao_id,
+                                              Falante.role == papel))
+    if falante is None:
+        raise AppError(409, "FALANTE_NAO_ENCONTRADO", "Esta aula ainda não tem os dois falantes definidos.")
+    return falante
+
+
+def revisar_segmento(db: Session, seg: Segmento, *, texto: str | None, papel: str | None,
+                     version_esperada: int) -> bool:
+    """Aplica a edição do professor num UPDATE só: compara `version` e incrementa
+    na mesma instrução (WHERE id=... AND version=...), para que duas abas editando
+    o mesmo trecho ao mesmo tempo nunca as duas ganhem em silêncio (Review Focus
+    5) — a checagem e a escrita são atômicas no banco, não um "lê, compara em
+    Python, escreve" que duas transações concorrentes poderiam passar as duas.
+
+    Editar o texto regrava text_pseudonymized: se a correção reintroduz um nome
+    de estudante, a versão pseudonimizada tem que acompanhar, senão a correção
+    vira um vazamento (PRIVACY.md §48).
+
+    Devolve False quando a versão não bateu (o trecho foi alterado por outra
+    aba desde que quem chamou o leu, nada é escrito); True quando a edição foi
+    aplicada."""
+    valores: dict = {"version": Segmento.version + 1}
+    if texto is not None:
+        valores["texto_revisado"] = texto
+        valores["text_pseudonymized"] = pseudonimizar(texto)
+    if papel is not None:
+        valores["falante_id"] = falante_do_papel(db, seg, papel).id
+    resultado = db.execute(update(Segmento).where(Segmento.id == seg.id, Segmento.version == version_esperada)
+                           .values(**valores))
+    return resultado.rowcount > 0
 
 
 class VozDesconhecida(Exception):

@@ -42,5 +42,7 @@ def error_message(code: str | None) -> str | None:
                               "Tente enviar uma gravação com menos ruído."),
         "JOB_FAILED": ("Algo deu errado ao preparar sua aula. Tente processar novamente; "
                        "se continuar, avise o administrador."),
+        "SEGMENTO_DESATUALIZADO": ("Este trecho foi alterado em outra aba. Recarregue a página "
+                                   "para ver a versão atual."),
     }
     return messages.get(code, "Algo deu errado. Tente novamente.")

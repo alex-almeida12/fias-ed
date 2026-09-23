@@ -1,9 +1,17 @@
 """PRIVACY.md exige exclusão real (remoção física, não soft delete) do material
-sensível. A W2 acrescenta transcrição e segmentos: este teste garante que excluir
-uma aula, ou a conta do professor dono dela, apaga essas linhas de verdade."""
+sensível. A W2 acrescenta transcrição e segmentos: os dois primeiros testes
+garantem que excluir uma aula, ou a conta do professor dono dela, apaga essas
+linhas de verdade.
+
+O resto do arquivo é a Task 9: a API da revisão da transcrição (paginação por
+blocos de cinco minutos, PATCH por segmento com version otimista, conclusão da
+revisão)."""
 import uuid
 
-from app.models import ClassificacaoFIAS, Falante, IndicadorFIAS, Segmento, Transcricao
+import pytest
+from sqlalchemy import select
+
+from app.models import Audio, ClassificacaoFIAS, Falante, IndicadorFIAS, Segmento, Transcricao
 from tests.helpers import login, make_aula, make_user
 
 
@@ -11,8 +19,6 @@ def _transcricao_completa(db, aula):
     """Monta a cadeia que o job de transcrição da Task 5 (ainda não implementada)
     vai deixar no banco: Transcricao, Falante, Segmento, ClassificacaoFIAS e
     IndicadorFIAS."""
-    from app.models import Audio
-
     audio = Audio(aula_id=aula.id, original_filename="aula.wav",
                  internal_filename=f"{uuid.uuid4()}.wav", path="original/aula.wav",
                  mime_type="audio/wav", size_bytes=1, duration_ms=61000, sha256="0" * 64,
@@ -74,3 +80,164 @@ def test_excluir_conta_apaga_transcricoes_das_aulas(client_factory, db):
     r = admin.request("DELETE", f"/api/admin/contas/{prof.id}", json={"confirmar_username": "ana"})
     assert r.status_code == 204
     assert db.query(Transcricao).count() == 0
+
+
+# ---- Task 9: API da revisão da transcrição ----
+
+
+@pytest.fixture
+def client_outro_professor(client_factory, db):
+    """Uma segunda professora, sem nenhuma aula — prova o isolamento por dono:
+    trecho de aula de outro professor é 404, nunca 403."""
+    make_user(db, "bruna")
+    c = client_factory()
+    login(c, "bruna")
+    return c
+
+
+def _aula_com_falantes(db, username, status, duration_ms=61_000):
+    """A cadeia que a escolha de voz (Task 8) deixa no banco: exatamente dois
+    falantes, PROFESSOR e ALUNO — nunca mais que isso, mesmo antes de qualquer
+    segmento ser repontado para o ALUNO."""
+    prof = make_user(db, username)
+    aula = make_aula(db, prof, status=status)
+    audio = Audio(aula_id=aula.id, original_filename="aula.wav", internal_filename=f"{aula.id}.wav",
+                 path="original/aula.wav", mime_type="audio/wav", size_bytes=1, duration_ms=duration_ms,
+                 sha256="0" * 64, channels=1, sample_rate=16000, is_original=True, derived_from_audio_id=None)
+    db.add(audio)
+    db.flush()
+    transcricao = Transcricao(aula_id=aula.id, audio_id=audio.id, asr_model_id="fake-asr")
+    db.add(transcricao)
+    db.flush()
+    falante_prof = Falante(transcricao_id=transcricao.id, diarization_label="SPEAKER_00", role="PROFESSOR")
+    falante_aluno = Falante(transcricao_id=transcricao.id, diarization_label="merged", role="ALUNO")
+    db.add_all([falante_prof, falante_aluno])
+    db.flush()
+    return aula, transcricao, falante_prof, falante_aluno
+
+
+@pytest.fixture
+def segmento_qualquer(db):
+    aula, transcricao, falante_prof, _ = _aula_com_falantes(db, "carla", "READY_FOR_TRANSCRIPT_REVIEW")
+    seg = Segmento(transcricao_id=transcricao.id, falante_id=falante_prof.id, start_ms=0, end_ms=1_000,
+                   texto_original_asr="oi turma", text_pseudonymized="oi turma")
+    db.add(seg)
+    db.commit()
+    return seg
+
+
+@pytest.fixture
+def aula_em_revisao(db):
+    aula, transcricao, falante_prof, _ = _aula_com_falantes(db, "carla", "READY_FOR_TRANSCRIPT_REVIEW")
+    db.add(Segmento(transcricao_id=transcricao.id, falante_id=falante_prof.id, start_ms=0, end_ms=1_000,
+                    texto_original_asr="oi turma", text_pseudonymized="oi turma"))
+    db.commit()
+    return aula
+
+
+@pytest.fixture
+def aula_com_transcricao_longa(db):
+    """50 minutos de áudio (10 blocos de cinco minutos), com trechos em blocos
+    diferentes — a prova de que a paginação filtra de verdade, não só que a
+    lista devolvida não vem vazia."""
+    aula, transcricao, falante_prof, _ = _aula_com_falantes(db, "carla", "READY_FOR_TRANSCRIPT_REVIEW",
+                                                             duration_ms=3_000_000)
+    db.add_all([
+        Segmento(transcricao_id=transcricao.id, falante_id=falante_prof.id, start_ms=0, end_ms=1_000,
+                 texto_original_asr="bloco 0 a", text_pseudonymized="bloco 0 a"),
+        Segmento(transcricao_id=transcricao.id, falante_id=falante_prof.id, start_ms=290_000, end_ms=299_000,
+                 texto_original_asr="bloco 0 b", text_pseudonymized="bloco 0 b"),
+        Segmento(transcricao_id=transcricao.id, falante_id=falante_prof.id, start_ms=300_000, end_ms=301_000,
+                 texto_original_asr="bloco 1", text_pseudonymized="bloco 1"),
+        Segmento(transcricao_id=transcricao.id, falante_id=falante_prof.id, start_ms=2_950_000, end_ms=2_960_000,
+                 texto_original_asr="bloco 9", text_pseudonymized="bloco 9"),
+    ])
+    db.commit()
+    return aula
+
+
+def test_transcricao_vem_paginada_em_blocos_de_cinco_minutos(client, aula_com_transcricao_longa):
+    login(client, "carla")
+    r = client.get(f"/api/aulas/{aula_com_transcricao_longa.id}/transcricao?bloco=0")
+    assert r.status_code == 200
+    corpo = r.json()
+    assert corpo["bloco"] == 0
+    assert corpo["blocos"] == 10  # 50 min
+    # não só "não vem vazio": prova que o bloco 1 e o bloco 9 ficaram de fora.
+    assert {s["texto"] for s in corpo["segmentos"]} == {"bloco 0 a", "bloco 0 b"}
+    assert all(s["start_ms"] < 300_000 for s in corpo["segmentos"])
+
+    r9 = client.get(f"/api/aulas/{aula_com_transcricao_longa.id}/transcricao?bloco=9")
+    assert {s["texto"] for s in r9.json()["segmentos"]} == {"bloco 9"}
+
+
+def test_editar_texto_regrava_a_versao_pseudonimizada(client, db, segmento_qualquer):
+    login(client, "carla")
+    r = client.patch(f"/api/segmentos/{segmento_qualquer.id}",
+                     json={"texto": "a Maria respondeu", "version": segmento_qualquer.version})
+    assert r.status_code == 200
+    db.refresh(segmento_qualquer)
+    assert segmento_qualquer.texto_revisado == "a Maria respondeu"
+    assert "Maria" not in segmento_qualquer.text_pseudonymized
+    assert "[NOME]" in segmento_qualquer.text_pseudonymized
+
+
+def test_texto_com_caracteres_especiais_volta_literal(client, segmento_qualquer):
+    """Review Focus 3: o texto vai para a tela e, na W3, para o relatório — tem
+    que voltar literal, sem escapar duas vezes e sem virar código."""
+    login(client, "carla")
+    texto = 'ele disse "3 < 5" e riu 😄'
+    r = client.patch(f"/api/segmentos/{segmento_qualquer.id}",
+                     json={"texto": texto, "version": segmento_qualquer.version})
+    assert r.status_code == 200
+    assert r.json()["texto"] == texto
+
+
+def test_segunda_aba_nao_sobrescreve_a_primeira_em_silencio(client, db, segmento_qualquer):
+    """Review Focus 5: duas abas editando o mesmo segmento. Não basta a segunda
+    escrita levar 409 — o texto da primeira precisa continuar valendo, ou a
+    "proteção" seria só um código de status sem efeito real."""
+    login(client, "carla")
+    versao = segmento_qualquer.version
+    primeira = client.patch(f"/api/segmentos/{segmento_qualquer.id}",
+                            json={"texto": "primeira", "version": versao})
+    assert primeira.status_code == 200
+    segunda = client.patch(f"/api/segmentos/{segmento_qualquer.id}",
+                           json={"texto": "segunda", "version": versao})
+    assert segunda.status_code == 409
+    assert segunda.json()["error_code"] == "SEGMENTO_DESATUALIZADO"
+    db.refresh(segmento_qualquer)
+    assert segmento_qualquer.texto_revisado == "primeira"
+
+
+def test_trocar_papel_de_um_segmento(client, db, segmento_qualquer):
+    """Trocar o falante de um trecho é apontar para a linha ALUNO já existente,
+    não criar uma linha nova (Falante tem exatamente duas linhas depois da
+    escolha da voz) — por isso a prova é pelo id da linha e pela contagem, não
+    só pelo valor de `role`."""
+    login(client, "carla")
+    aluno = db.scalar(select(Falante).where(Falante.transcricao_id == segmento_qualquer.transcricao_id,
+                                            Falante.role == "ALUNO"))
+    r = client.patch(f"/api/segmentos/{segmento_qualquer.id}",
+                     json={"papel": "ALUNO", "version": segmento_qualquer.version})
+    assert r.status_code == 200
+    assert r.json()["papel"] == "ALUNO"
+    db.refresh(segmento_qualquer)
+    assert segmento_qualquer.falante_id == aluno.id
+    assert db.query(Falante).filter_by(transcricao_id=segmento_qualquer.transcricao_id).count() == 2
+
+
+def test_concluir_a_revisao_leva_a_ready_for_fias(client, db, aula_em_revisao):
+    login(client, "carla")
+    r = client.post(f"/api/aulas/{aula_em_revisao.id}/transcricao/concluir")
+    assert r.status_code == 200
+    assert r.json()["status"] == "READY_FOR_FIAS"
+    db.refresh(aula_em_revisao)
+    assert aula_em_revisao.status == "READY_FOR_FIAS"
+
+
+def test_segmento_de_outro_professor_da_404(client_outro_professor, segmento_qualquer):
+    r = client_outro_professor.patch(f"/api/segmentos/{segmento_qualquer.id}",
+                                     json={"texto": "x", "version": 1})
+    assert r.status_code == 404
+    assert r.json()["error_code"] == "SEGMENTO_NAO_ENCONTRADO"
