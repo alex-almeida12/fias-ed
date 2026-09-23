@@ -90,14 +90,28 @@ def step(resp, status, msg):
     return body
 
 
+# Este smoke é da W1: o que ele cobre é a validação do áudio, não o pipeline
+# inteiro. Como AUDIO_VALIDATED deixou de ser ponto de parada (o handler já
+# enfileira prepare_audio), esperar "fila vazia em AUDIO_VALIDATED" nunca mais
+# aconteceria: a aula segue para PREPROCESSING logo em seguida. O smoke espera
+# então o fim da validação — a aula sair dos estados anteriores a ela.
+ANTES_DA_VALIDACAO = ("DRAFT", "AUDIO_IMPORTED")
+
+
 def wait(client, aula_id, timeout=120):
     end = time.time() + timeout
     while time.time() < end:
         _, _, body = client.request("GET", f"/api/aulas/{aula_id}")
-        if not body.get("job_ativo") and body.get("status") in ("AUDIO_VALIDATED", "ERROR"):
+        if body.get("status") not in ANTES_DA_VALIDACAO:
             return body
         time.sleep(2)
     check(False, f"aula {aula_id} não terminou em {timeout}s")
+
+
+def validou(body) -> bool:
+    """O áudio passou pela validação: há linha de Audio e a aula não foi recusada.
+    O status exato depende de quanto do pipeline já andou quando o smoke olhou."""
+    return body.get("status") != "ERROR" and bool(body.get("audio"))
 
 
 def escola(client):
@@ -154,7 +168,7 @@ def main() -> int:
                                                           "new_password": "senha-do-smoke-123"}), 200, "professor troca a senha")
 
         body = enviar_e_processar(prof, nova_aula(prof, "smoke"), "aula teste.wav", "professor")
-        check(body["status"] == "AUDIO_VALIDATED", "aula chega a AUDIO_VALIDATED")
+        check(validou(body), "áudio da aula é aceito na validação")
 
         body = enviar_e_processar(prof, nova_aula(prof, "extensão falsa"), "gravacao.mp3", "extensão falsa")
         check(body["status"] == "ERROR" and body["error_code"] == "AUDIO_FORMAT_MISMATCH" and body["error_message"],
@@ -163,7 +177,7 @@ def main() -> int:
         step(admin.request("POST", "/api/admin/agir-como", {"professor_id": prof_id}), 200, "admin age como o professor")
         feita = nova_aula(admin, "admin")
         body = enviar_e_processar(admin, feita, "aula do admin.wav", "admin")
-        check(body["status"] == "AUDIO_VALIDATED", "aula criada pelo admin chega a AUDIO_VALIDATED")
+        check(validou(body), "áudio da aula criada pelo admin é aceito na validação")
         step(admin.request("DELETE", "/api/admin/agir-como"), 200, "admin volta à própria conta")
         vista = step(prof.request("GET", f"/api/aulas/{feita}"), 200, "professor vê a aula criada pelo admin")
         check(bool(vista["alterada_pelo_admin_em"]), "aviso 'alterada pelo administrador' presente")

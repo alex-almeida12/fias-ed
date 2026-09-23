@@ -44,6 +44,11 @@ def handle_validate_audio(db: Session, job: Job) -> None:
                      derived_from_audio_id=None))
         db.delete(upload)
         aula.status, aula.error_code = "AUDIO_VALIDATED", None
+        # AUDIO_VALIDATED não é parada para o professor: o spec manda seguir
+        # direto para prepare_audio. O enqueue vai na MESMA transação que grava
+        # o status (mesma lição da Task 12) — status commitado sem job na fila
+        # deixaria a aula parada para sempre sem ninguém perceber.
+        enqueue(db, aula.id, "prepare_audio")
         finish_job(db, job)
         db.commit()
         log_event("audio_validated", aula_id=aula.id, job_id=job.id)

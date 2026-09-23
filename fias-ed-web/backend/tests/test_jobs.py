@@ -4,8 +4,11 @@ import time
 from datetime import timedelta
 
 from app.audio.storage import ensure_dirs, limpar_temporarios_antigos, store_root
-from app.jobs import queue
+from app.fias import service as fias_service
+from app.jobs import handlers, queue
 from app.jobs.worker import run_once
+from app.ml.fakes import ASRFalso, ClassificadorFalso, DiarizadorFalso
+from app.ml.protocols import SegmentoASR, TurnoDiar
 from app.models import Audio, AudioUpload, Aula, Job, utcnow
 from tests.audio_fixtures import make_audio, upload
 from tests.helpers import login, make_aula, make_user
@@ -25,7 +28,13 @@ def test_valid_audio_reaches_audio_validated(client, db, tmp_path):
     aula = _processar(client, db, tmp_path, make_audio(tmp_path / "aula.wav"))
     assert run_once(db) is True
     body = client.get(f"/api/aulas/{aula.id}").json()
-    assert body["status"] == "AUDIO_VALIDATED" and body["job_ativo"] is False
+    # `job_ativo is False` aqui era resíduo da W1, quando o pipeline de fato
+    # terminava em AUDIO_VALIDATED. Hoje o próprio handle_validate_audio deixa
+    # prepare_audio na fila, na mesma transação em que grava o status — logo a
+    # aula recém-validada tem sim job ativo. O que este teste prova continua
+    # sendo o mesmo: a validação deu certo e produziu a linha Audio correta.
+    assert body["status"] == "AUDIO_VALIDATED" and body["job_ativo"] is True
+    assert db.query(Job).filter_by(aula_id=aula.id, type="prepare_audio", status="queued").count() == 1
     assert body["audio"]["mime_type"] == "audio/wav" and body["audio"]["channels"] == 1
     assert db.query(AudioUpload).count() == 0
     audio = db.query(Audio).one()
@@ -177,3 +186,57 @@ def test_run_once_tambem_varre_temporarios_antigos(db, app_instance):
     os.utime(velho, (antigo, antigo))
     run_once(db)
     assert not velho.exists()
+
+
+# ---- A corrente anda sozinha -------------------------------------------------------
+#
+# Cada teste de estágio (test_audio_prepare, test_job_transcribe, test_job_diarize,
+# test_job_fias) enfileira o seu próprio job à mão, então nenhum deles percebe um
+# elo faltando entre dois estágios — a suite inteira ficava verde enquanto, em
+# produção, a aula parava em AUDIO_VALIDATED para sempre. Este teste é sobre o
+# encadeamento, não sobre o conteúdo de cada estágio.
+
+
+def _esvaziar_a_fila(db, limite: int = 20) -> None:
+    """Roda o worker até a fila secar, como o laço de `main()` faria.
+
+    Não há um único `enqueue` neste arquivo de teste a partir daqui: se a aula
+    avança, é porque cada handler enfileirou o estágio seguinte."""
+    for _ in range(limite):
+        if not run_once(db):
+            return
+    raise AssertionError(f"a fila não secou em {limite} rodadas do worker")
+
+
+def _status(client, aula) -> str:
+    return client.get(f"/api/aulas/{aula.id}").json()["status"]
+
+
+def test_aula_validada_percorre_o_pipeline_ate_o_fim_sem_ajuda(client, db, tmp_path, monkeypatch):
+    """Critério de aceitação 1 do spec: uma aula que chega a AUDIO_VALIDATED
+    percorre o pipeline até FIAS_COMPLETED.
+
+    Quem põe o primeiro job na fila é POST /processar, e quem põe o último é POST
+    /transcricao/concluir — os dois caminhos de produção. Tudo entre eles tem de
+    ser costurado pelos próprios handlers.
+
+    Os modelos reais não estão presentes na suíte: os dublês entram pelos mesmos
+    pontos que os testes de cada estágio já usam (os protocolos da Task 3)."""
+    monkeypatch.setattr(handlers, "obter_asr", lambda: ASRFalso([
+        SegmentoASR(0, 40_000, "a professora explica a questão"),
+        SegmentoASR(40_000, 60_000, "o aluno responde a pergunta")]))
+    monkeypatch.setattr(handlers, "obter_diarizador", lambda: DiarizadorFalso([
+        TurnoDiar(0, 40_000, "SPEAKER_00"), TurnoDiar(40_000, 60_000, "SPEAKER_01")]))
+    monkeypatch.setattr(fias_service, "obter_classificador", lambda: ClassificadorFalso(categoria_fixa=5))
+
+    aula = _processar(client, db, tmp_path, make_audio(tmp_path / "aula.wav"))
+    _esvaziar_a_fila(db)
+    # A fila secou por conta própria exatamente onde o spec manda esperar o humano.
+    assert _status(client, aula) == "READY_FOR_SPEAKER_REVIEW"
+
+    # As duas paradas deliberadas: "qual destas vozes é você?" e "a revisão está boa".
+    assert client.post(f"/api/aulas/{aula.id}/vozes/escolher", json={"rotulo": "voz-1"}).status_code == 200
+    assert client.post(f"/api/aulas/{aula.id}/transcricao/concluir").status_code == 200
+    _esvaziar_a_fila(db)
+    assert _status(client, aula) == "FIAS_COMPLETED"
+    assert db.query(Job).filter_by(aula_id=aula.id, status="failed").count() == 0
