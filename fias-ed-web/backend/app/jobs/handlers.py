@@ -12,10 +12,12 @@ from app.aulas.service import pending_upload
 from app.core.config import get_settings
 from app.core.logging import log_event
 from app.jobs.queue import enqueue, fail_job, finish_job
-from app.ml.loader import obter_asr
+from app.ml.loader import obter_asr, obter_diarizador
 from app.ml.protocols import SegmentoASR
 from app.models import Audio, Aula, Job
-from app.transcricao.service import criar_transcricao, falante_provisorio, gravar_segmentos
+from app.pipeline.align import alinhar, criar_falantes_provisorios
+from app.transcricao.service import (criar_transcricao, falante_provisorio, gravar_segmentos,
+                                     segmentos_asr, transcricao_da_aula)
 
 
 def handle_validate_audio(db: Session, job: Job) -> None:
@@ -128,8 +130,34 @@ def handle_transcribe(db: Session, job: Job) -> None:
     log_event("transcricao_pronta", aula_id=aula.id, job_id=job.id, n_segmentos=len(segmentos))
 
 
+def handle_diarize(db: Session, job: Job) -> None:
+    aula = db.get(Aula, job.aula_id)
+    transcricao = transcricao_da_aula(db, job.aula_id) if aula is not None else None
+    if aula is None or aula.deleted_at is not None or transcricao is None:
+        finish_job(db, job)
+        db.commit()
+        return
+    try:
+        turnos = obter_diarizador().turnos(work_path(aula.id))
+    except Exception:  # noqa: BLE001 - qualquer falha do separador de vozes vira erro de produto
+        # fail_job já marca a aula como ERROR/DIARIZACAO_FALHOU; nenhuma atribuição
+        # manual de status é necessária aqui (mesma lição da Task 5).
+        fail_job(db, job, "DIARIZACAO_FALHOU")
+        db.commit()
+        log_event("diarizacao_falhou", aula_id=aula.id, job_id=job.id)
+        return
+    segmentos = segmentos_asr(db, transcricao)
+    rotulos = alinhar(segmentos, turnos)
+    criar_falantes_provisorios(db, transcricao, segmentos, rotulos)
+    aula.status, aula.error_code = "READY_FOR_SPEAKER_REVIEW", None
+    finish_job(db, job)
+    db.commit()
+    log_event("diarizacao_pronta", aula_id=aula.id, job_id=job.id, n_vozes=len(set(filter(None, rotulos))))
+
+
 HANDLERS = {
     "validate_audio": handle_validate_audio,
     "prepare_audio": handle_prepare_audio,
     "transcribe": handle_transcribe,
+    "diarize": handle_diarize,
 }

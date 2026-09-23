@@ -38,6 +38,8 @@ def error_message(code: str | None) -> str | None:
         "AUDIO_LOCKED": "A análise desta aula já começou. Para usar outro áudio, crie uma nova aula.",
         "AUDIO_PREPARO_FALHOU": "Não conseguimos preparar este áudio para análise. Tente enviar o arquivo de novo.",
         "AUDIO_SEM_FALA": "Não conseguimos identificar fala neste áudio. Confira se o arquivo é mesmo o da aula.",
+        "DIARIZACAO_FALHOU": ("Não conseguimos separar as vozes deste áudio. "
+                              "Tente enviar uma gravação com menos ruído."),
         "JOB_FAILED": ("Algo deu errado ao preparar sua aula. Tente processar novamente; "
                        "se continuar, avise o administrador."),
     }

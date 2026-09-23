@@ -27,7 +27,7 @@ def test_messages_use_configured_limits(monkeypatch):
 def test_all_codes_have_messages():
     for code in ("AUDIO_FORMAT_MISMATCH", "AUDIO_UNSUPPORTED_FORMAT", "AUDIO_TOO_LONG", "AUDIO_TOO_SHORT",
                  "AUDIO_CORRUPTED", "AUDIO_TOO_LARGE", "AUDIO_LOCKED", "AUDIO_PREPARO_FALHOU",
-                 "AUDIO_SEM_FALA", "JOB_FAILED"):
+                 "AUDIO_SEM_FALA", "DIARIZACAO_FALHOU", "JOB_FAILED"):
         assert error_message(code)
     assert error_message(None) is None
     assert error_message("DESCONHECIDO") == "Algo deu errado. Tente novamente."
