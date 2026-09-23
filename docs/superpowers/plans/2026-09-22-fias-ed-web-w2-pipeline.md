@@ -25,7 +25,7 @@ Valem para todas as tasks. Copiadas do spec e do plano da W1.
 - Todo `Segmento` tem `text_pseudonymized` com nomes próprios trocados por `[NOME]`, inclusive depois de o professor editar o texto (`PRIVACY.md`).
 - Original nunca modificado (§17). Cópia de trabalho e chunks são apagados ao fim do estágio que os consome.
 - Erros da API sempre `{"error_code": "...", "message": "..."}`, mensagens em português, nunca stack trace. Mensagens de progresso são as do §36.
-- Logs só pelo helper `log_event` com a lista fechada de campos. **Nunca** texto de transcrição, nome de arquivo, nome de professor, turma ou estudante.
+- Logs só pelo helper `log_event`, cuja lista `ALLOWED_FIELDS` é **validada em tempo de execução**: um campo fora dela levanta erro, não passa silenciosamente. Ao acrescentar um campo novo (contagens como `n_segmentos` e `n_vozes` são aceitáveis), estenda `ALLOWED_FIELDS` em `app/core/logging.py` na mesma task. **Nunca** texto de transcrição, nome de arquivo, nome de professor, turma ou estudante.
 - Recurso de outro professor → 404. Rotas de admin chamadas por PROFESSOR → 403. "Professor efetivo" segue a regra da W1 (`sessao.acting_as_professor_id`), e o admin agindo como professor grava `acesso_admin`.
 - Frontend: sem `dangerouslySetInnerHTML` (regra de lint já existente — a transcrição é o primeiro texto longo editável que o produto renderiza de volta), sem atributo `style`, sem biblioteca de componentes, sem fonte de CDN.
 - Interface em pt-BR com o vocabulário do `PRODUCT.md`: nunca "avaliação", "avaliar", "nota", "desempenho", "ranking". O sistema **analisa** e devolve padrões.
@@ -922,7 +922,7 @@ from app.jobs.handlers import HANDLERS
 
 def test_prepare_audio_leva_a_preprocessing_e_nao_toca_o_original(db, aula_validada, wav_sintetico):
     original_antes = wav_sintetico.read_bytes()
-    job = enfileirar(db, aula_validada.id, "prepare_audio")
+    job = enqueue(db, aula_validada.id, "prepare_audio")
     HANDLERS["prepare_audio"](db, job)
     db.refresh(aula_validada)
     assert aula_validada.status == "TRANSCRIBING"
@@ -930,7 +930,7 @@ def test_prepare_audio_leva_a_preprocessing_e_nao_toca_o_original(db, aula_valid
 
 
 def test_prepare_audio_de_audio_ilegivel_vira_erro_com_mensagem_humana(db, aula_com_audio_quebrado):
-    job = enfileirar(db, aula_com_audio_quebrado.id, "prepare_audio")
+    job = enqueue(db, aula_com_audio_quebrado.id, "prepare_audio")
     HANDLERS["prepare_audio"](db, job)
     db.refresh(aula_com_audio_quebrado)
     assert aula_com_audio_quebrado.status == "ERROR"
@@ -939,7 +939,7 @@ def test_prepare_audio_de_audio_ilegivel_vira_erro_com_mensagem_humana(db, aula_
 
 def test_prepare_audio_nao_deixa_arquivo_de_trabalho_orfao_ao_falhar(db, aula_com_audio_quebrado):
     """fail_job é terminal. Um .wav parcial de 170 MB ficaria no disco para sempre."""
-    job = enfileirar(db, aula_com_audio_quebrado.id, "prepare_audio")
+    job = enqueue(db, aula_com_audio_quebrado.id, "prepare_audio")
     HANDLERS["prepare_audio"](db, job)
     assert not work_path(aula_com_audio_quebrado.id).exists()
 
@@ -984,7 +984,7 @@ def handle_prepare_audio(db: Session, job: Job) -> None:
         # órfã para sempre — mais de 170 MB numa aula de 90 min. handle_validate_audio
         # já faz a limpeza equivalente no seu caminho de erro.
         trabalho.unlink(missing_ok=True)
-        aula.status, aula.error_code = "ERROR", "AUDIO_PREPARO_FALHOU"
+        # fail_job já marca aula.status=ERROR e o error_code; não reatribuir.
         fail_job(db, job, "AUDIO_PREPARO_FALHOU")
         db.commit()
         log_event("audio_prepare_failed", aula_id=aula.id, job_id=job.id)
@@ -1064,7 +1064,7 @@ from app.models import Segmento, Transcricao
 
 def test_transcricao_soma_o_deslocamento_de_cada_chunk(db, aula_preparada, asr_falso_por_chunk):
     """Cada chunk devolve tempos locais; o que é gravado tem de ser global."""
-    job = enfileirar(db, aula_preparada.id, "transcribe")
+    job = enqueue(db, aula_preparada.id, "transcribe")
     HANDLERS["transcribe"](db, job)
     t = db.query(Transcricao).filter_by(aula_id=aula_preparada.id).one()
     segmentos = db.query(Segmento).filter_by(transcricao_id=t.id).order_by(Segmento.ordem).all()
@@ -1075,7 +1075,7 @@ def test_transcricao_soma_o_deslocamento_de_cada_chunk(db, aula_preparada, asr_f
 def test_segmentos_nascem_ligados_a_um_falante_nao_atribuido(db, aula_preparada, asr_falso_por_chunk):
     """falante_id é NOT NULL; antes da diarização todos apontam para a mesma
     linha com role=UNASSIGNED."""
-    job = enfileirar(db, aula_preparada.id, "transcribe")
+    job = enqueue(db, aula_preparada.id, "transcribe")
     HANDLERS["transcribe"](db, job)
     t = db.query(Transcricao).filter_by(aula_id=aula_preparada.id).one()
     segmentos = db.query(Segmento).filter_by(transcricao_id=t.id).all()
@@ -1085,14 +1085,14 @@ def test_segmentos_nascem_ligados_a_um_falante_nao_atribuido(db, aula_preparada,
 
 
 def test_transcricao_leva_a_diarizing(db, aula_preparada, asr_falso_por_chunk):
-    job = enfileirar(db, aula_preparada.id, "transcribe")
+    job = enqueue(db, aula_preparada.id, "transcribe")
     HANDLERS["transcribe"](db, job)
     db.refresh(aula_preparada)
     assert aula_preparada.status == "DIARIZING"
 
 
 def test_audio_sem_fala_vira_erro_com_mensagem_humana(db, aula_preparada, asr_falso_vazio):
-    job = enfileirar(db, aula_preparada.id, "transcribe")
+    job = enqueue(db, aula_preparada.id, "transcribe")
     HANDLERS["transcribe"](db, job)
     db.refresh(aula_preparada)
     assert aula_preparada.status == "ERROR"
@@ -1100,7 +1100,7 @@ def test_audio_sem_fala_vira_erro_com_mensagem_humana(db, aula_preparada, asr_fa
 
 
 def test_chunks_sao_apagados_ao_fim(db, aula_preparada, asr_falso_por_chunk, dir_chunks):
-    job = enfileirar(db, aula_preparada.id, "transcribe")
+    job = enqueue(db, aula_preparada.id, "transcribe")
     HANDLERS["transcribe"](db, job)
     assert list(dir_chunks.glob("chunk_*.wav")) == []
 
@@ -1113,7 +1113,7 @@ def test_chunks_sao_apagados_quando_o_asr_levanta(db, aula_preparada, dir_chunks
             raise RuntimeError("modelo indisponível")
 
     monkeypatch.setattr(handlers, "obter_asr", lambda: ASRQueFalha())
-    job = enfileirar(db, aula_preparada.id, "transcribe")
+    job = enqueue(db, aula_preparada.id, "transcribe")
     with pytest.raises(RuntimeError):
         HANDLERS["transcribe"](db, job)
     assert list(dir_chunks.glob("chunk_*.wav")) == []
@@ -1148,7 +1148,7 @@ def handle_transcribe(db: Session, job: Job) -> None:
     finally:
         limpar_chunks(dir_chunks)
     if not segmentos:
-        aula.status, aula.error_code = "ERROR", "AUDIO_SEM_FALA"
+        # fail_job já marca aula.status=ERROR e o error_code; não reatribuir.
         fail_job(db, job, "AUDIO_SEM_FALA")
         db.commit()
         log_event("transcricao_sem_fala", aula_id=aula.id, job_id=job.id)
@@ -1579,7 +1579,7 @@ from app.models import Falante
 
 
 def test_diarize_leva_a_escolha_de_voz(db, aula_transcrita, diarizador_falso_duas_vozes):
-    job = enfileirar(db, aula_transcrita.id, "diarize")
+    job = enqueue(db, aula_transcrita.id, "diarize")
     HANDLERS["diarize"](db, job)
     db.refresh(aula_transcrita)
     assert aula_transcrita.status == "READY_FOR_SPEAKER_REVIEW"
@@ -1587,21 +1587,21 @@ def test_diarize_leva_a_escolha_de_voz(db, aula_transcrita, diarizador_falso_dua
 
 def test_diarize_nao_grava_agrupamento_de_voz_no_banco(db, aula_transcrita, diarizador_falso_duas_vozes):
     """§48: os rótulos do diarizador vivem só em memória e no payload da tela."""
-    job = enfileirar(db, aula_transcrita.id, "diarize")
+    job = enqueue(db, aula_transcrita.id, "diarize")
     HANDLERS["diarize"](db, job)
-    falantes = db.query(Falante).filter_by(aula_id=aula_transcrita.id).all()
+    falantes = db.query(Falante).join(Transcricao).filter(Transcricao.aula_id == aula_transcrita.id).all()
     assert {f.role for f in falantes} <= {"PROFESSOR", "ALUNO", "UNASSIGNED"}
 
 
 def test_uma_voz_so_nao_e_erro(db, aula_transcrita, diarizador_falso_uma_voz):
-    job = enfileirar(db, aula_transcrita.id, "diarize")
+    job = enqueue(db, aula_transcrita.id, "diarize")
     HANDLERS["diarize"](db, job)
     db.refresh(aula_transcrita)
     assert aula_transcrita.status == "READY_FOR_SPEAKER_REVIEW"
 
 
 def test_falha_da_diarizacao_vira_erro_com_mensagem_humana(db, aula_transcrita, diarizador_que_falha):
-    job = enfileirar(db, aula_transcrita.id, "diarize")
+    job = enqueue(db, aula_transcrita.id, "diarize")
     HANDLERS["diarize"](db, job)
     db.refresh(aula_transcrita)
     assert aula_transcrita.status == "ERROR"
@@ -1626,7 +1626,7 @@ def handle_diarize(db: Session, job: Job) -> None:
     try:
         turnos = obter_diarizador().turnos(work_path(aula.id))
     except Exception:  # noqa: BLE001 - qualquer falha do modelo vira erro de produto
-        aula.status, aula.error_code = "ERROR", "DIARIZACAO_FALHOU"
+        # fail_job já marca aula.status=ERROR e o error_code; não reatribuir.
         fail_job(db, job, "DIARIZACAO_FALHOU")
         db.commit()
         log_event("diarizacao_falhou", aula_id=aula.id, job_id=job.id)
@@ -2309,14 +2309,14 @@ from app.models import ClassificacaoFIAS, IndicadorFIAS
 
 
 def test_classificacao_grava_uma_linha_por_segmento(db, aula_revisada, classificador_falso):
-    job = enfileirar(db, aula_revisada.id, "classify_fias")
+    job = enqueue(db, aula_revisada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     n_segmentos = contar_segmentos(db, aula_revisada)
     assert db.query(ClassificacaoFIAS).filter_by(aula_id=aula_revisada.id).count() == n_segmentos
 
 
 def test_indices_sao_gravados_com_evidencia_e_rules_version(db, aula_revisada, classificador_falso):
-    job = enfileirar(db, aula_revisada.id, "classify_fias")
+    job = enqueue(db, aula_revisada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     indicadores = db.query(IndicadorFIAS).filter_by(aula_id=aula_revisada.id).all()
     assert indicadores
@@ -2329,7 +2329,7 @@ def test_indices_sao_gravados_com_evidencia_e_rules_version(db, aula_revisada, c
 
 
 def test_classificacao_leva_a_fias_completed(db, aula_revisada, classificador_falso):
-    job = enfileirar(db, aula_revisada.id, "classify_fias")
+    job = enqueue(db, aula_revisada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     db.refresh(aula_revisada)
     assert aula_revisada.status == "FIAS_COMPLETED"
@@ -2338,7 +2338,7 @@ def test_classificacao_leva_a_fias_completed(db, aula_revisada, classificador_fa
 def test_a_categoria_respeita_o_papel_do_falante(db, aula_revisada, classificador_falso_categoria_8):
     """constrain_by_role é do motor do shared: uma categoria de fala docente num
     segmento de ALUNO tem de ser corrigida antes de virar intervalo."""
-    job = enfileirar(db, aula_revisada.id, "classify_fias")
+    job = enqueue(db, aula_revisada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     de_aluno = classificacoes_de_papel(db, aula_revisada, "ALUNO")
     assert all(c.categoria in (8, 9) for c in de_aluno)
@@ -2346,7 +2346,7 @@ def test_a_categoria_respeita_o_papel_do_falante(db, aula_revisada, classificado
 
 def test_reclassificar_apaga_o_resultado_anterior(db, aula_classificada, classificador_falso):
     antes = db.query(ClassificacaoFIAS).filter_by(aula_id=aula_classificada.id).count()
-    job = enfileirar(db, aula_classificada.id, "classify_fias")
+    job = enqueue(db, aula_classificada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     depois = db.query(ClassificacaoFIAS).filter_by(aula_id=aula_classificada.id).count()
     assert depois == antes  # não duplicou
@@ -2420,7 +2420,7 @@ def test_processamento_registra_modelo_parametros_e_versoes(db, aula_revisada, c
     """Os nomes de coluna são os da tabela criada na W1 (app/models.py), não
     inventados aqui: asr_model, asr_model_hash, diarization_model, fias_model,
     fias_model_hash, parameters."""
-    job = enfileirar(db, aula_revisada.id, "classify_fias")
+    job = enqueue(db, aula_revisada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     proc = db.query(Processamento).filter_by(aula_id=aula_revisada.id).one()
     assert proc.asr_model and proc.asr_model_hash
@@ -2434,7 +2434,7 @@ def test_processamento_registra_modelo_parametros_e_versoes(db, aula_revisada, c
 def test_processamento_preenche_todas_as_colunas_obrigatorias(db, aula_revisada, classificador_falso):
     """A tabela da W1 tem seis colunas NOT NULL que não são de modelo; nenhuma
     pode ficar de fora, ou o INSERT falha em produção e não no teste."""
-    job = enfileirar(db, aula_revisada.id, "classify_fias")
+    job = enqueue(db, aula_revisada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     proc = db.query(Processamento).filter_by(aula_id=aula_revisada.id).one()
     assert proc.hardware and proc.device
@@ -2445,7 +2445,7 @@ def test_processamento_preenche_todas_as_colunas_obrigatorias(db, aula_revisada,
 
 
 def test_modelo_ia_nasce_do_registro_do_shared(db, aula_revisada, classificador_falso):
-    job = enfileirar(db, aula_revisada.id, "classify_fias")
+    job = enqueue(db, aula_revisada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     m = db.query(ModeloIA).filter_by(task="fias_utterance_classification").one()
     do_registro = entrada(get_settings().clf_model_id)
@@ -2456,7 +2456,7 @@ def test_modelo_ia_nasce_do_registro_do_shared(db, aula_revisada, classificador_
 
 
 def test_reprocessar_nao_duplica_o_processamento(db, aula_classificada, classificador_falso):
-    job = enfileirar(db, aula_classificada.id, "classify_fias")
+    job = enqueue(db, aula_classificada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
     assert db.query(Processamento).filter_by(aula_id=aula_classificada.id).count() == 1
 ```
