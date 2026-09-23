@@ -166,7 +166,9 @@ O item 1 é o de melhor relação entre esforço e retorno: é o único que, iso
 
 ## Anexo — Procedência e reprodutibilidade
 
-Cada modelo utilizado está declarado em um registro versionado (`fias-ed-shared/scientific-config/models.json`) com identificador, revisão fixada, licença, métricas quando existem, limitações e referência à fonte. O sistema recusa-se a executar com modelo que o registro não declare.
+Cada modelo utilizado está declarado em um registro versionado (`fias-ed-shared/scientific-config/models.json`) com identificador, revisão fixada, licença, métricas quando existem, limitações e referência à fonte.
+
+O sistema recusa-se a executar com modelo que o registro não declare — **e também com modelo que o registro declare sem ter adotado**. A distinção importa: alguns pesos constam do registro apenas para preservar a procedência de uma medição publicada, e não por terem sido validados para uso. É o caso dos dois tamanhos menores de modelo de transcrição que aparecem na tabela da seção 5.2. A autorização de uso é uma lista de estados explicitamente permitidos, de modo que um estado novo entra recusado por padrão, e não adotado por omissão.
 
 As fontes científicas — documentação dos experimentos e pesos treinados — são conferidas por instantâneo criptográfico a cada verificação, de modo que alteração silenciosa é detectável.
 
