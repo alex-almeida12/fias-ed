@@ -113,6 +113,22 @@ def test_chunks_sao_apagados_mesmo_sem_fala(db, aula_preparada, asr_falso_vazio,
     assert list(dir_chunks.glob("chunk_*.wav")) == []
 
 
+def test_chunks_sao_apagados_quando_o_asr_levanta(db, aula_preparada, dir_chunks, monkeypatch):
+    """A exceção sobe até o worker, que faz rollback e retry. Sem o try/finally em
+    volta do corte e da transcrição, os pedaços já cortados ficariam no disco —
+    centenas de MB numa aula de 90 min, repetidos a cada tentativa de retry."""
+    class ASRQueFalha:
+        def transcrever(self, caminho, deslocamento_ms):
+            raise RuntimeError("modelo indisponível")
+
+    monkeypatch.setattr(handlers, "obter_asr", lambda: ASRQueFalha())
+    job = enqueue(db, aula_preparada.id, "transcribe")
+    db.commit()
+    with pytest.raises(RuntimeError):
+        HANDLERS["transcribe"](db, job)
+    assert list(dir_chunks.glob("chunk_*.wav")) == []
+
+
 def test_segmento_gravado_ja_vem_pseudonimizado(db, aula_preparada, monkeypatch):
     """A Task 6 roda antes desta de propósito: gravar_segmentos precisa pseudonimizar
     na primeira escrita, não depois — senão um nome de estudante fica em claro no

@@ -93,15 +93,22 @@ def handle_transcribe(db: Session, job: Job) -> None:
         db.commit()
         return
     trabalho, dir_chunks = work_path(aula.id), chunks_dir(aula.id)
-    plano = planejar_chunks(audio.duration_ms)
-    chunks = cortar(trabalho, plano, dir_chunks)
-    asr = obter_asr()
-    segmentos: list[SegmentoASR] = []
-    for chunk in chunks:
-        # ASR devolve tempos locais ao chunk; a soma do deslocamento aqui é o que
-        # torna o tempo gravado global — nenhuma camada acima sabe que houve corte.
-        segmentos.extend(asr.transcrever(chunk.caminho, chunk.inicio_ms))
-    limpar_chunks(dir_chunks)
+    # try/finally: se cortar() ou transcrever() levantar, a exceção sobe até o
+    # worker, que faz rollback e retry — mas os pedaços já cortados ficariam no
+    # disco para sempre. Numa aula de 90 min são centenas de MB por falha, e o
+    # retry pode repetir isso mais de uma vez.
+    try:
+        plano = planejar_chunks(audio.duration_ms)
+        chunks = cortar(trabalho, plano, dir_chunks)
+        asr = obter_asr()
+        segmentos: list[SegmentoASR] = []
+        for chunk in chunks:
+            # ASR devolve tempos locais ao chunk; a soma do deslocamento aqui é o
+            # que torna o tempo gravado global — nenhuma camada acima sabe que
+            # houve corte.
+            segmentos.extend(asr.transcrever(chunk.caminho, chunk.inicio_ms))
+    finally:
+        limpar_chunks(dir_chunks)
     if not segmentos:
         # fail_job já marca a aula como ERROR/AUDIO_SEM_FALA; nenhuma atribuição
         # manual de status é necessária aqui.
