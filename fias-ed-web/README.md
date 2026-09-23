@@ -117,6 +117,98 @@ com o volume dos modelos:
 docker compose -f docker-compose.test.yml run --rm -v fias-ed-web_models:/models:ro api-test pytest -q -m lento
 ```
 
+### Escolha do modelo de ASR
+
+O tamanho do Whisper está em `ASR_SIZE` no `.env` (`small`). A escolha foi
+medida, não chutada — `scripts/medir_asr.py` mede tempo e pico de memória dos
+três tamanhos, com **os mesmos parâmetros do produto** (CPU, `int8`,
+`language="pt"`, `temperature=0.0`, `vad_filter=True`):
+
+```bash
+docker compose -f docker-compose.test.yml run --rm \
+    -v fias-ed-web_models:/models:ro api-test python /app/scripts/medir_asr.py
+```
+
+Máquina de referência: o container do projeto, **16 CPUs e 15,5 GB de RAM**,
+**sem GPU** (o `torch` instalado é o `+cpu`, e `app/ml/asr_whisper.py` fixa
+`device="cpu"`). Não há VRAM em jogo: o orçamento é de RAM. O áudio é fala
+sintetizada pelo libflite, o mesmo recurso das fixtures dos testes `lento`; um
+tom puro não serviria, porque o VAD do Whisper o descarta inteiro e a medição
+viraria o custo do VAD.
+
+**Medido** (uma execução por célula; repetindo a célula decisiva — `small` em
+10 min — deu 99,5 s contra 100,2 s, 0,7% de diferença, e a mesma contagem de
+segmentos):
+
+| Modelo | Duração do áudio | Carga do modelo | Transcrição | s por min de áudio | Pico de memória | Segmentos |
+|---|---|---|---|---|---|---|
+| tiny | 2,5 min | 0,2 s | 4,5 s | 1,8 | 0,43 GB | 38 |
+| tiny | 5 min | 0,2 s | 9,8 s | 2,0 | 0,52 GB | 90 |
+| tiny | 10 min | 0,2 s | 14,7 s | 1,5 | 0,78 GB | 25 |
+| base | 2,5 min | 0,2 s | 5,3 s | 2,1 | 0,49 GB | 6 |
+| base | 5 min | 0,2 s | 8,6 s | 1,7 | 0,57 GB | 11 |
+| base | 10 min | 0,2 s | 29,8 s | 3,0 | 0,87 GB | 51 |
+| small | 2,5 min | 0,6 s | 29,2 s | 11,7 | 1,07 GB | 13 |
+| small | 5 min | 0,5 s | 51,6 s | 10,3 | 1,08 GB | 18 |
+| small | 10 min | 0,5 s | 100,2 s | 10,0 | 1,14 GB | 70 |
+
+**Linearidade, verificada e não suposta.** O custo por minuto *não* se mantém
+constante dentro de uma mesma chamada: variou 1,33× no `tiny`, 1,72× no `base`
+e 1,16× no `small` entre 2,5 e 10 min. A causa provável é o áudio sintético —
+o texto se repete e o Whisper condiciona a decodificação no que já transcreveu,
+o que muda a quantidade de segmentos (a coluna "Segmentos" oscila junto com o
+tempo). **Por isso a projeção abaixo não usa regra de três sobre a duração.**
+Ela usa o fato de que o produto corta o áudio em chunks de 10 min
+(`JANELA_PADRAO_MS` em `app/audio/prepare.py`) e chama o ASR uma vez por chunk,
+do zero: uma aula de 90 min é o chunk de 10 min — medido — repetido 9 vezes,
+com uma carga de modelo só.
+
+**Extrapolado** (9 × o chunk de 10 min medido; os números desta tabela **não**
+foram medidos numa aula de 90 min):
+
+| Modelo | Tempo numa aula de 90 min | Em múltiplos da duração do áudio | Pico de memória (medido, do chunk de 10 min) |
+|---|---|---|---|
+| tiny | ~2 min | 0,02× | 0,78 GB |
+| base | ~4 min | 0,05× | 0,87 GB |
+| small | ~15 min | 0,17× | 1,14 GB |
+
+O pico de memória não é extrapolado: como o chunk de 10 min é o maior pedaço
+que o ASR vê em produção, o pico medido nele é o pico de produção. Ele cresce
+com a duração *dentro* de uma chamada (0,43 → 0,78 GB no `tiny` entre 2,5 e
+10 min), e é justamente por isso que o número que vale é o do chunk inteiro.
+
+**Critério:** o **maior** tamanho cujo tempo numa aula de 90 min fique abaixo
+de 2× a duração do áudio e cujo pico de memória caiba com folga na máquina de
+referência, lembrando que o `pyannote` roda em seguida.
+
+**Escolhido: `small`** (`ASR_SIZE=small`). É o maior dos três, fica em 0,17× a
+duração do áudio — bem abaixo do teto de 2× — e o pico de 1,14 GB ocupa 7% dos
+15,5 GB da máquina. Os dois menores são mais baratos, mas não há motivo para
+gastar o tamanho de modelo quando o maior cabe com folga dessa ordem.
+
+Três limites do que está escrito aqui, para não valerem mais do que valem:
+
+- **Não há medição de acerto.** WER e DER exigiriam áudio real de aula com
+  transcrição e diarização de referência, que o projeto não tem. Os dois
+  seguem `PENDING_SCIENTIFIC_VALIDATION`. A fala do libflite tem pronúncia
+  inglesa: serve para medir tempo de processamento, não para medir acerto.
+- **O orçamento de memória do `pyannote` é desconhecido.** Ele roda depois do
+  ASR, no mesmo worker, e hoje não dá para medi-lo: os repositórios dele são
+  *gated* no Hugging Face e os pesos não estão nesta máquina. A folga de 14 GB
+  é grande, mas a conta final só fecha quando ele for medido.
+- **`tiny` e `base` não são adotáveis como estão.** Eles têm revisão fixada em
+  `scripts/setup_models.py` (para a medição), mas não têm entrada em
+  `fias-ed-shared/scientific-config/models.json`, que este repositório não
+  altera — e `app/ml/asr_whisper.py` recusa carregar um modelo que o registro
+  não declare. Trocar o tamanho em produção exige a entrada lá primeiro.
+
+Para baixar os pesos de um tamanho só (a medição precisa dos três em disco):
+
+```bash
+docker compose --profile setup run --rm -e FIAS_ED_ASR_SIZE=tiny \
+    setup-models python /app/scripts/setup_models.py --somente-asr
+```
+
 ### Tamanho máximo do áudio
 
 O limite é 1,5 GB (`MAX_UPLOAD_BYTES=1610612736` no `.env`) e está repetido no

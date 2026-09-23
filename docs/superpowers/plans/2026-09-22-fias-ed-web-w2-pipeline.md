@@ -3079,7 +3079,7 @@ Cumpre o §21 na parte que dá para cumprir sem áudio real de aula.
 - Modify: `fias-ed-web/README.md`, `fias-ed-web/.env.example`
 - Test: — (script de medição; a saída é a evidência)
 
-- [ ] **Step 1: Escrever o script**
+- [x] **Step 1: Escrever o script**
 
 `scripts/medir_asr.py`, stdlib + `psutil`. Gera áudio sintético nas durações do
 §18, roda cada tamanho de modelo, e imprime uma tabela em Markdown:
@@ -3104,12 +3104,12 @@ def main() -> int:
     return 0
 ```
 
-- [ ] **Step 2: Rodar a medição**
+- [x] **Step 2: Rodar a medição**
 
 Run: `docker compose run --rm api python /app/scripts/medir_asr.py | tee /tmp/medicao.md`
 Expected: uma tabela com 15 linhas, sem falha
 
-- [ ] **Step 3: Escolher o modelo e registrar**
+- [x] **Step 3: Escolher o modelo e registrar**
 
 Critério declarado: o **maior** tamanho cujo tempo numa aula de 90 min fique
 abaixo de 2× a duração do áudio e cujo pico de memória fique abaixo de 5 GB (a
@@ -3118,7 +3118,7 @@ máquina de referência tem 6 GB de VRAM e o `pyannote` roda em seguida).
 Gravar em `.env.example` (`FIAS_ED_ASR_SIZE=<escolhido>`) e colar a tabela no
 README, numa seção "Escolha do modelo de ASR", com o critério escrito ao lado.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add fias-ed-web/scripts fias-ed-web/README.md fias-ed-web/.env.example

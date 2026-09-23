@@ -22,6 +22,11 @@ URL, que vai sem credencial.
 Os repositórios do pyannote são *gated*: é preciso aceitar as condições de uso
 na página de cada um, logado na conta dona do token, senão o download volta
 403. O script diz isso em vez de estourar uma pilha.
+
+Com `--somente-asr` baixa só os pesos do Whisper do tamanho pedido, sem o
+pyannote e sem o BERTimbau. É o que `scripts/medir_asr.py` precisa para medir
+tamanhos que o produto não usa hoje — e continua sendo aqui, e não no script de
+medição, que a rede é tocada.
 """
 import os
 import shutil
@@ -29,7 +34,14 @@ import sys
 from pathlib import Path
 
 # repo_id -> revisão fixada
+# `tiny` e `base` estão aqui por causa da medição do §21 (scripts/medir_asr.py):
+# só dá para comparar tamanhos com os três em disco. Os dois **não** estão
+# declarados em scientific-config/models.json, que é somente leitura para este
+# repositório — adotar um deles em produção exige a entrada lá antes, senão
+# `app/ml/asr_whisper.py` recusa a carregar.
 REVISOES = {
+    "Systran/faster-whisper-tiny": "d90ca5fe260221311c53c58e660288d3deb8d356",
+    "Systran/faster-whisper-base": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
     "Systran/faster-whisper-small": "536b0662742c02347bc0e980a01041f333bce120",
     "pyannote/speaker-diarization-3.1": "84fd25912480287da0247647c3d2b4853cb3ee5d",
     "pyannote/segmentation-3.0": "e66f3d3b9eb0873085418a7b813d3b369bf160bb",
@@ -149,15 +161,28 @@ def _exigir_ambiente(nome: str, dica: str) -> str:
     return valor
 
 
-def main() -> int:
+def somente_asr(base: Path, tamanho: str, token: str) -> int:
+    """Só os pesos do Whisper, para a medição do §21.
+
+    Sem `conferir`: o registro declara `faster-whisper-small` e mais nada, e o
+    registro mora em fias-ed-shared, que este repositório não altera. A garantia
+    de integridade aqui é a mesma do resto do script — a revisão fixada,
+    conferida pelo huggingface_hub no download.
+    """
+    whisper = baixar_whisper(base, tamanho, token)
+    _exigir(tuple(whisper / a for a in ARQUIVOS_ASR))
+    shutil.rmtree(base / ".hf", ignore_errors=True)
+    print(f"ASR {tamanho} OK")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    argumentos = sys.argv[1:] if argv is None else argv
     base = Path(_exigir_ambiente("FIAS_ED_MODELS_DIR", "É o diretório onde os pesos ficam."))
     tamanho = os.environ.get("FIAS_ED_ASR_SIZE", "small")
     token = _exigir_ambiente(
         "HUGGINGFACE_TOKEN",
         "Crie um token de leitura em https://huggingface.co/settings/tokens e ponha no .env.")
-    experimentos = Path(_exigir_ambiente(
-        "FIAS_ED_EXPERIMENTS_DIR",
-        "É o diretório 'artigos selecionados/experimentos'; ponha o caminho no .env."))
     if REPO_ASR.format(tamanho=tamanho) not in REVISOES:
         raise SystemExit(
             f"FIAS_ED_ASR_SIZE={tamanho} não tem revisão fixada neste script. Acrescente o"
@@ -165,6 +190,13 @@ def main() -> int:
             " e a entrada correspondente em scientific-config/models.json.")
     base.mkdir(parents=True, exist_ok=True)
 
+    if "--somente-asr" in argumentos:
+        print(f"baixando o faster-whisper ({tamanho})…", flush=True)
+        return somente_asr(base, tamanho, token)
+
+    experimentos = Path(_exigir_ambiente(
+        "FIAS_ED_EXPERIMENTS_DIR",
+        "É o diretório 'artigos selecionados/experimentos'; ponha o caminho no .env."))
     print("baixando o pyannote…", flush=True)
     pyannote = baixar_pyannote(base, token)
     print("copiando o BERTimbau dos experimentos…", flush=True)
