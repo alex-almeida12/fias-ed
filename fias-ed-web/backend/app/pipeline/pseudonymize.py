@@ -75,5 +75,5 @@ def pseudonimizar(texto: str) -> str:
     nomes = nomes_por_ner(texto) | nomes_por_heuristica(texto)
     if not nomes:
         return texto
-    padrao = re.compile("|".join(re.escape(n) for n in sorted(nomes, key=len, reverse=True)))
+    padrao = re.compile(r"\b(?:" + "|".join(re.escape(n) for n in sorted(nomes, key=len, reverse=True)) + r")\b")
     return padrao.sub(MARCADOR, texto)
