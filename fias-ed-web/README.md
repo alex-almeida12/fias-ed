@@ -104,7 +104,14 @@ Depois:
 docker compose --profile setup run --rm setup-models
 ```
 
-O script termina com `MODELOS OK`. Ele é o único serviço do Compose que usa
+O script termina com `MODELOS OK`, e só com os três modelos prontos. Cada um
+tenta por conta própria: se um falhar, os outros ainda são instalados e o fim
+da saída nomeia quem ficou faltando e por quê — o download do pyannote precisa
+de rede e de licença aceita, a cópia do BERTimbau não precisa de nenhuma das
+duas, e não faz sentido a segunda ficar refém da primeira. Rodar de novo
+aproveita o que já está em disco.
+
+Ele é o único serviço do Compose que usa
 rede para buscar peso, e por isso fica atrás do profile `setup`: um
 `docker compose up` não o levanta. Ele lê o diretório dos experimentos
 **somente leitura** e nunca escreve lá.

@@ -23,6 +23,11 @@ Os repositórios do pyannote são *gated*: é preciso aceitar as condições de 
 na página de cada um, logado na conta dona do token, senão o download volta
 403. O script diz isso em vez de estourar uma pilha.
 
+Cada modelo é tentado por conta própria e as falhas são coletadas: um 403 no
+pyannote não impede mais a cópia do BERTimbau, que nem rede usa. `MODELOS OK`
+continua exigindo os três; o que falhou sai nomeado, com o motivo, e o script
+termina em 1.
+
 Com `--somente-asr` baixa só os pesos do Whisper do tamanho pedido, sem o
 pyannote e sem o BERTimbau. É o que `scripts/medir_asr.py` precisa para medir
 tamanhos que o produto não usa hoje — e continua sendo aqui, e não no script de
@@ -60,6 +65,14 @@ MODEL_ID_DIAR = "pyannote-speaker-diarization-3.1"
 MODEL_ID_CLF = "fias-bertimbau-ptbr-frente3"
 
 
+class FalhaDeModelo(Exception):
+    """Um modelo não ficou pronto.
+
+    É `Exception`, e não `SystemExit`, porque quem a levanta não decide mais o
+    destino do script: `_passo` a coleta e os outros modelos seguem tentando.
+    """
+
+
 def _baixar(repo_id: str, arquivo: str, destino: Path, token: str, cache: Path) -> Path:
     from huggingface_hub import hf_hub_download
     from huggingface_hub.errors import GatedRepoError
@@ -69,7 +82,7 @@ def _baixar(repo_id: str, arquivo: str, destino: Path, token: str, cache: Path) 
         baixado = hf_hub_download(repo_id, arquivo, revision=REVISOES[repo_id],
                                   token=token, cache_dir=str(cache))
     except GatedRepoError:
-        raise SystemExit(
+        raise FalhaDeModelo(
             f"acesso negado a {repo_id}: é um repositório com condições de uso.\n"
             f"Abra https://huggingface.co/{repo_id} logado na conta dona do token,\n"
             "aceite as condições e rode este script de novo.") from None
@@ -123,7 +136,7 @@ def copiar_bertimbau(base: Path, experimentos: Path) -> None:
     for art in entrada(MODEL_ID_CLF)["artifacts"]:
         origem = experimentos / art["relative_path"]
         if not origem.is_file():
-            raise SystemExit(
+            raise FalhaDeModelo(
                 f"artefato do BERTimbau ausente em {experimentos}: {art['relative_path']}."
                 " Confira FIAS_ED_EXPERIMENTS_DIR no .env.")
         alvo = base / art["relative_path"]
@@ -131,27 +144,90 @@ def copiar_bertimbau(base: Path, experimentos: Path) -> None:
         shutil.copyfile(origem, alvo)
 
 
-def conferir(base: Path, model_ids: tuple[str, ...]) -> None:
-    """BERTimbau: sha256 artefato por artefato, contra o registro.
+def _sem_banco() -> None:
+    """O setup não fala com banco nenhum, e ainda assim precisa dizer isso.
 
-    Whisper e pyannote: o registro do shared é enraizado no diretório de
-    experimentos e recusa artefato `.bin`, então os pesos baixados do Hugging
-    Face não têm sha256 lá (fias-ed-shared/engine-py/tests/test_models_registry.py).
-    A conferência deles é a da revisão fixada, feita pelo huggingface_hub no
-    download; aqui só se exige que o modelo esteja declarado no registro e que
-    o arquivo tenha ficado no lugar.
+    Os três passos conferem o modelo contra o registro, e `app.ml.registry`
+    chega ao arquivo por `get_settings()`, onde `database_url` é obrigatório.
+    Declarar uma URL de banco no serviço `setup-models` do Compose pareceria uma
+    conexão de verdade; aqui o valor fica vazio e explicado. Nada neste script
+    abre conexão.
+
+    A falta disso só apareceu quando os passos passaram a ser independentes: com
+    o script abortando no 403 do pyannote, nenhum passo chegou a importar o
+    registro, e o setup nunca teria terminado mesmo com as licenças aceitas.
     """
-    from app.ml.registry import entrada, verificar_artefatos
+    os.environ.setdefault("DATABASE_URL", "")
 
+
+def _passo(nome: str, funcao, falhas: list[tuple[str, str]]) -> None:
+    """Roda um modelo, coleta o erro se houver e deixa os outros tentarem.
+
+    Antes, o primeiro `raise` derrubava o script inteiro, e a ordem era
+    pyannote → BERTimbau → Whisper: enquanto o pyannote devolveu 403, o
+    BERTimbau — que só copia do disco, sem rede e sem licença — nunca chegou a
+    ser copiado, e o estado dele ficou desconhecido. Uma falha passou a não
+    mascarar mais o estado das outras. O critério não afrouxou: quem falha
+    continua reprovando o setup (veja o fim de `main`), e o `MODELOS OK` só sai
+    com todos verdes.
+
+    `Exception` larga de propósito: o que interessa é que nenhum modelo leve os
+    outros junto, seja 403, disco cheio ou rede caída. `SystemExit` fica de fora
+    (não é `Exception`) e continua abortando — é o que `_exigir_ambiente` usa
+    para dizer que falta configuração, e sem configuração não há passo nenhum
+    para tentar.
+    """
+    try:
+        funcao()
+    except Exception as erro:  # noqa: BLE001 — o relatório no fim de main é quem decide
+        falhas.append((nome, f"{type(erro).__name__}: {erro}"))
+        print(f"{nome}: FALHOU", flush=True)
+        return
+    print(f"{nome}: ok", flush=True)
+
+
+def passo_pyannote(base: Path, token: str) -> None:
+    print("baixando o pyannote…", flush=True)
+    from app.ml.registry import entrada
+
+    destino = baixar_pyannote(base, token)
+    _exigir((destino / "config.yaml",
+             destino / "segmentation-3.0" / "pytorch_model.bin",
+             destino / "wespeaker-voxceleb-resnet34-LM" / "pytorch_model.bin"))
+    entrada(MODEL_ID_DIAR)
+
+
+def passo_bertimbau(base: Path, experimentos: Path) -> None:
+    """Único passo com sha256 artefato por artefato, contra o registro.
+
+    Whisper e pyannote não têm sha256 lá: o registro do shared é enraizado no
+    diretório de experimentos e recusa artefato `.bin`
+    (fias-ed-shared/engine-py/tests/test_models_registry.py). A conferência
+    deles é a da revisão fixada, feita pelo huggingface_hub no download; aqui só
+    se exige que o modelo esteja declarado no registro e que o arquivo tenha
+    ficado no lugar.
+    """
+    print("copiando o BERTimbau dos experimentos…", flush=True)
+    from app.ml.registry import verificar_artefatos
+
+    copiar_bertimbau(base, experimentos)
     verificar_artefatos(MODEL_ID_CLF, base)
-    for model_id in model_ids:
-        entrada(model_id)
+
+
+def passo_whisper(base: Path, tamanho: str, token: str) -> None:
+    print(f"baixando o faster-whisper ({tamanho})…", flush=True)
+    from app.ml.registry import entrada
+
+    whisper = baixar_whisper(base, tamanho, token)
+    _exigir(tuple(whisper / a for a in ARQUIVOS_ASR))
+    entrada(MODEL_ID_ASR.format(tamanho=tamanho))
 
 
 def _exigir(caminhos: tuple[Path, ...]) -> None:
     faltando = [str(c) for c in caminhos if not c.is_file()]
     if faltando:
-        raise SystemExit("arquivos que o setup deveria ter deixado e não deixou: " + ", ".join(faltando))
+        raise FalhaDeModelo("arquivos que o setup deveria ter deixado e não deixou: "
+                            + ", ".join(faltando))
 
 
 def _exigir_ambiente(nome: str, dica: str) -> str:
@@ -164,14 +240,19 @@ def _exigir_ambiente(nome: str, dica: str) -> str:
 def somente_asr(base: Path, tamanho: str, token: str) -> int:
     """Só os pesos do Whisper, para a medição do §21.
 
-    Sem `conferir`: o registro declara `faster-whisper-small` e mais nada, e o
-    registro mora em fias-ed-shared, que este repositório não altera. A garantia
+    Sem conferência no registro: ele declara `faster-whisper-small` e mais nada,
+    e mora em fias-ed-shared, que este repositório não altera. A garantia
     de integridade aqui é a mesma do resto do script — a revisão fixada,
     conferida pelo huggingface_hub no download.
     """
-    whisper = baixar_whisper(base, tamanho, token)
-    _exigir(tuple(whisper / a for a in ARQUIVOS_ASR))
-    shutil.rmtree(base / ".hf", ignore_errors=True)
+    try:
+        whisper = baixar_whisper(base, tamanho, token)
+        _exigir(tuple(whisper / a for a in ARQUIVOS_ASR))
+    except FalhaDeModelo as erro:
+        # Um modelo só: não há o que coletar, e a mensagem vale mais que a pilha.
+        raise SystemExit(str(erro)) from None
+    finally:
+        shutil.rmtree(base / ".hf", ignore_errors=True)
     print(f"ASR {tamanho} OK")
     return 0
 
@@ -189,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
             f" commit de https://huggingface.co/{REPO_ASR.format(tamanho=tamanho)} em REVISOES"
             " e a entrada correspondente em scientific-config/models.json.")
     base.mkdir(parents=True, exist_ok=True)
+    _sem_banco()
 
     if "--somente-asr" in argumentos:
         print(f"baixando o faster-whisper ({tamanho})…", flush=True)
@@ -197,21 +279,24 @@ def main(argv: list[str] | None = None) -> int:
     experimentos = Path(_exigir_ambiente(
         "FIAS_ED_EXPERIMENTS_DIR",
         "É o diretório 'artigos selecionados/experimentos'; ponha o caminho no .env."))
-    print("baixando o pyannote…", flush=True)
-    pyannote = baixar_pyannote(base, token)
-    print("copiando o BERTimbau dos experimentos…", flush=True)
-    copiar_bertimbau(base, experimentos)
-    print(f"baixando o faster-whisper ({tamanho})…", flush=True)
-    whisper = baixar_whisper(base, tamanho, token)
 
-    _exigir((pyannote / "config.yaml",
-             pyannote / "segmentation-3.0" / "pytorch_model.bin",
-             pyannote / "wespeaker-voxceleb-resnet34-LM" / "pytorch_model.bin",
-             *(whisper / a for a in ARQUIVOS_ASR)))
-    conferir(base, (MODEL_ID_DIAR, MODEL_ID_ASR.format(tamanho=tamanho)))
+    # Os três tentam, cada um por si. Quem falhar é reportado no fim, com nome e
+    # motivo; nenhum deles decide sozinho parar o script.
+    falhas: list[tuple[str, str]] = []
+    _passo("pyannote", lambda: passo_pyannote(base, token), falhas)
+    _passo("BERTimbau", lambda: passo_bertimbau(base, experimentos), falhas)
+    _passo("faster-whisper", lambda: passo_whisper(base, tamanho, token), falhas)
+
     # O cache do download não fica: só ocupa espaço (uma segunda cópia de tudo)
     # e confunde a conferência de arquivos proibidos.
     shutil.rmtree(base / ".hf", ignore_errors=True)
+    if falhas:
+        print("MODELOS INCOMPLETOS — estes não ficaram prontos:", file=sys.stderr)
+        for nome, motivo in falhas:
+            print(f"  - {nome}: {motivo}", file=sys.stderr)
+        print("Os que passaram já estão em disco; resolva o que está acima e rode de novo.",
+              file=sys.stderr)
+        return 1
     print("MODELOS OK")
     return 0
 
