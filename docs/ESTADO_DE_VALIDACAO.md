@@ -101,13 +101,32 @@ Essa distinção está registrada tanto no código de medição quanto na docume
 
 Medições em máquina sem placa gráfica dedicada, com 16 núcleos de processamento e 15,5 GB de memória disponível.
 
-Para uma aula de 90 minutos:
+### 5.1 Execução completa, medida no processo real
 
-| Etapa | Tempo | Proporção da duração do áudio | Pico de memória |
+Uma aula de 46 minutos foi processada de ponta a ponta pela interface, com os modelos reais, e o consumo do processo de trabalho foi amostrado ao longo da execução:
+
+| Etapa | Tempo | Proporção da duração do áudio | Memória acumulada no processo |
+|---|---|---|---|
+| Validação e preparo | 0,5 s | ≈ 0 | — |
+| Transcrição (5 trechos) | 387,6 s | 0,140× | 1,54 GB |
+| Separação de vozes | 1.451,7 s | 0,526× | 2,73 GB |
+| Classificação FIAS | 45,9 s | 0,017× | **4,75 GB** |
+| **Total** | **31,6 min** | **0,683×** | **4,75 GB (31 % da memória disponível)** |
+
+**O pico é da classificação, e esse estágio não tem teto.** O classificador processa todos os segmentos da aula em uma única passagem, sem divisão em lotes. O consumo cresce linearmente com o número de segmentos — isto é, com a duração da aula **e** com o quanto a fala é fragmentada. Uma aula da mesma duração, porém com mais trocas de turno, consome proporcionalmente mais.
+
+Esse comportamento é uma característica da implementação, não uma medida do problema: dividir a classificação em lotes limitaria o pico sem alterar o resultado. Enquanto não for dividida, o consumo máximo do sistema não é um número fixo, e sim uma função do material processado.
+
+### 5.2 Medições por etapa, em laboratório
+
+Extrapoladas para uma aula de 90 minutos, medindo cada etapa isoladamente:
+
+| Etapa | Tempo | Proporção da duração do áudio | Pico isolado |
 |---|---|---|---|
 | Transcrição | ≈ 15 min | 0,17× | 1,14 GB |
 | Separação de vozes | ≈ 54 min | 0,60× | 2,58 GB |
-| **Ambas em sequência** | **≈ 69 min** | **0,77×** | **2,53 GB (16 % da memória disponível)** |
+
+Estes números medem cada etapa sozinha e **não somam ao consumo real**, pelo motivo da seção anterior: as três etapas compartilham um mesmo processo, e a memória já solicitada não retorna ao sistema entre elas.
 
 Três observações metodológicas:
 
@@ -115,7 +134,7 @@ Três observações metodológicas:
 2. **A transcrição de 90 minutos é uma extrapolação declarada.** A linearidade entre duração e tempo de processamento foi testada e **não se confirmou**. A extrapolação apoia-se em outro fato: o produto divide o áudio em trechos de 10 minutos e processa cada um independentemente, de modo que o caso longo é o trecho de 10 minutos — este sim medido — repetido. A unidade repetida é medida; apenas o número de repetições é inferido.
 3. **O custo dominante é a separação de vozes**, que consome 3,6 vezes o tempo da transcrição. Caso o tempo total precise ser reduzido, é nessa etapa que a intervenção tem efeito; trocar o modelo de transcrição por um menor economizaria cerca de 13 dos 69 minutos.
 
-A memória cresce muito pouco com a duração da gravação (2,41 GB para 2,5 minutos contra 2,58 GB para 90 minutos), pois é dominada pelo modelo carregado, não pelo áudio.
+Quanto à memória, as etapas se comportam de forma oposta, e convém não generalizar de uma para a outra. Na separação de vozes o consumo quase não depende da duração (2,41 GB para 2,5 minutos contra 2,58 GB para 90 minutos), pois é dominado pelo modelo carregado. Na classificação, ao contrário, o consumo cresce com a quantidade de segmentos, pela razão descrita na seção 5.1 — e é ela que determina o pico do sistema.
 
 ---
 
