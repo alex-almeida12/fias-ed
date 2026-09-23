@@ -2406,6 +2406,22 @@ def test_indices_sao_gravados_com_evidencia_e_rules_version(db, aula_revisada, c
     assert all(i.rules_version for i in indicadores)
 
 
+def test_concluir_a_revisao_enfileira_a_classificacao(cliente, db, aula_em_revisao):
+    """Sem isto a aula para em READY_FOR_FIAS para sempre, e a suíte não percebe
+    porque todo teste desta task enfileira o job à mão."""
+    cliente.post(f"/api/aulas/{aula_em_revisao.id}/transcricao/concluir")
+    assert db.query(Job).filter_by(aula_id=aula_em_revisao.id, type="classify_fias").count() == 1
+
+
+def test_reabrir_a_revisao_nao_enfileira(cliente, db, aula_classificada):
+    """Cinquenta trechos corrigidos não podem virar cinquenta classificações."""
+    seg = primeiro_segmento(db, aula_classificada)
+    cliente.patch(f"/api/segmentos/{seg.id}", json={"texto": "a", "version": seg.version})
+    db.refresh(aula_classificada)
+    assert aula_classificada.status == "READY_FOR_FIAS"
+    assert db.query(Job).filter_by(aula_id=aula_classificada.id, type="classify_fias").count() == 0
+
+
 def test_classificacao_leva_a_fias_completed(db, aula_revisada, classificador_falso):
     job = enqueue(db, aula_revisada.id, "classify_fias")
     HANDLERS["classify_fias"](db, job)
@@ -2517,6 +2533,24 @@ def classificar_aula(db, aula) -> None:
 
 E `handle_classify_fias` em `handlers.py`, no mesmo estilo dos outros, levando a
 aula a `FIAS_COMPLETED` e registrando `log_event("fias_pronto", aula_id=…)`.
+
+**Alguém precisa enfileirar esse job, e hoje ninguém enfileira.** Cada teste desta
+task chama `enqueue` à mão, então a suíte fica verde enquanto a aula, em produção,
+para em `READY_FOR_FIAS` para sempre. O lugar certo é a rota
+`POST /aulas/{id}/transcricao/concluir`, que é a ação deliberada do professor
+dizendo "está bom assim":
+
+```python
+    aula.status = "READY_FOR_FIAS"
+    if not has_active_job(db, aula.id):
+        enqueue(db, aula.id, "classify_fias")
+```
+
+**Reabrir a revisão não enfileira.** Editar um trecho depois de `FIAS_COMPLETED`
+devolve a aula a `READY_FOR_FIAS` mas **não** dispara o job: o professor está de
+volta ao modo de revisão e vai concluir de novo quando terminar. Enfileirar a cada
+edição criaria uma tempestade de jobs — cinquenta trechos corrigidos, cinquenta
+classificações da aula inteira.
 
 - [ ] **Step 4: Rodar e confirmar que passa**
 
