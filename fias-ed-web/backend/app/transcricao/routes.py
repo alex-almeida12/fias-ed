@@ -15,11 +15,12 @@ from sqlalchemy.orm import Session
 
 from app.audit import audit
 from app.auth.deps import Actor, current_actor
-from app.aulas.service import aula_payload, current_audio, get_owned_aula
+from app.aulas.service import aula_payload, current_audio, get_owned_aula, has_active_job
 from app.core.db import get_db
 from app.core.errors import AppError
 from app.core.logging import log_event
 from app.core.messages import error_message
+from app.jobs.queue import enqueue
 from app.models import Falante
 from app.transcricao.service import (VozDesconhecida, atribuir_papeis, get_owned_segmento,
                                      precisa_reclassificar, revisar_segmento, segmento_payload,
@@ -114,6 +115,15 @@ def concluir_transcricao(aula_id: uuid.UUID, actor: Actor = Depends(current_acto
     if aula.status != "READY_FOR_TRANSCRIPT_REVIEW":
         raise AppError(409, "AULA_STATE", "Esta aula não está em revisão de transcrição.")
     aula.status, aula.error_code = "READY_FOR_FIAS", None
+    # A ação deliberada do professor dizendo "está bom assim" é o único lugar que
+    # enfileira a classificação: sem isto a aula para em READY_FOR_FIAS para
+    # sempre, porque nenhum outro caminho de produção chama enqueue. Reabrir a
+    # revisão (editar_segmento) não enfileira de novo — o professor volta ao modo
+    # de revisão e conclui de novo quando terminar; enfileirar a cada edição
+    # transformaria cinquenta correções em cinquenta classificações da aula
+    # inteira. has_active_job evita duplicar se um job ainda estiver em curso.
+    if not has_active_job(db, aula.id):
+        enqueue(db, aula.id, "classify_fias")
     audit(db, actor, "aula", aula.id, "update")
     db.commit()
     log_event("revisao_concluida", aula_id=aula.id)

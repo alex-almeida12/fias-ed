@@ -21,9 +21,9 @@ from app.jobs.queue import enqueue
 from app.core.config import get_settings
 from app.ml.fakes import ClassificadorFalso
 from app.ml.registry import carregar_registro, entrada
-from app.models import (Audio, ClassificacaoFIAS, Falante, IndicadorFIAS, ModeloIA, Processamento,
+from app.models import (Audio, ClassificacaoFIAS, Falante, IndicadorFIAS, Job, ModeloIA, Processamento,
                         Segmento, Transcricao)
-from tests.helpers import make_aula, make_user
+from tests.helpers import login, make_aula, make_user
 
 
 def _construir_aula(db, username: str, *, status: str, segmentos_spec: list[tuple[str, str, bool]]):
@@ -107,15 +107,30 @@ def classificador_falso_indeciso(monkeypatch):
 def aula_classificada(db, classificador_falso):
     """Uma aula que já passou pela classificação uma vez — o cenário de
     reclassificação (spec §3: editar depois de FIAS_COMPLETED reabre e
-    reclassifica; evidência e resultado não podem ficar fora de sincronia)."""
+    reclassifica; evidência e resultado não podem ficar fora de sincronia).
+
+    Chama `classificar_aula` direto (não passa pela fila) de propósito: esta
+    fixture é estado ("a aula já foi classificada"), não um teste do job em si
+    — isso já é coberto por `_rodar`/HANDLERS nos testes que exercitam o job.
+    Passar pela fila aqui deixaria um Job "done" de bônus, o que quebraria
+    `test_reabrir_a_revisao_nao_enfileira` (que checa contagem zero de Job)."""
     aula = _construir_aula(db, "diana-fias", status="READY_FOR_FIAS", segmentos_spec=[
         ("PROFESSOR", "a professora explica a questão", True),
         ("ALUNO", "o aluno responde a pergunta", True),
     ])
-    job = enqueue(db, aula.id, "classify_fias")
+    fias_service.classificar_aula(db, aula)
+    aula.status, aula.error_code = "FIAS_COMPLETED", None
     db.commit()
-    HANDLERS["classify_fias"](db, job)
     return aula
+
+
+@pytest.fixture
+def aula_em_revisao(db):
+    """Em READY_FOR_TRANSCRIPT_REVIEW — o status que `POST
+    /transcricao/concluir` exige antes de avançar."""
+    return _construir_aula(db, "elisa-fias", status="READY_FOR_TRANSCRIPT_REVIEW", segmentos_spec=[
+        ("PROFESSOR", "a professora explica a questão", True),
+    ])
 
 
 def _rodar(db, aula):
@@ -142,6 +157,39 @@ def classificacoes_de_papel(db, aula, papel: str) -> list[ClassificacaoFIAS]:
            .join(Falante, Falante.id == Segmento.falante_id)
            .join(Transcricao, Transcricao.id == Segmento.transcricao_id)
            .filter(Transcricao.aula_id == aula.id, Falante.role == papel).all())
+
+
+def primeiro_segmento(db, aula) -> Segmento:
+    return (db.query(Segmento).join(Transcricao, Transcricao.id == Segmento.transcricao_id)
+           .filter(Transcricao.aula_id == aula.id).order_by(Segmento.start_ms).first())
+
+
+# ---- Rodada de conserto 1: alguém precisa enfileirar classify_fias ----
+#
+# Todo teste acima enfileira o job à mão (via `_rodar`/enqueue direto), então a
+# suíte inteira ficava verde enquanto nenhum caminho de produção disparava a
+# classificação — a aula parava em READY_FOR_FIAS para sempre. Os dois testes
+# abaixo travam a costura: concluir a revisão enfileira; reabrir não.
+
+
+def test_concluir_a_revisao_enfileira_a_classificacao(client, db, aula_em_revisao):
+    """Sem isto a aula para em READY_FOR_FIAS para sempre, e a suíte não percebe
+    porque todo teste desta task enfileira o job à mão."""
+    login(client, "elisa-fias")
+    r = client.post(f"/api/aulas/{aula_em_revisao.id}/transcricao/concluir")
+    assert r.status_code == 200
+    assert db.query(Job).filter_by(aula_id=aula_em_revisao.id, type="classify_fias").count() == 1
+
+
+def test_reabrir_a_revisao_nao_enfileira(client, db, aula_classificada):
+    """Cinquenta trechos corrigidos não podem virar cinquenta classificações."""
+    login(client, "diana-fias")
+    seg = primeiro_segmento(db, aula_classificada)
+    r = client.patch(f"/api/segmentos/{seg.id}", json={"texto": "a", "version": seg.version})
+    assert r.status_code == 200
+    db.refresh(aula_classificada)
+    assert aula_classificada.status == "READY_FOR_FIAS"
+    assert db.query(Job).filter_by(aula_id=aula_classificada.id, type="classify_fias").count() == 0
 
 
 # ---- Steps 1-4: o job em si ----
