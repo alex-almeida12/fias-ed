@@ -113,9 +113,11 @@ Uma aula de 46 minutos foi processada de ponta a ponta pela interface, com os mo
 | Classificação FIAS | 45,9 s | 0,017× | **4,75 GB** |
 | **Total** | **31,6 min** | **0,683×** | **4,75 GB (31 % da memória disponível)** |
 
-**O pico é da classificação, e esse estágio não tem teto.** O classificador processa todos os segmentos da aula em uma única passagem, sem divisão em lotes. O consumo cresce linearmente com o número de segmentos — isto é, com a duração da aula **e** com o quanto a fala é fragmentada. Uma aula da mesma duração, porém com mais trocas de turno, consome proporcionalmente mais.
+**O pico é da classificação, e nessa execução esse estágio não tinha teto.** O classificador processava todos os segmentos da aula em uma única passagem, sem divisão em lotes, de modo que o consumo crescia linearmente com o número de segmentos — isto é, com a duração da aula **e** com o quanto a fala é fragmentada. Uma aula da mesma duração, porém com mais trocas de turno, consumiria proporcionalmente mais.
 
-Esse comportamento é uma característica da implementação, não uma medida do problema: dividir a classificação em lotes limitaria o pico sem alterar o resultado. Enquanto não for dividida, o consumo máximo do sistema não é um número fixo, e sim uma função do material processado.
+**A divisão em lotes foi implementada depois desta medição, e o teto passou a existir.** O classificador processa 16 segmentos por passagem. Medido no modelo real, isoladamente e com o mesmo método das demais seções: 381 segmentos — a quantidade desta aula — custavam 4,23 GB de pico em passagem única e passaram a custar **1,07 GB**; 762 segmentos custavam 7,65 GB e custam os mesmos 1,07 GB. O consumo máximo do estágio deixou de ser função do material processado, e o tempo de processamento não piorou. A execução completa da tabela acima não foi repetida, de modo que o número de 4,75 GB registra o comportamento anterior à correção, não o atual.
+
+**A correção não altera a classificação de nenhuma fala.** A entrada do modelo é idêntica linha a linha, porque cada par de turnos é preenchido até 256 tokens independentemente dos demais. A saída difere apenas na última casa da representação em float32, cuja ordem de redução depende da dimensão do lote: 1,9 × 10⁻⁶ no pior dos 381 segmentos, contra uma margem mínima de 0,231 entre o maior e o segundo maior logit de cada fala — nenhuma categoria muda. O que a exigência de reprodutibilidade pede é que a mesma aula reprocessada produza o mesmo resultado, e isso o lote de tamanho fixo garante integralmente.
 
 ### 5.2 Medições por etapa, em laboratório
 
@@ -134,7 +136,7 @@ Três observações metodológicas:
 2. **A transcrição de 90 minutos é uma extrapolação declarada.** A linearidade entre duração e tempo de processamento foi testada e **não se confirmou**. A extrapolação apoia-se em outro fato: o produto divide o áudio em trechos de 10 minutos e processa cada um independentemente, de modo que o caso longo é o trecho de 10 minutos — este sim medido — repetido. A unidade repetida é medida; apenas o número de repetições é inferido.
 3. **O custo dominante é a separação de vozes**, que consome 3,6 vezes o tempo da transcrição. Caso o tempo total precise ser reduzido, é nessa etapa que a intervenção tem efeito; trocar o modelo de transcrição por um menor economizaria cerca de 13 dos 69 minutos.
 
-Quanto à memória, as etapas se comportam de forma oposta, e convém não generalizar de uma para a outra. Na separação de vozes o consumo quase não depende da duração (2,41 GB para 2,5 minutos contra 2,58 GB para 90 minutos), pois é dominado pelo modelo carregado. Na classificação, ao contrário, o consumo cresce com a quantidade de segmentos, pela razão descrita na seção 5.1 — e é ela que determina o pico do sistema.
+Quanto à memória, as etapas se comportam de forma oposta, e convém não generalizar de uma para a outra. Na separação de vozes o consumo quase não depende da duração (2,41 GB para 2,5 minutos contra 2,58 GB para 90 minutos), pois é dominado pelo modelo carregado. Na classificação o consumo crescia com a quantidade de segmentos, pela razão descrita na seção 5.1; com a divisão em lotes ele passou a ser constante (1,07 GB, medidos tanto para 381 quanto para 762 segmentos), de modo que nenhum dos três estágios tem mais consumo proporcional ao tamanho da aula.
 
 ---
 

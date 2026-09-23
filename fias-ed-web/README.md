@@ -302,6 +302,51 @@ de aula com diarização de referência, que o projeto não tem. A fala do libfl
 serve para medir custo de processamento, não acerto. DER segue
 `PENDING_SCIENTIFIC_VALIDATION`.
 
+### Custo da classificação FIAS
+
+O BERTimbau é o terceiro modelo do mesmo worker, e por muito tempo foi o único
+sem medição — o que fez a conta de memória do projeto errar por quase 2x. Numa
+aula de 46 min percorrida pela interface, o processo ia a 2,73 GB no fim da
+diarização e saltava para **4,75 GB** durante os ~46 s da classificação.
+
+A causa não era o modelo (são 0,46 GB carregado), e sim a falta de lote:
+`logits()` mandava os 381 segmentos da aula numa passagem só, e as ativações do
+BERT — sobretudo a matriz de atenção, `linhas x cabeças x 256 x 256` — crescem
+com o número de linhas do lote. O pico era função da duração da aula **e** do
+quanto a fala é picada, sem teto previsto. Hoje o lote é fixo
+(`TAMANHO_DO_LOTE` em `app/ml/clf_bertimbau.py`, 16), e
+`scripts/medir_classificacao.py` mede os dois lados com o método dos outros dois
+scripts (`resource.getrusage`, um processo por célula, modelo real):
+
+```bash
+docker compose -f docker-compose.test.yml run --rm \
+    -v fias-ed-web_models:/models:ro api-test python /app/scripts/medir_classificacao.py
+```
+
+**Medido** (uma execução por célula):
+
+| Segmentos | Lote | Classificação | Pico de memória | % da máquina |
+|---|---|---|---|---|
+| 381 | passagem única | 47,8 s | 4,23 GB | 27% |
+| 381 | 16 | 52,9 s | **1,07 GB** | 7% |
+| 762 | passagem única | 106,9 s | 7,65 GB | 49% |
+| 762 | 16 | 106,9 s | **1,07 GB** | 7% |
+
+Dobrar a aula dobrava a memória (4,23 → 7,65 GB) e agora não muda nada
+(1,07 → 1,07 GB, dos quais 0,46 GB são o modelo carregado). O tempo não piora
+fora do ruído de medição.
+
+**O lote não muda a categoria de nenhuma fala.** A entrada do modelo é idêntica
+linha a linha — com `padding: "max_length"` cada par ocupa 256 tokens
+independentemente de quem está no mesmo lote —, mas a saída não é bit a bit
+igual: o produto de matrizes em float32 escolhe a ordem de redução conforme a
+dimensão do lote. Medida a diferença, ela é de **1,9e-6** no pior dos 381
+segmentos, contra uma margem mínima de **0,231** entre o maior e o segundo maior
+logit; nenhuma das 381 categorias muda, e o mesmo vale em 762. Nenhum tamanho de
+lote reproduz os valores de outro tamanho — o que o §44 pede é que a **mesma**
+aula reprocessada dê o mesmo resultado, e isso o lote fixo garante bit a bit
+(`test_bertimbau_em_lote_e_reproduzivel`).
+
 ### Tamanho máximo do áudio
 
 O limite é 1,5 GB (`MAX_UPLOAD_BYTES=1610612736` no `.env`) e está repetido no

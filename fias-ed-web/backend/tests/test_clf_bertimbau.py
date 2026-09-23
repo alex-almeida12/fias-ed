@@ -1,6 +1,9 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+
+from fias_ed_engine.rules import load_rules
 
 from app.ml import clf_bertimbau
 from app.ml.clf_bertimbau import _parametros_tokenizacao, _tokenizar, categoria_de, montar_pares
@@ -141,3 +144,116 @@ def test_parametros_tokenizacao_recusa_formato_de_entrada_inesperado(monkeypatch
     monkeypatch.setattr(clf_bertimbau, "load_rules", regras_falsas)
     with pytest.raises(ValueError):
         _parametros_tokenizacao()
+
+
+# ---- lote: o pico de memória deixa de crescer com a aula --------------------------
+
+
+class _TokenizerPorLinha:
+    """Tokenizer falso em que cada par gera uma linha diferente das outras.
+
+    Um tokenizer que devolvesse a mesma linha para todo par (como o
+    `_TokenizerFalso` acima) tornaria a comparação entre lote e passagem única
+    verdadeira por acidente: qualquer embaralhamento ou repetição de linhas
+    passaria despercebido. Aqui os ids saem do texto, então trocar duas linhas
+    de lugar muda os valores."""
+
+    def __call__(self, a, b, padding, truncation, max_length):
+        linhas = []
+        for texto_a, texto_b in zip(a, b):
+            ids = [101] + [ord(c) for c in texto_a] + [102] + [ord(c) for c in texto_b] + [102]
+            ids = ids[:max_length]
+            linhas.append(ids + [0] * (max_length - len(ids)))
+        return {
+            "input_ids": linhas,
+            "attention_mask": [[1 if i else 0 for i in linha] for linha in linhas],
+            "token_type_ids": [[0] * len(linha) for linha in linhas],
+        }
+
+
+class _ModeloPorLinha:
+    """Modelo falso cujos logits dependem só da própria linha — como um BERT em
+    eval(), onde uma linha não influencia a outra. Anota o tamanho de cada lote
+    recebido, que é como o teste distingue "dividiu em lotes" de "mandou tudo de
+    uma vez e o resultado por acaso bateu"."""
+
+    def __init__(self):
+        self.lotes_recebidos: list[int] = []
+
+    def __call__(self, **tensores):
+        import torch
+
+        ids = tensores["input_ids"]
+        self.lotes_recebidos.append(int(ids.shape[0]))
+        soma = ids.sum(dim=1).to(torch.float64)
+        colunas = torch.arange(1, 11, dtype=torch.float64)
+        return SimpleNamespace(logits=soma.unsqueeze(1) / (colunas * 7))
+
+
+def _classificador_falso() -> tuple[clf_bertimbau.BertimbauClassificador, _ModeloPorLinha]:
+    """Instância sem __init__: carregar o BERTimbau de verdade aqui exigiria o
+    peso em disco, e o que está em teste é a divisão em lotes, não o load."""
+    clf = object.__new__(clf_bertimbau.BertimbauClassificador)
+    modelo = _ModeloPorLinha()
+    clf._tok, clf._modelo = _TokenizerPorLinha(), modelo
+    return clf, modelo
+
+
+def _pares_de_teste(n: int) -> list[tuple[str, str]]:
+    return montar_pares([f"fala numero {i} da aula" for i in range(n)])
+
+
+def test_logits_em_lote_sao_identicos_a_passagem_unica(monkeypatch):
+    """O ponto do conserto inteiro (§44). Contar linhas não prova nada: um lote
+    quebrado — deslocado, repetido, fora de ordem — devolve a quantidade certa
+    de linhas com os valores errados. O que prova é a igualdade valor a valor
+    contra a passagem única, com mais segmentos do que cabe num lote."""
+    pares = _pares_de_teste(37)
+
+    clf, modelo = _classificador_falso()
+    monkeypatch.setattr(clf_bertimbau, "TAMANHO_DO_LOTE", len(pares) * 10)
+    passagem_unica = clf.logits(pares)
+    assert modelo.lotes_recebidos == [37], "a referência precisa ser mesmo uma passagem só"
+
+    clf_lote, modelo_lote = _classificador_falso()
+    monkeypatch.setattr(clf_bertimbau, "TAMANHO_DO_LOTE", 8)
+    em_lote = clf_lote.logits(pares)
+
+    assert modelo_lote.lotes_recebidos == [8, 8, 8, 8, 5], "não houve divisão em lotes"
+    assert em_lote == passagem_unica
+
+
+def test_logits_de_lista_vazia_nao_chama_o_modelo():
+    clf, modelo = _classificador_falso()
+    assert clf.logits([]) == []
+    assert modelo.lotes_recebidos == []
+
+
+def test_logits_com_menos_segmentos_que_um_lote(monkeypatch):
+    """Aula curta: três segmentos, lote de 16. Uma passagem só, com as três
+    linhas — e nada de um lote vazio no fim."""
+    pares = _pares_de_teste(3)
+    clf, modelo = _classificador_falso()
+    monkeypatch.setattr(clf_bertimbau, "TAMANHO_DO_LOTE", 16)
+    saida = clf.logits(pares)
+    assert modelo.lotes_recebidos == [3]
+    assert len(saida) == 3
+
+
+def test_logits_com_numero_exato_de_lotes_nao_faz_passagem_vazia(monkeypatch):
+    """Múltiplo exato do lote: 16 segmentos em lotes de 8 são duas passagens, não
+    três — uma terceira, vazia, faria o modelo receber um tensor de zero linhas."""
+    pares = _pares_de_teste(16)
+    clf, modelo = _classificador_falso()
+    monkeypatch.setattr(clf_bertimbau, "TAMANHO_DO_LOTE", 8)
+    assert len(clf.logits(pares)) == 16
+    assert modelo.lotes_recebidos == [8, 8]
+
+
+def test_tamanho_do_lote_e_decisao_local_e_nao_sai_do_shared():
+    """fias_rules.classifier não declara lote, e não deve: lote não muda
+    resultado (a igualdade acima), só memória. Se um dia declarar, este teste
+    cai e a decisão volta a ser do shared, como manda "o motor decide"."""
+    classificador = load_rules("fias_rules")["classifier"]
+    assert not [chave for chave in classificador if "batch" in chave or "lote" in chave]
+    assert isinstance(clf_bertimbau.TAMANHO_DO_LOTE, int) and clf_bertimbau.TAMANHO_DO_LOTE > 0
