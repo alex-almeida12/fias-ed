@@ -97,6 +97,10 @@
   .list__item { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
 }
 .meta { color: var(--color-text-muted); font-size: var(--type-caption-size); }
+/* Trechos de áudio dentro de um item de lista (Task 8: "qual destas vozes é
+   você?"). Mesmo raciocínio de .audio-area audio: o controle é nativo do
+   navegador, mas o bloco em volta segue a medida e o ritmo vertical do resto. */
+.list__item audio { display: block; width: 100%; max-width: 24rem; margin-top: var(--space-2); }
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { text-align: left; padding: var(--space-3) var(--space-2); border-bottom: var(--border-hairline) solid var(--color-border); }
 /* Tabela de texto mantém o alinhamento vertical ao meio: a linha de texto casa com

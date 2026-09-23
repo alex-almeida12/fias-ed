@@ -52,6 +52,9 @@ def create_app() -> FastAPI:
 
     from app.audio.routes import router as audio_router
     app.include_router(audio_router, prefix="/api")
+
+    from app.transcricao.routes import router as transcricao_router
+    app.include_router(transcricao_router, prefix="/api")
     return app
 
 

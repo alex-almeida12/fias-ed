@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { api, ApiError, sendAndProcess } from "../api/client";
 import type { Aula } from "../api/types";
 import { AudioPicker } from "../app/AudioPicker";
@@ -80,6 +80,10 @@ export function AulaPage() {
   }
 
   if (!aula) return error ? <Banner kind="error">{error}</Banner> : <p role="status">Carregando…</p>;
+
+  // O sistema não decide sozinho qual voz é a do professor (§48): aula pronta para
+  // essa escolha leva direto para a tela dela, em vez de ficar parada aqui.
+  if (aula.status === "READY_FOR_SPEAKER_REVIEW") return <Navigate to={`/aulas/${id}/vozes`} replace />;
 
   const podeEnviar = !aula.job_ativo && PODE_TROCAR.has(aula.status);
   const mostrarEnvio = podeEnviar && (aula.status === "DRAFT" || aula.status === "ERROR" || trocando);

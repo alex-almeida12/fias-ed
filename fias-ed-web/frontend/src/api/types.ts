@@ -41,6 +41,15 @@ export interface Aula extends AulaResumo {
   alterada_pelo_admin_em: string | null;
 }
 
+export interface VozAmostra { inicio_ms: number; fim_ms: number }
+
+export interface Voz {
+  rotulo: string;
+  tempo_total_ms: number;
+  n_segmentos: number;
+  amostras: VozAmostra[];
+}
+
 export interface Conta {
   id: string;
   username: string;

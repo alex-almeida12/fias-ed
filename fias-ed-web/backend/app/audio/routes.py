@@ -6,7 +6,9 @@ from urllib.parse import unquote
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
+from app.audio.prepare import extrair_trecho
 from app.audio.storage import abs_path, delete_file, ensure_dirs, store_root
 from app.audit import audit
 from app.auth.deps import Actor, current_actor
@@ -91,11 +93,23 @@ async def upload_audio(aula_id: uuid.UUID, request: Request, actor: Actor = Depe
 
 
 @router.get("/aulas/{aula_id}/audio")
-def play_audio(aula_id: uuid.UUID, actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
+def play_audio(aula_id: uuid.UUID, inicio_ms: int | None = None, fim_ms: int | None = None,
+               actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
     aula = get_owned_aula(db, actor, aula_id)
     audio = current_audio(db, aula.id)
     if audio is None:
         raise AppError(404, "AUDIO_NAO_ENCONTRADO", "Esta aula ainda não tem áudio conferido.")
     audit(db, actor, "aula", aula.id, "read")
     db.commit()
-    return FileResponse(abs_path(audio.path), media_type=audio.mime_type, content_disposition_type="inline")
+    if inicio_ms is None and fim_ms is None:
+        return FileResponse(abs_path(audio.path), media_type=audio.mime_type, content_disposition_type="inline")
+    # Trecho avulso para audição (Task 8: ouvir a amostra de uma voz antes de
+    # escolher qual é a do professor). É um corte de verdade via ffmpeg, não um
+    # Range de bytes — o navegador não converte milissegundos em offset de byte
+    # de um WAV/MP3/M4A/AAC/FLAC.
+    if inicio_ms is None or fim_ms is None or inicio_ms < 0 or fim_ms <= inicio_ms:
+        raise AppError(422, "TRECHO_INVALIDO", "Informe o início e o fim do trecho corretamente.")
+    trecho = store_root() / "tmp" / f"trecho-{uuid.uuid4()}.wav"
+    extrair_trecho(abs_path(audio.path), inicio_ms, fim_ms, trecho)
+    return FileResponse(trecho, media_type="audio/wav", content_disposition_type="inline",
+                        background=BackgroundTask(trecho.unlink))

@@ -138,3 +138,52 @@ def test_playback_requires_validated_audio_and_supports_range(client, db):
     assert r.status_code == 200 and r.headers["content-type"].startswith("audio/wav")
     r = client.get(f"/api/aulas/{aula.id}/audio", headers={"Range": "bytes=0-3"})
     assert r.status_code == 206 and r.content == b"0123"
+
+
+# Não vem dos passos do brief da Task 8 (que só lista `test_escolha_voz.py`), mas a
+# interface que a própria task promete — `GET /api/aulas/{id}/audio?inicio_ms=&fim_ms=`,
+# "trecho para ouvir" — não existia antes dela: sem isto, o `<audio>` de cada amostra na
+# tela "qual destas vozes é você?" tocaria a aula inteira do começo, não os poucos
+# segundos daquela voz. O corte é de verdade (ffmpeg), não um Range de bytes: o
+# navegador não sabe converter milissegundos em offset de byte de um WAV/MP3/etc.
+def _aula_com_audio_real(db, tmp_path, *, seconds=10, status="AUDIO_VALIDATED"):
+    ana = make_user(db, "ana")
+    aula = make_aula(db, ana, status=status)
+    origem = store_root() / "original"
+    origem.mkdir(parents=True, exist_ok=True)
+    caminho = make_audio(origem / f"{uuid.uuid4()}.wav", seconds=seconds)
+    db.add(Audio(aula_id=aula.id, original_filename="aula.wav", internal_filename=caminho.name,
+                 path=f"original/{caminho.name}", mime_type="audio/wav", size_bytes=caminho.stat().st_size,
+                 duration_ms=int(seconds * 1000), sha256="0" * 64, channels=1, sample_rate=16000,
+                 is_original=True))
+    db.commit()
+    return aula, caminho
+
+
+def test_playback_com_inicio_e_fim_devolve_so_o_trecho_pedido(client, db, tmp_path):
+    from app.audio.probe import probe
+
+    aula, caminho = _aula_com_audio_real(db, tmp_path, seconds=10)
+    login(client, "ana")
+    r = client.get(f"/api/aulas/{aula.id}/audio", params={"inicio_ms": 2000, "fim_ms": 4000})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("audio/wav")
+    recortado = tmp_path / "recebido.wav"
+    recortado.write_bytes(r.content)
+    duracao = probe(recortado).duration_ms
+    assert abs(duracao - 2000) <= 50  # tolerância de um quadro, como test_audio_prepare.py
+    # prova que é mesmo um corte, não o arquivo original inteiro sendo devolvido
+    assert len(r.content) < caminho.stat().st_size
+
+
+def test_playback_so_com_inicio_ms_e_invalido(client, db, tmp_path):
+    aula, _ = _aula_com_audio_real(db, tmp_path)
+    login(client, "ana")
+    r = client.get(f"/api/aulas/{aula.id}/audio", params={"inicio_ms": 1000})
+    assert r.status_code == 422 and r.json()["error_code"] == "TRECHO_INVALIDO"
+
+
+def test_playback_com_fim_antes_do_inicio_e_invalido(client, db, tmp_path):
+    aula, _ = _aula_com_audio_real(db, tmp_path)
+    login(client, "ana")
+    r = client.get(f"/api/aulas/{aula.id}/audio", params={"inicio_ms": 4000, "fim_ms": 2000})
+    assert r.status_code == 422 and r.json()["error_code"] == "TRECHO_INVALIDO"

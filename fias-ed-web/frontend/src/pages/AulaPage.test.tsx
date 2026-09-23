@@ -20,6 +20,18 @@ test("erro mostra a mensagem humana e permite enviar outro áudio", async () => 
   expect(screen.getByRole("button", { name: "Selecionar áudio" })).toBeInTheDocument();
 });
 
+// Task 8: o sistema não decide sozinho qual voz é a do professor — READY_FOR_SPEAKER_REVIEW
+// leva direto à tela de escolha, em vez de mostrar a Aula parada nesse estado.
+test("aula aguardando escolha de voz leva direto à tela de vozes", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/aulas/a1": () => jsonResponse({ ...BASE, status: "READY_FOR_SPEAKER_REVIEW" }),
+    "GET /api/aulas/a1/vozes": () => jsonResponse({ vozes: [] }),
+  });
+  renderApp("/aulas/a1");
+  await waitFor(() => expect(window.location.pathname).toBe("/aulas/a1/vozes"));
+});
+
 test("aviso de alteração pelo administrador", async () => {
   mockApi({
     "GET /api/auth/me": () => jsonResponse(PROFESSORA),

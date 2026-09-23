@@ -62,6 +62,17 @@ def cortar(origem: Path, plano: list[tuple[int, int]], dir_destino: Path) -> lis
     return chunks
 
 
+def extrair_trecho(origem: Path, inicio_ms: int, fim_ms: int, destino: Path) -> None:
+    """Recorta um trecho do áudio original para audição avulsa (Task 8: ouvir a
+    amostra de uma voz antes de escolher qual é a do professor). Sempre grava em
+    WAV — o áudio original pode estar em qualquer um dos formatos aceitos, e a
+    resposta HTTP só carrega um Content-Type."""
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    _rodar(["ffmpeg", "-nostdin", "-y", "-i", str(origem), "-ss", f"{inicio_ms / 1000:.3f}",
+            "-t", f"{(fim_ms - inicio_ms) / 1000:.3f}", "-ac", "1", "-ar", "16000",
+            "-c:a", "pcm_s16le", str(destino)])
+
+
 def work_path(aula_id: uuid.UUID) -> Path:
     """Caminho da cópia de trabalho — derivado só do UUID da aula, nunca de nome vindo do professor."""
     return store_root() / "work" / f"{aula_id}.wav"

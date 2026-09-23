@@ -3,6 +3,7 @@ import { Home } from "../pages/Home";
 import { TrocarSenha } from "../pages/TrocarSenha";
 import { AulaPage } from "../pages/AulaPage";
 import { Dashboard } from "../pages/Dashboard";
+import { EscolhaVoz } from "../pages/EscolhaVoz";
 import { NovaAula } from "../pages/NovaAula";
 import { AdminAulas } from "../pages/admin/AdminAulas";
 import { Contas } from "../pages/admin/Contas";
@@ -22,6 +23,7 @@ export function App() {
             <Route path="/aulas" element={<Dashboard />} />
             <Route path="/aulas/nova" element={<NovaAula />} />
             <Route path="/aulas/:id" element={<AulaPage />} />
+            <Route path="/aulas/:id/vozes" element={<EscolhaVoz />} />
             <Route path="/admin/contas" element={<RequireAdmin><Contas /></RequireAdmin>} />
             <Route path="/admin/aulas" element={<RequireAdmin><AdminAulas /></RequireAdmin>} />
             <Route path="/admin/escolas" element={<RequireAdmin><Escolas /></RequireAdmin>} />
