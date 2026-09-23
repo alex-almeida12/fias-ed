@@ -266,30 +266,47 @@ npm --prefix frontend audit --audit-level=high
 | Ferramenta | Resultado |
 |---|---|
 | bandit (severidade alta) | `No issues identified.` (2 achados médios, 0 altos) |
-| pip-audit | **7 vulnerabilidades conhecidas em 2 pacotes** — ver abaixo |
+| pip-audit | `Found 8 known vulnerabilities in 1 package` — 5 CVEs distintas, todas no `transformers`; ver abaixo |
 | npm audit (alta ou crítica) | `found 0 vulnerabilities` |
+
+(O `pip-audit` imprime 8 linhas para 5 CVEs: três delas aparecem duas vezes,
+uma com a versão corrigida final e outra com a pré-lançamento. O `torch`, o
+`torchaudio` e o `pt_core_news_sm` saem como `Dependency not found on PyPI`:
+vêm do índice de wheels CPU do PyTorch e do release do spaCy, e não são
+auditados aqui.)
 
 ### pip-audit: achados em aberto
 
-Esta é a primeira execução do `pip-audit` sobre o conjunto de dependências de
-W2, que trouxe `torch`, `transformers`, `faster-whisper` e `pyannote.audio`.
-A execução anterior (W1) dizia `No known vulnerabilities found`; aquele
-resultado valia para um conjunto de dependências que não existe mais.
+A execução de W1 dizia `No known vulnerabilities found`; aquele resultado valia
+para um conjunto de dependências que não existe mais — W2 trouxe `torch`,
+`transformers`, `faster-whisper` e `pyannote.audio`, e com eles 7 achados em 2
+pacotes. Os dois do `setuptools` foram corrigidos; os cinco do `transformers`
+continuam em aberto, por decisão.
+
+**`setuptools`: corrigido.** Ele nunca esteve no `pyproject.toml`. A imagem base
+não o traz; quem o puxava era o requisito `setuptools; python_version >= "3.12"`
+do `torch`, resolvido do índice de wheels CPU do PyTorch, que só hospeda até a
+78.1.0. O Dockerfile agora instala `setuptools>=78.1.1` do PyPI **antes** do
+`torch`, e a imagem ficou com a 84.0.0 — o que fecha tanto a CVE-2025-47273
+(**HIGH**, path traversal em `PackageIndex.download`, corrigida na 78.1.1)
+quanto a CVE-2026-59890 (MODERATE, corrigida na 83.0.0). Mexer no `requires` do
+`[build-system]` não resolveria: aquilo vale para o ambiente isolado de
+construção do pacote, não para o que fica instalado na imagem.
+
+**`transformers`: em aberto.** Continua na 4.57.6:
 
 | Pacote | Versão | ID | Severidade | O quê | Corrigido em |
 |---|---|---|---|---|---|
-| setuptools | 78.1.0 | CVE-2025-47273 (PYSEC-2025-49) | **HIGH** | Path traversal em `PackageIndex.download` → escrita de arquivo arbitrária | 78.1.1 |
-| setuptools | 78.1.0 | CVE-2026-59890 (PYSEC-2026-3447) | MODERATE | Bypass de exclusão do `MANIFEST.in` no sdist (macOS) | 83.0.0 |
 | transformers | 4.57.6 | CVE-2025-14929 (PYSEC-2025-217) | **HIGH** (CVSS 7.8) | — | sem versão corrigida publicada |
 | transformers | 4.57.6 | CVE-2026-1839 (PYSEC-2026-2288) | MODERATE | Execução de código arbitrário na classe `Trainer` | 5.0.0 |
 | transformers | 4.57.6 | CVE-2026-4372 (PYSEC-2026-2289) | **HIGH** | Execução remota de código | 5.3.0 |
 | transformers | 4.57.6 | CVE-2026-5241 (PYSEC-2026-2290) | **HIGH** | Execução de código no carregamento do modelo (caminho do LightGlue) | 5.5.0 |
 | transformers | 4.57.6 | CVE-2026-9856 (PYSEC-2026-3929) | **HIGH** | Path traversal em `save_pretrained` → escrita de arquivo arbitrária | 5.10.0 |
 
-**Nada foi tratado ainda: a decisão está em aberto.** As correções do
-`transformers` exigem a série 5.x, uma troca de versão maior, e por isso não
-são uma atualização de rotina. Até que a decisão seja tomada, fica registrado
-o que o produto de fato faz — o que reduz, mas não elimina, a exposição:
+As correções exigem a série 5.x, uma troca de versão maior, e por isso não são
+uma atualização de rotina. A decisão foi ficar na 4.57.6 e registrar a
+exposição. Fica registrado, então, o que o produto de fato faz — o que reduz,
+mas não elimina, a exposição:
 
 - O produto **não treina** e **não chama `save_pretrained`**: `Trainer`
   (CVE-2026-1839) e `save_pretrained` (CVE-2026-9856) não estão nos caminhos
@@ -299,8 +316,8 @@ o que o produto de fato faz — o que reduz, mas não elimina, a exposição:
   somente leitura, com `local_files_only=True` e `HF_HUB_OFFLINE=1`, e depois
   de `app/ml/registry.py` conferir SHA-256 de cada artefato e recusar o
   diretório se houver `forbidden_files`. Nenhum peso vem da rede em execução.
-- `setuptools` é dependência de construção da imagem; `PackageIndex.download`
-  (CVE-2025-47273) não é chamado em execução.
+- Sobre a CVE-2025-14929 não há o que dizer: não há versão corrigida publicada
+  e o aviso não descreve o caminho afetado.
 
 ## 7. Backup e restauração
 
