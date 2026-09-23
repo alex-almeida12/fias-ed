@@ -11,6 +11,7 @@ from app.audio.validation import ValidationFailed, check
 from app.aulas.service import pending_upload
 from app.core.config import get_settings
 from app.core.logging import log_event
+from app.fias.service import classificar_aula
 from app.jobs.queue import enqueue, fail_job, finish_job
 from app.ml.loader import obter_asr, obter_diarizador
 from app.ml.protocols import SegmentoASR
@@ -159,9 +160,24 @@ def handle_diarize(db: Session, job: Job) -> None:
     log_event("diarizacao_pronta", aula_id=aula.id, job_id=job.id, n_vozes=len(set(filter(None, rotulos))))
 
 
+def handle_classify_fias(db: Session, job: Job) -> None:
+    aula = db.get(Aula, job.aula_id)
+    transcricao = transcricao_da_aula(db, job.aula_id) if aula is not None else None
+    if aula is None or aula.deleted_at is not None or transcricao is None:
+        finish_job(db, job)
+        db.commit()
+        return
+    classificar_aula(db, aula)
+    aula.status, aula.error_code = "FIAS_COMPLETED", None
+    finish_job(db, job)
+    db.commit()
+    log_event("fias_pronto", aula_id=aula.id, job_id=job.id)
+
+
 HANDLERS = {
     "validate_audio": handle_validate_audio,
     "prepare_audio": handle_prepare_audio,
     "transcribe": handle_transcribe,
     "diarize": handle_diarize,
+    "classify_fias": handle_classify_fias,
 }

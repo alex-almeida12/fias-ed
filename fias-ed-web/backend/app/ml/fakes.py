@@ -25,10 +25,14 @@ class DiarizadorFalso:
 
 
 class ClassificadorFalso:
-    def __init__(self, categoria_fixa: int = 1) -> None:
-        self._indice = categoria_fixa - 1  # logit_index_offset = 1
+    def __init__(self, categoria_fixa: int | None = 1) -> None:
+        # None → vetor uniforme (nenhuma categoria domina): usado para testar o
+        # limiar de incerteza do shared (fias_rules.classifier.uncertain_below),
+        # sem inventar um segundo cálculo de confiança aqui.
+        self._indice = None if categoria_fixa is None else categoria_fixa - 1  # logit_index_offset = 1
 
     def logits(self, pares: list[tuple[str, str]]) -> list[list[float]]:
         vetor = [0.0] * 10
-        vetor[self._indice] = 10.0
+        if self._indice is not None:
+            vetor[self._indice] = 10.0
         return [list(vetor) for _ in pares]
