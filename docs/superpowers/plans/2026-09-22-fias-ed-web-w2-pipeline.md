@@ -2949,14 +2949,21 @@ Acrescentar as entradas do `pyannote` e do `faster-whisper` a
 `fias-ed-shared/scientific-config/models.json`, no formato que já existe
 (`model_id`, `artifacts[].sha256`, `license`, `validation_status`).
 
-- [ ] **Step 6: Rodar o setup e os testes lentos**
+- [x] **Step 6: Rodar o setup e os testes lentos**
 
-> **BLOQUEADO na parte da diarização.** `pyannote/speaker-diarization-3.1` e
-> `pyannote/segmentation-3.0` são repositórios com condições de uso: o token
-> volta `403 GatedRepo` ("you are not in the authorized list") enquanto a conta
-> dona do token não aceitar as condições na página de cada um. Sem isso não dá
-> para baixar o peso, nem conferir o carregamento offline do pipeline. A parte
-> do ASR foi baixada e os três testes `lento` do Whisper passam offline.
+> **DESBLOQUEADO em 2026-09-23** e concluído. As condições de uso dos dois
+> repositórios do `pyannote` foram aceitas pela conta dona do token, o setup
+> devolveu `MODELOS OK` com os três modelos, e os quatro testes `lento` passam.
+>
+> O gate aberto **não era o único bloqueio**: com os pesos em disco a diarização
+> ainda não carregava, porque desde o torch 2.6 o `torch.load` desempacota com
+> `weights_only=True` e os checkpoints do `pyannote` guardam quatro tipos fora
+> da lista permitida ao lado dos pesos. Morria antes de tocar num peso, com ou
+> sem rede — e estava escondido atrás do 403. Corrigido em `diar_pyannote.py`
+> por `add_safe_globals` dos quatro tipos, e **não** por `weights_only=False`,
+> que devolveria o pickle irrestrito que o próprio registro recusa.
+>
+> Carregamento offline provado na imagem de produção com `--network none`.
 
 Run: `docker compose run --rm -e HUGGINGFACE_TOKEN=<token> api python /app/scripts/setup_models.py`
 Expected: `MODELOS OK`
