@@ -171,6 +171,21 @@ def test_transcricao_vem_paginada_em_blocos_de_cinco_minutos(client, aula_com_tr
     assert {s["texto"] for s in r9.json()["segmentos"]} == {"bloco 9"}
 
 
+def test_patch_marca_o_segmento_como_revisado_mesmo_sem_mudar_texto(client, db, segmento_qualquer):
+    """`revisado` (exigido por segmento.schema.json) é "o professor já passou por
+    este trecho" — diferente de `texto_revisado`, que só grava quando o texto
+    muda. Confirmar um trecho como correto (PATCH só com `version`, sem `texto`
+    nem `papel`) também é revisão; a tela de progresso da Task 10 depende disso."""
+    login(client, "carla")
+    assert segmento_qualquer.revisado is False
+    r = client.patch(f"/api/segmentos/{segmento_qualquer.id}", json={"version": segmento_qualquer.version})
+    assert r.status_code == 200
+    assert r.json()["revisado"] is True
+    db.refresh(segmento_qualquer)
+    assert segmento_qualquer.revisado is True
+    assert segmento_qualquer.texto_revisado is None  # nada mudou no texto
+
+
 def test_editar_texto_regrava_a_versao_pseudonimizada(client, db, segmento_qualquer):
     login(client, "carla")
     r = client.patch(f"/api/segmentos/{segmento_qualquer.id}",

@@ -112,7 +112,8 @@ def segmentos_do_bloco(db: Session, transcricao: Transcricao, bloco: int) -> lis
 
 def segmento_payload(seg: Segmento, papel: str) -> dict:
     return {"id": str(seg.id), "start_ms": seg.start_ms, "end_ms": seg.end_ms,
-            "texto": texto_efetivo(seg), "papel": papel, "version": seg.version}
+            "texto": texto_efetivo(seg), "papel": papel, "version": seg.version,
+            "revisado": seg.revisado}
 
 
 def get_owned_segmento(db: Session, actor, segmento_id: uuid.UUID) -> tuple[Segmento, uuid.UUID]:
@@ -156,10 +157,16 @@ def revisar_segmento(db: Session, seg: Segmento, *, texto: str | None, papel: st
     de estudante, a versão pseudonimizada tem que acompanhar, senão a correção
     vira um vazamento (PRIVACY.md §48).
 
+    Marca `revisado=True` sempre que a versão bate, mesmo numa chamada sem
+    `texto`/`papel` (só a versão): `revisado` (exigido pelo schema do shared) é
+    "o professor já passou por este trecho", distinto de `texto_revisado` (só
+    grava quando o texto muda) — confirmar um trecho como correto sem editar
+    nada também é revisão.
+
     Devolve False quando a versão não bateu (o trecho foi alterado por outra
     aba desde que quem chamou o leu, nada é escrito); True quando a edição foi
     aplicada."""
-    valores: dict = {"version": Segmento.version + 1}
+    valores: dict = {"version": Segmento.version + 1, "revisado": True}
     if texto is not None:
         valores["texto_revisado"] = texto
         valores["text_pseudonymized"] = pseudonimizar(texto)
