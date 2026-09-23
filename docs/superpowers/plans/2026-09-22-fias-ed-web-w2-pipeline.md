@@ -1923,7 +1923,7 @@ Itens 3 e 5 do Review Focus.
   - `PATCH /api/segmentos/{id}` com `{"texto": "...", "papel": "PROFESSOR"|"ALUNO", "version": N}` → segmento atualizado
   - `POST /api/aulas/{id}/transcricao/concluir` → detalhe da aula, status `READY_FOR_FIAS`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `backend/tests/test_revisao.py`:
 
@@ -1992,7 +1992,7 @@ def test_segmento_de_outro_professor_da_404(cliente_outro_professor, segmento_qu
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_revisao.py`
 Expected: FAIL com 404
 
-- [ ] **Step 2: Implementar as rotas**
+- [x] **Step 2: Implementar as rotas**
 
 `version` vem da coluna que o `EntityMixin` da W1 já traz. O `PATCH` compara e
 incrementa numa só instrução, para duas abas simultâneas não passarem as duas.
@@ -2028,12 +2028,12 @@ def editar_segmento(segmento_id: uuid.UUID, body: SegmentoPatch,
 
 Mensagem em `app/core/messages.py` para `SEGMENTO_DESATUALIZADO`.
 
-- [ ] **Step 3: Rodar e confirmar que passa**
+- [x] **Step 3: Rodar e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_revisao.py`
 Expected: PASS (7 testes)
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add fias-ed-web/backend
