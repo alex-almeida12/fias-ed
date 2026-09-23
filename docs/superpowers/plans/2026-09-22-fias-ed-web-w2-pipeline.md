@@ -1922,6 +1922,11 @@ Itens 3 e 5 do Review Focus.
   - `GET /api/aulas/{id}/transcricao?bloco=N` → `{"bloco": N, "blocos": M, "segmentos": [...]}`, blocos de 5 min
   - `PATCH /api/segmentos/{id}` com `{"texto": "...", "papel": "PROFESSOR"|"ALUNO", "version": N}` → segmento atualizado
   - `POST /api/aulas/{id}/transcricao/concluir` → detalhe da aula, status `READY_FOR_FIAS`
+  - **Editar um segmento depois de `FIAS_COMPLETED` devolve a aula a `READY_FOR_FIAS`.**
+    O spec §3 exige isso: "se ele reabrir a revisão depois de FIAS_COMPLETED, a aula
+    volta para READY_FOR_FIAS e reclassifica — evidência e resultado nunca ficam fora
+    de sincronia". Sem isso, o professor corrige um trecho e a tela de padrões continua
+    mostrando a classificação do texto antigo, sem nenhum sinal de que está desatualizada.
 
 - [x] **Step 1: Escrever o teste que falha**
 
@@ -1974,6 +1979,25 @@ def test_trocar_papel_de_um_segmento(cliente, db, segmento_qualquer):
     assert r.status_code == 200
     db.refresh(segmento_qualquer)
     assert segmento_qualquer.falante.role == "ALUNO"
+
+
+def test_editar_depois_do_fias_devolve_a_aula_para_reclassificar(cliente, db, aula_classificada):
+    """spec §3: evidência e resultado não podem ficar fora de sincronia. Sem isto,
+    a tela de padrões seguiria mostrando a classificação do texto antigo."""
+    seg = primeiro_segmento(db, aula_classificada)
+    r = cliente.patch(f"/api/segmentos/{seg.id}", json={"texto": "corrigido", "version": seg.version})
+    assert r.status_code == 200
+    db.refresh(aula_classificada)
+    assert aula_classificada.status == "READY_FOR_FIAS"
+
+
+def test_editar_antes_do_fias_nao_muda_o_status(cliente, db, aula_em_revisao):
+    """Só a aula já classificada volta atrás; a que ainda está em revisão fica onde está."""
+    seg = primeiro_segmento(db, aula_em_revisao)
+    antes = aula_em_revisao.status
+    cliente.patch(f"/api/segmentos/{seg.id}", json={"texto": "x", "version": seg.version})
+    db.refresh(aula_em_revisao)
+    assert aula_em_revisao.status == antes
 
 
 def test_concluir_a_revisao_leva_a_ready_for_fias(cliente, db, aula_em_revisao):
@@ -2132,6 +2156,11 @@ Expected: FAIL — a rota não existe
 Estrutura: um `<section>` por segmento, com `role="group"` e `aria-label` com o
 horário; alternância de falante como botão de dois estados com texto; `onBlur`
 dispara o `PATCH`; falha de versão mostra `Banner` e mantém o texto digitado.
+
+**O `PATCH` só sai quando o professor de fato mexeu no trecho** — texto alterado ou
+falante trocado. Qualquer `PATCH` bem-sucedido marca `Segmento.revisado` no banco, que
+é a coluna do shared que mede quanto da transcrição foi revisado. Disparar por rolagem,
+por foco ou por temporizador infla essa medida sem que ninguém tenha revisado nada.
 
 ```tsx
 function SegmentoLinha({ seg, onSalvo }: { seg: Segmento; onSalvo: (s: Segmento) => void }) {
