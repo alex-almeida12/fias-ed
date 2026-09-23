@@ -110,6 +110,14 @@ def play_audio(aula_id: uuid.UUID, inicio_ms: int | None = None, fim_ms: int | N
     if inicio_ms is None or fim_ms is None or inicio_ms < 0 or fim_ms <= inicio_ms:
         raise AppError(422, "TRECHO_INVALIDO", "Informe o início e o fim do trecho corretamente.")
     trecho = store_root() / "tmp" / f"trecho-{uuid.uuid4()}.wav"
-    extrair_trecho(abs_path(audio.path), inicio_ms, fim_ms, trecho)
+    try:
+        extrair_trecho(abs_path(audio.path), inicio_ms, fim_ms, trecho)
+    except BaseException:
+        # Mesmo padrão de upload_audio: se o ffmpeg levantar depois de já ter escrito
+        # saída parcial (timeout, disco cheio, áudio corrompido no meio), nenhum
+        # FileResponse chega a existir e o BackgroundTask abaixo nunca é criado — sem
+        # isto o arquivo parcial ficaria em tmp/ para sempre.
+        trecho.unlink(missing_ok=True)
+        raise
     return FileResponse(trecho, media_type="audio/wav", content_disposition_type="inline",
                         background=BackgroundTask(trecho.unlink))

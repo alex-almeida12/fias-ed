@@ -1,7 +1,9 @@
+import os
 import shutil
+import time
 from datetime import timedelta
 
-from app.audio.storage import store_root
+from app.audio.storage import ensure_dirs, limpar_temporarios_antigos, store_root
 from app.jobs import queue
 from app.jobs.worker import run_once
 from app.models import Audio, AudioUpload, Aula, Job, utcnow
@@ -127,3 +129,51 @@ def test_job_for_deleted_aula_is_closed(db):
     db.commit()
     run_once(db)
     assert db.query(Job).one().status == "done"
+
+
+# Rodada de conserto 1 da Task 8 (Important): tmp/ guarda tanto upload em andamento
+# (upload_audio) quanto trechos avulsos de audição (extrair_trecho) — os dois só saem de
+# lá no caminho feliz. Uma desconexão do cliente no meio do envio, ou antes de o
+# BackgroundTask do trecho rodar, deixa o arquivo órfão para sempre; nenhum handler
+# fecha esse caso sozinho, então a varredura é periódica, no worker, ao lado de
+# recover_stale — mesma ideia, texto diferente.
+def _idade(horas: float) -> float:
+    return time.time() - horas * 3600
+
+
+def test_limpar_temporarios_antigos_preserva_recente_e_apaga_velho(app_instance):
+    ensure_dirs()
+    tmp = store_root() / "tmp"
+    velho = tmp / "orfao-velho.wav"
+    novo = tmp / "orfao-novo.wav"
+    velho.write_bytes(b"x")
+    novo.write_bytes(b"y")
+    seis_horas_e_um_minuto_atras = _idade(6) - 60
+    os.utime(velho, (seis_horas_e_um_minuto_atras, seis_horas_e_um_minuto_atras))
+    limpar_temporarios_antigos()
+    assert not velho.exists()
+    assert novo.exists()
+
+
+def test_limpar_temporarios_antigos_nao_mata_upload_lento_dentro_do_prazo(app_instance):
+    """O limite de upload do projeto é 1,5 GB; seis horas é a folga deliberada para um
+    envio lento e genuíno não ser apagado no meio (o `mtime` do arquivo é renovado a
+    cada chunk escrito por upload_audio, então um upload de verdade em andamento nunca
+    fica "velho" enquanto estiver escrevendo)."""
+    ensure_dirs()
+    em_andamento = store_root() / "tmp" / "upload-em-andamento.wav"
+    em_andamento.write_bytes(b"x")
+    cinco_horas_e_meia_atras = _idade(5.5)
+    os.utime(em_andamento, (cinco_horas_e_meia_atras, cinco_horas_e_meia_atras))
+    limpar_temporarios_antigos()
+    assert em_andamento.exists()
+
+
+def test_run_once_tambem_varre_temporarios_antigos(db, app_instance):
+    ensure_dirs()
+    velho = store_root() / "tmp" / "orfao-velho.wav"
+    velho.write_bytes(b"x")
+    antigo = _idade(6) - 60
+    os.utime(velho, (antigo, antigo))
+    run_once(db)
+    assert not velho.exists()

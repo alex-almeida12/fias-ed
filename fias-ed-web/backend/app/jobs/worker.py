@@ -4,6 +4,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.audio.storage import limpar_temporarios_antigos
 from app.core.config import get_settings
 from app.core.db import SessionLocal, get_engine
 from app.core.logging import configure_logging, log_event
@@ -21,6 +22,10 @@ def beat() -> None:
 
 def run_once(db: Session) -> bool:
     recover_stale(db)
+    # Terceiro arquivo temporário sem limpeza garantida no caminho feliz nesta fatia
+    # (depois da cópia de trabalho da Task 4 e dos pedaços de ASR da Task 5) — varredura
+    # periódica no mesmo laço que já cuida de jobs travados.
+    limpar_temporarios_antigos()
     job = claim_next(db)
     if job is None:
         return False

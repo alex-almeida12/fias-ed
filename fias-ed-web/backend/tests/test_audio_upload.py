@@ -187,3 +187,26 @@ def test_playback_com_fim_antes_do_inicio_e_invalido(client, db, tmp_path):
     login(client, "ana")
     r = client.get(f"/api/aulas/{aula.id}/audio", params={"inicio_ms": 4000, "fim_ms": 2000})
     assert r.status_code == 422 and r.json()["error_code"] == "TRECHO_INVALIDO"
+
+
+# Rodada de conserto 1 (Important): se extrair_trecho levantar depois de o ffmpeg já ter
+# escrito saída parcial (timeout, disco cheio, áudio corrompido no meio), o FileResponse
+# nunca chega a existir e o BackgroundTask nunca é criado — o arquivo parcial ficaria em
+# tmp/ para sempre. Mesmo padrão de upload_audio (except BaseException + unlink).
+def test_playback_do_trecho_nao_deixa_arquivo_orfao_se_ffmpeg_falhar(client, db, tmp_path, monkeypatch):
+    import subprocess
+
+    from app.audio import routes as audio_routes
+
+    aula, _ = _aula_com_audio_real(db, tmp_path)
+    login(client, "ana")
+
+    def extrair_com_saida_parcial(origem, inicio_ms, fim_ms, destino):
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_bytes(b"RIFF-parcial")
+        raise subprocess.CalledProcessError(1, ["ffmpeg"])
+
+    monkeypatch.setattr(audio_routes, "extrair_trecho", extrair_com_saida_parcial)
+    r = client.get(f"/api/aulas/{aula.id}/audio", params={"inicio_ms": 1000, "fim_ms": 2000})
+    assert r.status_code == 500
+    assert list((store_root() / "tmp").glob("trecho-*")) == []
