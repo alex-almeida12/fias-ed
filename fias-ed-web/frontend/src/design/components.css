@@ -140,8 +140,17 @@ progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--co
    card: mesma linha de 1px em Papel Milimetrado que separa os itens de `.list`,
    sem fundo próprio — centenas de trechos com fundo bege virariam ruído, e bege
    é reservado para "aqui se lê e se reflete" (blocos únicos), não para item
-   repetido em lista. */
-.segmentos { border-top: var(--border-hairline) solid var(--color-border); }
+   repetido em lista.
+
+   A Regra da Medida vale sobretudo aqui, que é a tela de leitura mais longa do
+   produto. Sem limite, num monitor de 1280px o campo de texto de cada trecho
+   chegava a 1112px — 120 caracteres por linha, quase o dobro dos 68 que o
+   sistema fixa para texto corrido, e justamente a largura que o DESIGN.md dá
+   como exemplo de linha ilegível. O limite fica na coluna inteira, não só no
+   campo: com o campo estreito e a linha do horário larga, o botão de falante
+   ficava a meia tela de distância do texto a que pertence. É o mesmo 68ch de
+   `p`, não um valor novo. */
+.segmentos { border-top: var(--border-hairline) solid var(--color-border); max-width: 68ch; }
 .segmento { padding: var(--space-4) var(--space-1); border-bottom: var(--border-hairline) solid var(--color-border);
   display: flex; flex-direction: column; gap: var(--space-2); }
 .segmento__cabecalho { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
@@ -157,9 +166,11 @@ progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--co
 
 /* Navegação entre blocos de cinco minutos: mesmo par de botões secundários com
    uma legenda de contagem entre eles — sem inventar um componente novo de
-   paginação. */
+   paginação. A largura é a mesma da coluna de trechos logo abaixo: a navegação é
+   dela, não da página — sem o limite, "Próximos 5 minutos" ficava a meia tela dos
+   trechos que ele pagina, encostado no botão de concluir a revisão. */
 .bloco-nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
-  flex-wrap: wrap; margin: var(--space-5) 0; }
+  flex-wrap: wrap; margin: var(--space-5) 0; max-width: 68ch; }
 
 /* Padrões de interação (Task 13). A faixa de tempo é um SVG com viewBox
    proporcional à duração da aula (preserveAspectRatio="none") — a largura de
@@ -219,3 +230,9 @@ progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--co
 /* Índices: nome por extenso, o que medem, e o valor — nunca um limiar ao lado. */
 .indice { align-items: flex-start; gap: var(--space-4); }
 .indice__valor { font-weight: 700; white-space: nowrap; }
+
+/* A matriz de transições é o único conteúdo do produto que não quebra em linha:
+   são 10 colunas numéricas, e esconder ou truncar coluna seria perder dado. Em
+   360px ela mede 400px dentro de uma coluna de 328px e empurrava o scroll
+   horizontal para o documento inteiro. Aqui a rolagem fica presa à tabela. */
+.tabela-rolante { overflow-x: auto; }

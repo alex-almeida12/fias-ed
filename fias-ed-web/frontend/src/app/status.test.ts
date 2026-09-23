@@ -30,11 +30,29 @@ describe("mensagem de progresso (§36)", () => {
   test.each([
     ["PREPROCESSING", "Preparando sua aula…"],
     ["TRANSCRIBING", "Transformando áudio em texto…"],
-    ["TRANSCRIBED", "Identificando os momentos de fala…"],
+    ["TRANSCRIBED", "Texto da aula pronto. O próximo passo é separar as vozes."],
     ["DIARIZING", "Identificando os momentos de fala…"],
     ["READY_FOR_FIAS", "Analisando padrões da aula…"],
   ])("%s diz o que está acontecendo com a aula", (status, mensagem) => {
     expect(progressMessage(status, true)).toBe(mensagem);
+  });
+
+  // O estado em que a transcrição acabou e a separação de vozes ainda não começou
+  // dizia a mesma frase do estado em que ela está de fato acontecendo: a tela
+  // afirmava um trabalho que não tinha começado, e os dois estados ficavam
+  // indistinguíveis.
+  test("TRANSCRIBED não promete o trabalho que só o DIARIZING faz", () => {
+    expect(progressMessage("TRANSCRIBED", true)).not.toBe(progressMessage("DIARIZING", true));
+  });
+
+  // Nenhum estado anterior à classificação pode se anunciar como concluído: o
+  // badge prometia "Padrões de interação prontos" numa aula cuja tela de padrões
+  // ainda responde 409.
+  test("só o estado com padrões calculados anuncia padrões prontos", () => {
+    expect(statusText("READY_FOR_FIAS")).not.toMatch(/prontos/i);
+    expect(statusTone("READY_FOR_FIAS")).toBe("progress");
+    expect(statusText("FIAS_COMPLETED")).toBe("Padrões de interação prontos");
+    expect(statusTone("FIAS_COMPLETED")).toBe("done");
   });
 
   test("nenhuma mensagem de progresso usa jargão técnico", () => {

@@ -43,9 +43,14 @@ function SegmentoLinha({ seg, aulaId, onSalvo }: SegmentoLinhaProps) {
            baixaria (e o servidor recortaria com ffmpeg) todos eles ao abrir a página. */}
         <audio controls preload="none" aria-label={`Áudio do trecho de ${horario}`}
           src={`/api/aulas/${aulaId}/audio?inicio_ms=${seg.start_ms}&fim_ms=${seg.end_ms}`} />
+        {/* `ALUNO` é o rótulo interno do banco (PRODUCT.md: terminologia interna, não
+           necessariamente tela), e caixa alta é proibida em botão (DESIGN.md, Button:
+           "sem caixa alta — o produto não grita"). A palavra do professor, aqui e no
+           resto do produto ("fala dos estudantes", "percepção dos estudantes"), é
+           estudante. */}
         <Button variant="secondary" aria-pressed={seg.papel === "ALUNO"}
           onClick={() => void salvar({ papel: proximoPapel(seg.papel) })}>
-          {seg.papel === "PROFESSOR" ? "Você — marcar como ALUNO" : "ALUNO — marcar como você"}
+          {seg.papel === "PROFESSOR" ? "Você — marcar como estudante" : "Estudante — marcar como você"}
         </Button>
       </div>
       <TextAreaField label={`Texto do trecho de ${horario}`} value={texto}

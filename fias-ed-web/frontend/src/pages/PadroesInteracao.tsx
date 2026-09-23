@@ -74,23 +74,32 @@ export function PadroesInteracao() {
               vão de 1 a 10: 1 a 4 são influência indireta do professor, 5 a 7 são influência direta, 8 e 9 são
               fala dos estudantes, e 10 é silêncio ou confusão.
             </p>
-            <table className="table">
-              <caption>Matriz de transições FIAS (10×10): categoria de origem (linha) para categoria seguinte (coluna).</caption>
-              <thead>
-                <tr>
-                  <th scope="col">De \ para</th>
-                  {CATEGORIAS.map((c) => <th key={c} scope="col">{c}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {dados.matriz.map((linha, i) => (
-                  <tr key={i + 1}>
-                    <th scope="row">{i + 1}</th>
-                    {linha.map((valor, j) => <td key={j + 1}>{valor}</td>)}
+            {/* Uma matriz 10x10 mede 400px e não quebra em linha como o resto do
+               produto: em 360px ela arrastava a PÁGINA INTEIRA para o lado — o
+               título e a barra de navegação saíam da tela junto. Quem rola é a
+               tabela, não a página. `tabIndex` porque uma área rolável precisa
+               ser alcançável pelo teclado (WCAG 2.1.1); `role`/`aria-label`
+               para ela se anunciar como região, e não como um bloco anônimo. */}
+            <div className="tabela-rolante" tabIndex={0} role="region"
+              aria-label="Matriz de transições FIAS, rolável na horizontal">
+              <table className="table">
+                <caption>Matriz de transições FIAS (10×10): categoria de origem (linha) para categoria seguinte (coluna).</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">De \ para</th>
+                    {CATEGORIAS.map((c) => <th key={c} scope="col">{c}</th>)}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {dados.matriz.map((linha, i) => (
+                    <tr key={i + 1}>
+                      <th scope="row">{i + 1}</th>
+                      {linha.map((valor, j) => <td key={j + 1}>{valor}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </section>
 
           <section>

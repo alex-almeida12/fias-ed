@@ -3143,7 +3143,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: as telas das Tasks 8, 10, 13 e 15 rodando em `http://localhost:8080`.
 - Produces: telas revisadas; achados, correções e a tabela do §84 no corpo do commit.
 
-- [ ] **Step 1: Pré-requisito e armadilha conhecida**
+- [x] **Step 1: Pré-requisito e armadilha conhecida**
 
 Confirmar que a skill `impeccable` está na sessão. **Não confiar no
 `impeccable detect`**: na verificação da W1 ele retornou vazio até para CSS
@@ -3153,13 +3153,13 @@ vazio, fazer a revisão sobre as telas reais.
 
 `DESIGN.md` e `.impeccable/design.json` são a autoridade visual.
 
-- [ ] **Step 2: Preparar dados de exemplo**
+- [x] **Step 2: Preparar dados de exemplo**
 
 Com o sistema no ar, criar uma conta de professor e uma aula que percorra o
 pipeline inteiro com os modelos reais, até `FIAS_COMPLETED`. Criar também uma
 aula parada em `ERROR` por áudio sem fala.
 
-- [ ] **Step 3: Ciclo de revisão**
+- [x] **Step 3: Ciclo de revisão**
 
 Para cada tela nova — **vozes**, **revisão da transcrição** (primeiro bloco,
 bloco do meio, conflito de versão), **padrões de interação**, e a **página da
@@ -3172,7 +3172,7 @@ aula** em cada estado de progresso — em 360 px e 1280 px:
 3. `cd frontend && npm test && npm run lint && npm run build`.
 4. Uma rodada de confirmação, e parar.
 
-- [ ] **Step 4: Critério visual final (§84)**
+- [x] **Step 4: Critério visual final (§84)**
 
 Responder no commit: "Esta interface parece um produto criado especificamente
 para professores ou parece um template gerado por IA?" e preencher a tabela com
@@ -3185,7 +3185,7 @@ Atenção especial a duas coisas desta fatia: a **tela de revisão** é a mais d
 do produto e a mais fácil de virar planilha; e a **tela de padrões** é a que
 mais arrisca virar boletim.
 
-- [ ] **Step 5: Rebuild e commit**
+- [x] **Step 5: Rebuild e commit**
 
 ```bash
 docker compose up -d --build web

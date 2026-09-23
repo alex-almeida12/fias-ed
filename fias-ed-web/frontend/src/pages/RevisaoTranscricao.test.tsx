@@ -24,7 +24,7 @@ test("mostra os segmentos do bloco com horário, falante e texto", async () => {
   expect(await screen.findByDisplayValue("bom dia, turma")).toBeInTheDocument();
   expect(screen.getByText("0:00")).toBeInTheDocument();
   // "falante": o controle de troca é um botão de dois estados com texto, não só cor.
-  expect(screen.getByRole("button", { name: /você.*marcar como aluno/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /você.*marcar como estudante/i })).toBeInTheDocument();
   // O rótulo do campo existe (para leitor de tela), mesmo que visualmente escondido.
   expect(screen.getByLabelText(/texto do trecho de 0:00/i)).toHaveValue("bom dia, turma");
 });
@@ -86,7 +86,7 @@ test("trocar o falante de um segmento", async () => {
     "PATCH /api/segmentos/s1": () => jsonResponse({ ...SEGMENTO_1, papel: "ALUNO", version: 2 }),
   });
   renderApp("/aulas/a1/transcricao");
-  await userEvent.click(await screen.findByRole("button", { name: /marcar como aluno/i }));
+  await userEvent.click(await screen.findByRole("button", { name: /marcar como estudante/i }));
   const patch = spy.mock.calls.find(([, i]) => i?.method === "PATCH");
   expect(JSON.parse(String(patch![1]!.body))).toMatchObject({ papel: "ALUNO" });
 });
