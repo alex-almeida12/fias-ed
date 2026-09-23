@@ -2999,7 +2999,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `STATUS_TEXT` e `statusTone` (W1, já cobrem os 18 status).
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 Acrescentar a `frontend/src/pages/AulaPage.test.tsx`:
 
@@ -3042,7 +3042,7 @@ test("nenhum texto da interface usa o vocabulário proibido", async () => {
 Run: `cd frontend && npx vitest run src/pages/AulaPage.test.tsx`
 Expected: FAIL
 
-- [ ] **Step 2: Implementar**
+- [x] **Step 2: Implementar**
 
 A página da aula ganha, conforme o status: a mensagem de progresso do §36 com
 `role="status"`, o link para `/vozes` quando `READY_FOR_SPEAKER_REVIEW`, o link
@@ -3050,12 +3050,12 @@ para `/transcricao` quando `READY_FOR_TRANSCRIPT_REVIEW`, e o link para
 `/padroes` quando `FIAS_COMPLETED`. `JOB_MESSAGE` da W1 vira um mapa de
 status → mensagem, com os textos do §36 já presentes em `status.ts`.
 
-- [ ] **Step 3: Rodar e confirmar que passa**
+- [x] **Step 3: Rodar e confirmar que passa**
 
 Run: `cd frontend && npm test && npm run lint`
 Expected: PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add fias-ed-web/frontend fias-ed-web/backend

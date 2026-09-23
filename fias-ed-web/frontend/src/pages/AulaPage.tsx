@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { api, ApiError, sendAndProcess } from "../api/client";
 import type { Aula } from "../api/types";
 import { AudioPicker } from "../app/AudioPicker";
 import { formatBytes, formatDate, formatDateTime, formatDuration } from "../app/format";
-import { JOB_MESSAGE } from "../app/status";
+import { progressMessage } from "../app/status";
 import { Banner } from "../design/components/Banner";
 import { Button } from "../design/components/Button";
 import { Dialog } from "../design/components/Dialog";
@@ -85,6 +85,7 @@ export function AulaPage() {
   // essa escolha leva direto para a tela dela, em vez de ficar parada aqui.
   if (aula.status === "READY_FOR_SPEAKER_REVIEW") return <Navigate to={`/aulas/${id}/vozes`} replace />;
 
+  const progresso = progressMessage(aula.status, aula.job_ativo);
   const podeEnviar = !aula.job_ativo && PODE_TROCAR.has(aula.status);
   const mostrarEnvio = podeEnviar && (aula.status === "DRAFT" || aula.status === "ERROR" || trocando);
 
@@ -101,10 +102,19 @@ export function AulaPage() {
       {aula.alterada_pelo_admin_em && (
         <Banner>Alterada pelo administrador em {formatDateTime(aula.alterada_pelo_admin_em)}.</Banner>
       )}
-      {aula.job_ativo && <Banner>{JOB_MESSAGE}</Banner>}
+      {progresso && <Banner>{progresso}</Banner>}
       {aula.status === "ERROR" && aula.error_message && <Banner kind="error">{aula.error_message}</Banner>}
       {error && <Banner kind="error">{error}</Banner>}
       {aula.note && <p>{aula.note}</p>}
+
+      {/* Toda aula parada esperando o professor mostra aqui a porta por onde ele continua:
+         sem isto a tela informa o estado e deixa a pessoa sem saber o que fazer. */}
+      {aula.status === "READY_FOR_TRANSCRIPT_REVIEW" && (
+        <p><Link className="btn btn--primary" to={`/aulas/${id}/transcricao`}>Revisar a transcrição</Link></p>
+      )}
+      {aula.status === "FIAS_COMPLETED" && (
+        <p><Link className="btn btn--primary" to={`/aulas/${id}/padroes`}>Ver padrões de interação</Link></p>
+      )}
 
       {aula.audio && (
         <section className="audio-area" aria-labelledby="audio-original">

@@ -22,8 +22,23 @@ export const STATUS_TEXT: Record<string, string> = {
   ERROR: "Precisa de atenção",
 };
 
-/** Mensagem do prompt §36 para a etapa executada em W1 (validação do áudio). */
-export const JOB_MESSAGE = "Preparando sua aula...";
+const PREPARANDO = "Preparando sua aula…";
+
+/** Mensagens do prompt §36, por estágio: dizem o que está acontecendo com a aula do
+ * professor, nunca o que o sistema está rodando (§86). */
+const PROGRESSO: Record<string, string> = {
+  PREPROCESSING: PREPARANDO,
+  TRANSCRIBING: "Transformando áudio em texto…",
+  TRANSCRIBED: "Identificando os momentos de fala…",
+  DIARIZING: "Identificando os momentos de fala…",
+  READY_FOR_FIAS: "Analisando padrões da aula…",
+};
+
+/** Mensagem a mostrar enquanto a aula avança sozinha, ou `null` se ela estiver parada
+ * esperando o professor — dizer "preparando" a uma aula parada seria mentira. */
+export function progressMessage(status: string, jobAtivo: boolean): string | null {
+  return PROGRESSO[status] ?? (jobAtivo ? PREPARANDO : null);
+}
 
 export type Tone = "progress" | "attention" | "done";
 
