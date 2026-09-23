@@ -3,8 +3,8 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.audio.prepare import (audio_original, chunks_dir, cortar, limpar_chunks, normalizar,
-                               planejar_chunks, work_path)
+from app.audio.prepare import (audio_original, chunks_dir, cortar, descartar_trabalho, limpar_chunks,
+                               normalizar, planejar_chunks, work_path)
 from app.audio.probe import ProbeError, probe
 from app.audio.storage import abs_path, delete_file
 from app.audio.validation import ValidationFailed, check
@@ -115,6 +115,9 @@ def handle_transcribe(db: Session, job: Job) -> None:
     aula.status, aula.error_code = "TRANSCRIBING", None
     db.commit()
     trabalho, dir_chunks = work_path(aula.id), chunks_dir(aula.id)
+    # A cópia de trabalho NÃO é apagada aqui, embora os chunks sejam: a
+    # diarização ainda vai lê-la inteira (handle_diarize), e é lá que ela morre.
+    # Os chunks são diferentes — existem só para este estágio.
     # try/finally: se cortar() ou transcrever() levantar, a exceção sobe até o
     # worker, que faz rollback e retry — mas os pedaços já cortados ficariam no
     # disco para sempre. Numa aula de 90 min são centenas de MB por falha, e o
@@ -136,6 +139,10 @@ def handle_transcribe(db: Session, job: Job) -> None:
         # manual de status é necessária aqui.
         fail_job(db, job, "AUDIO_SEM_FALA")
         db.commit()
+        # Terminal, como o caminho de erro da diarização: sem transcrição a
+        # diarização nunca é enfileirada, então ninguém mais vai ler a cópia de
+        # trabalho desta aula.
+        descartar_trabalho(aula.id)
         log_event("transcricao_sem_fala", aula_id=aula.id, job_id=job.id)
         return
     transcricao = criar_transcricao(db, aula, audio, get_settings().asr_model_id)
@@ -172,6 +179,11 @@ def handle_diarize(db: Session, job: Job) -> None:
         # manual de status é necessária aqui (mesma lição da Task 5).
         fail_job(db, job, "DIARIZACAO_FALHOU")
         db.commit()
+        # fail_job é terminal: não há retry, e uma aula em ERROR não volta ao
+        # pipeline sem um áudio novo (que refaz a normalização). A cópia de
+        # trabalho não tem mais leitor nenhum — depois do commit, para o arquivo
+        # não sumir de um estado que o banco ainda não registrou.
+        descartar_trabalho(aula.id)
         log_event("diarizacao_falhou", aula_id=aula.id, job_id=job.id)
         return
     # Uma consulta só: as mesmas linhas alimentam o alinhamento (via
@@ -184,6 +196,17 @@ def handle_diarize(db: Session, job: Job) -> None:
     aula.status, aula.error_code = "READY_FOR_SPEAKER_REVIEW", None
     finish_job(db, job)
     db.commit()
+    # Fim da linha da cópia de trabalho: a diarização é o último estágio que a lê
+    # (a revisão de vozes ouve trechos do áudio ORIGINAL, e a classificação só vê
+    # texto). Sem isto ela ficava em disco para sempre — ~173 MB numa aula de 90
+    # min, por aula, sobrevivendo à exclusão da aula e da conta.
+    #
+    # Depois do commit, e não antes, por causa do retry: enquanto o job não está
+    # fechado, `recover_stale` pode devolvê-lo à fila e o handler reprocessa o
+    # estágio do início, lendo este arquivo de novo. Se o processo morrer entre o
+    # commit e esta linha, o arquivo fica — e aí quem fecha é
+    # `limpar_trabalho_orfao`, no laço do worker.
+    descartar_trabalho(aula.id)
     log_event("diarizacao_pronta", aula_id=aula.id, job_id=job.id, n_vozes=len(set(filter(None, rotulos))))
 
 

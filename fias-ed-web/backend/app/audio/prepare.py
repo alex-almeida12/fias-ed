@@ -10,11 +10,12 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.audio.storage import store_root
+from app.audio.storage import store_root, work_rel
 from app.aulas.service import current_audio
-from app.models import Audio
+from app.models import Audio, Aula
 
 JANELA_PADRAO_MS = 600_000
 
@@ -75,7 +76,59 @@ def extrair_trecho(origem: Path, inicio_ms: int, fim_ms: int, destino: Path) -> 
 
 def work_path(aula_id: uuid.UUID) -> Path:
     """Caminho da cópia de trabalho — derivado só do UUID da aula, nunca de nome vindo do professor."""
-    return store_root() / "work" / f"{aula_id}.wav"
+    return store_root() / work_rel(aula_id)
+
+
+def descartar_trabalho(aula_id: uuid.UUID) -> None:
+    """Apaga a cópia de trabalho da aula. Silenciosa se ela não existir — quem
+    chama nunca precisa saber se o estágio anterior chegou a criá-la.
+
+    Chamada no fim do último estágio que lê este arquivo — a diarização — e nos
+    caminhos de erro terminal que garantem que ele nunca mais será lido
+    (app/jobs/handlers.py)."""
+    work_path(aula_id).unlink(missing_ok=True)
+
+
+def limpar_trabalho_orfao(db: Session) -> int:
+    """Apaga cópias de trabalho de aulas excluídas ou inexistentes; devolve
+    quantas apagou.
+
+    É a rede embaixo dos dois descartes normais (fim da diarização e exclusão da
+    aula), pelo mesmo motivo que existe `limpar_temporarios_antigos`: o worker
+    pode morrer entre fechar o job e apagar o arquivo, uma aula pode ter sido
+    excluída por uma versão anterior deste código, e um estágio que termina em
+    erro terminal nunca mais roda — em todos esses casos sobra um arquivo de
+    dezenas ou centenas de MB que ninguém mais vai ler.
+
+    O critério não é idade, e sim dono: o arquivo é de uma aula, então só sai
+    quando a aula não existe mais ou está excluída. Idade não serviria — uma aula
+    pode passar horas na fila antes da transcrição, com a cópia de trabalho
+    pronta e velha, e apagá-la ali quebraria o estágio seguinte.
+
+    Nome que não seja `<uuid>.wav` é deixado quieto: este diretório é escrito só
+    por `normalizar`, e apagar o que não se sabe de onde veio é pior do que
+    deixar."""
+    diretorio = store_root() / "work"
+    if not diretorio.is_dir():
+        return 0
+    arquivos: dict[uuid.UUID, Path] = {}
+    for arquivo in diretorio.iterdir():
+        if arquivo.suffix != ".wav" or not arquivo.is_file():
+            continue
+        try:
+            arquivos[uuid.UUID(arquivo.stem)] = arquivo
+        except ValueError:
+            continue
+    if not arquivos:
+        return 0
+    vivas = set(db.scalars(select(Aula.id).where(Aula.id.in_(arquivos.keys()),
+                                                 Aula.deleted_at.is_(None))))
+    apagados = 0
+    for aula_id, arquivo in arquivos.items():
+        if aula_id not in vivas:
+            arquivo.unlink(missing_ok=True)
+            apagados += 1
+    return apagados
 
 
 def chunks_dir(aula_id: uuid.UUID) -> Path:

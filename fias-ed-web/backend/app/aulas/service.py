@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.audio.storage import work_rel
 from app.audit import last_admin_change
 from app.core.errors import AppError
 from app.core.messages import error_message
@@ -102,6 +103,13 @@ def apagar_transcricao(db: Session, aula_id: uuid.UUID) -> None:
 def soft_delete_aula(db: Session, aula: Aula) -> list[str]:
     now = utcnow()
     paths = detach_audio(db, aula, now)
+    # A cópia de trabalho é áudio derivado do original — a mesma voz, a mesma
+    # aula — e sai junto com ele. Sem esta linha ela sobrevivia à exclusão da
+    # aula e da conta, porque detach_audio só conhece o que está na tabela Audio,
+    # e a cópia de trabalho não tem linha em tabela nenhuma: ela é derivada do
+    # UUID da aula. No caminho feliz o arquivo já foi apagado no fim da
+    # diarização, e `delete_file` é silencioso quando não existe.
+    paths.append(work_rel(aula.id))
     apagar_transcricao(db, aula.id)
     db.execute(update(Processamento).where(Processamento.aula_id == aula.id,
                                            Processamento.deleted_at.is_(None)).values(deleted_at=now))

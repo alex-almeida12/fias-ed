@@ -204,3 +204,23 @@ def test_texto_efetivo_prefere_o_revisado():
 def test_texto_efetivo_cai_no_original_sem_revisao():
     seg = Segmento(texto_original_asr="original", texto_revisado=None)
     assert texto_efetivo(seg) == "original"
+
+
+def test_transcribe_preserva_a_copia_de_trabalho_para_a_diarizacao(db, aula_preparada, asr_falso_por_chunk):
+    """Os chunks somem no fim deste estágio, a cópia de trabalho não: a diarização
+    (o estágio seguinte) recebe o arquivo normalizado inteiro, porque é na
+    fronteira entre chunks que a troca de falante se perde. Apagar aqui pouparia
+    disco por alguns minutos e quebraria a aula inteira."""
+    _rodar(db, aula_preparada)
+    db.refresh(aula_preparada)
+    assert aula_preparada.status == "TRANSCRIBED"
+    assert work_path(aula_preparada.id).exists()
+
+
+def test_audio_sem_fala_nao_deixa_a_copia_de_trabalho(db, aula_preparada, asr_falso_vazio):
+    """AUDIO_SEM_FALA é terminal e a diarização nunca chega a ser enfileirada:
+    daqui em diante ninguém lê mais este arquivo."""
+    _rodar(db, aula_preparada)
+    db.refresh(aula_preparada)
+    assert aula_preparada.error_code == "AUDIO_SEM_FALA"
+    assert not work_path(aula_preparada.id).exists()

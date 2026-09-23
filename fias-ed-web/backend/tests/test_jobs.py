@@ -1,8 +1,10 @@
 import os
 import shutil
 import time
+import uuid
 from datetime import timedelta
 
+from app.audio.prepare import work_path
 from app.audio.storage import ensure_dirs, limpar_temporarios_antigos, store_root
 from app.fias import service as fias_service
 from app.jobs import handlers, queue
@@ -186,6 +188,19 @@ def test_run_once_tambem_varre_temporarios_antigos(db, app_instance):
     os.utime(velho, (antigo, antigo))
     run_once(db)
     assert not velho.exists()
+
+
+def test_run_once_tambem_varre_copias_de_trabalho_orfas(db, app_instance):
+    """A varredura precisa estar ligada no laço do worker, e não só existir: os
+    97 MB de órfãos encontrados em disco eram de aulas excluídas por um código
+    que não conhecia a cópia de trabalho, e é esta chamada que dá conta deles
+    sem ninguém apagar arquivo à mão."""
+    ensure_dirs()
+    orfao = work_path(uuid.uuid4())
+    orfao.parent.mkdir(parents=True, exist_ok=True)
+    orfao.write_bytes(b"RIFF")
+    run_once(db)
+    assert not orfao.exists()
 
 
 # ---- A corrente anda sozinha -------------------------------------------------------

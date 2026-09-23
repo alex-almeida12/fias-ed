@@ -9,6 +9,7 @@ test_align.py, que também precisa do estado "pós-transcrição, pré-diarizaç
 para testar o repontamento contra o banco de verdade."""
 import pytest
 
+from app.audio.prepare import work_path
 from app.core.db import SessionLocal, get_engine
 from app.jobs import handlers
 from app.jobs.handlers import HANDLERS
@@ -122,3 +123,57 @@ def test_job_para_aula_excluida_e_fechado_sem_diarizar(db, aula_transcrita, diar
     HANDLERS["diarize"](db, job)
     db.refresh(job)
     assert job.status == "done"
+
+
+# ---- ciclo de vida da cópia de trabalho --------------------------------------------
+
+
+def _criar_trabalho(aula):
+    caminho = work_path(aula.id)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_bytes(b"RIFF")
+    return caminho
+
+
+def test_diarize_apaga_a_copia_de_trabalho_ao_terminar(db, aula_transcrita, diarizador_falso_duas_vozes):
+    """A diarização é o último estágio que lê o arquivo normalizado: a revisão de
+    vozes ouve trechos do áudio ORIGINAL e a classificação só vê texto. Enquanto
+    ninguém apagava aqui, cada aula processada deixava a cópia em disco para
+    sempre — ~173 MB numa aula de 90 min."""
+    caminho = _criar_trabalho(aula_transcrita)
+    _rodar(db, aula_transcrita)
+    db.refresh(aula_transcrita)
+    assert aula_transcrita.status == "READY_FOR_SPEAKER_REVIEW"
+    assert not caminho.exists()
+
+
+def test_diarize_so_apaga_depois_de_fechar_o_job(db, aula_transcrita, monkeypatch):
+    """A ordem importa por causa do retry: um job ainda aberto pode voltar à fila
+    (`recover_stale`) e o handler reprocessa o estágio do início, lendo este
+    arquivo de novo. Se o arquivo sumisse antes do commit, o reprocessamento
+    encontraria o disco vazio."""
+    caminho = _criar_trabalho(aula_transcrita)
+    visto = {}
+
+    class DiarizadorEspiao:
+        def turnos(self, caminho_recebido):
+            visto["existia_durante"] = caminho_recebido.exists()
+            return [TurnoDiar(0, 9_000, "SPEAKER_00")]
+
+    monkeypatch.setattr(handlers, "obter_diarizador", lambda: DiarizadorEspiao())
+    job = enqueue(db, aula_transcrita.id, "diarize")
+    db.commit()
+    HANDLERS["diarize"](db, job)
+    db.refresh(job)
+    assert visto["existia_durante"] is True
+    assert job.status == "done" and not caminho.exists()
+
+
+def test_diarize_que_falha_nao_deixa_a_copia_de_trabalho(db, aula_transcrita, diarizador_que_falha):
+    """`fail_job` é terminal: a aula vai para ERROR e não volta ao pipeline sem um
+    áudio novo, que refaz a normalização. Ninguém mais vai ler este arquivo."""
+    caminho = _criar_trabalho(aula_transcrita)
+    _rodar(db, aula_transcrita)
+    db.refresh(aula_transcrita)
+    assert aula_transcrita.error_code == "DIARIZACAO_FALHOU"
+    assert not caminho.exists()

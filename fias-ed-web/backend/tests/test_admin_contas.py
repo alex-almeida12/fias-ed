@@ -1,5 +1,6 @@
 import uuid
 
+from app.audio.prepare import work_path
 from app.audio.storage import store_root
 from app.models import AcessoAdmin, Audio, Aula, Professor, Sessao
 from tests.helpers import PASSWORD, login, make_aula, make_user
@@ -135,3 +136,20 @@ def test_professor_cannot_use_admin_routes(client, db):
     assert client.get("/api/admin/contas").status_code == 403
     assert client.get("/api/admin/aulas").status_code == 403
     assert client.post(f"/api/admin/contas/{prof.id}/senha-provisoria").status_code == 403
+
+
+def test_delete_account_removes_work_copy_of_lessons(client_factory, db):
+    """A cópia de trabalho sobrevivia até à exclusão da conta: a varredura da
+    conta percorre as aulas com `soft_delete_aula`, que só conhecia os áudios da
+    tabela Audio."""
+    admin = _admin(client_factory, db)
+    prof = make_user(db, "ana")
+    aula = make_aula(db, prof, status="ERROR")
+    trabalho = work_path(aula.id)
+    trabalho.parent.mkdir(parents=True, exist_ok=True)
+    trabalho.write_bytes(b"RIFF")
+
+    r = admin.request("DELETE", f"/api/admin/contas/{prof.id}", json={"confirmar_username": "ana"})
+
+    assert r.status_code == 204
+    assert not trabalho.exists()

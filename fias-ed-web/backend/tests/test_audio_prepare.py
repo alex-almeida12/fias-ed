@@ -3,13 +3,14 @@ import uuid
 
 import pytest
 
-from app.audio.prepare import chunks_dir, cortar, limpar_chunks, planejar_chunks, work_path
+from app.audio.prepare import (chunks_dir, cortar, limpar_chunks, limpar_trabalho_orfao,
+                               planejar_chunks, work_path)
 from app.audio.probe import probe
 from app.audio.storage import ensure_dirs, store_root
 from app.jobs import handlers
 from app.jobs.handlers import HANDLERS
 from app.jobs.queue import enqueue
-from app.models import Audio, Job
+from app.models import Audio, Job, utcnow
 from tests.audio_fixtures import make_audio
 from tests.helpers import make_aula, make_user
 
@@ -207,3 +208,64 @@ def test_prepare_audio_marca_preprocessing_antes_de_normalizar(db, aula_validada
     db.commit()
     HANDLERS["prepare_audio"](db, job)
     assert capturado["status"] == "PREPROCESSING"
+
+
+# ---- limpar_trabalho_orfao ---------------------------------------------------------
+# A rede embaixo dos dois descartes normais (fim da diarização e exclusão da aula).
+# Existe porque havia 97 MB de cópias de trabalho de aulas já excluídas em disco antes
+# de os descartes existirem, e porque o worker pode morrer entre fechar o job e apagar
+# o arquivo.
+
+
+def _escrever_trabalho(aula_id) -> object:
+    caminho = work_path(aula_id)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
+    caminho.write_bytes(b"RIFF")
+    return caminho
+
+
+def test_limpar_trabalho_orfao_apaga_de_aula_excluida(db, app_instance):
+    prof = make_user(db, "elisa")
+    aula = make_aula(db, prof, status="READY_FOR_SPEAKER_REVIEW")
+    aula.deleted_at = utcnow()
+    db.commit()
+    caminho = _escrever_trabalho(aula.id)
+
+    assert limpar_trabalho_orfao(db) == 1
+    assert not caminho.exists()
+
+
+def test_limpar_trabalho_orfao_apaga_de_aula_que_nao_existe_mais(db, app_instance):
+    """Os órfãos encontrados em produção eram destes: aulas cuja exclusão passou
+    por um código que não conhecia a cópia de trabalho."""
+    caminho = _escrever_trabalho(uuid.uuid4())
+
+    assert limpar_trabalho_orfao(db) == 1
+    assert not caminho.exists()
+
+
+def test_limpar_trabalho_orfao_preserva_a_copia_de_aula_viva(db, app_instance):
+    """O teste que impede a varredura de virar um defeito pior do que o que
+    conserta: uma aula pode passar horas na fila entre o preparo e a transcrição,
+    com a cópia de trabalho pronta em disco. Apagá-la ali quebraria o estágio
+    seguinte — por isso o critério é dono, e não idade."""
+    prof = make_user(db, "fabio")
+    aula = make_aula(db, prof, status="PREPROCESSING")
+    caminho = _escrever_trabalho(aula.id)
+
+    assert limpar_trabalho_orfao(db) == 0
+    assert caminho.exists()
+
+
+def test_limpar_trabalho_orfao_nao_mexe_no_que_nao_reconhece(db, app_instance):
+    ensure_dirs()
+    estranho = store_root() / "work" / "nao-e-uuid.wav"
+    estranho.parent.mkdir(parents=True, exist_ok=True)
+    estranho.write_bytes(b"RIFF")
+
+    assert limpar_trabalho_orfao(db) == 0
+    assert estranho.exists()
+
+
+def test_limpar_trabalho_orfao_sem_diretorio_nenhum(db, app_instance):
+    assert limpar_trabalho_orfao(db) == 0

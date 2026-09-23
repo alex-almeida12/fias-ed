@@ -1,4 +1,5 @@
 import time
+import uuid
 from pathlib import Path
 
 from app.core.config import get_settings
@@ -13,6 +14,16 @@ def store_root() -> Path:
 def ensure_dirs() -> None:
     for sub in ("tmp", "original"):
         (store_root() / sub).mkdir(parents=True, exist_ok=True)
+
+
+def work_rel(aula_id: uuid.UUID) -> str:
+    """Caminho da cópia de trabalho, relativo à raiz do armazenamento.
+
+    Existe aqui, e não só em `app.audio.prepare.work_path`, porque quem exclui a
+    aula (`app.aulas.service`) precisa devolver o caminho no mesmo formato
+    relativo dos áudios, para `delete_file` — e não pode importar `prepare`, que
+    importa `aulas.service` de volta. O layout do disco fica com uma dona só."""
+    return f"work/{aula_id}.wav"
 
 
 def limpar_temporarios_antigos(max_age_hours: float = TEMP_MAX_AGE_HOURS) -> None:
