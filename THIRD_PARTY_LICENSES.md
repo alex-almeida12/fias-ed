@@ -40,8 +40,9 @@ modelo.
 | `fias-bertimbau-ptbr-frente3` | Classificação FIAS (Web) | MIT (`neuralmind/bert-base-portuguese-cased`) | **CC BY-NC-SA 4.0** (TalkMoves) |
 | `fias-bertimbau-ptbr-frente3-onnx-int8` | Classificação FIAS (Android) | MIT | **CC BY-NC-SA 4.0** |
 | `pt_core_news_sm` 3.8.0 (spaCy) | Pseudonimização de nomes na transcrição | MIT | **CC BY-SA 4.0** |
-| `pyannote/speaker-diarization-3.1` | Separação de vozes | PENDENTE — entra na Task 14 da fatia W2 | PENDENTE |
-| `faster-whisper` (tamanho a definir) | Transcrição | PENDENTE — entra na Task 14 da fatia W2 | PENDENTE |
+| `pyannote/speaker-diarization-3.1` | Separação de vozes (Web) | MIT (`pyannote.audio`, `pyannote/segmentation-3.0`) | AMI, DIHARD, VoxConverse (segmentação) |
+| `pyannote/wespeaker-voxceleb-resnet34-LM` | Embedding de voz, dentro do pipeline acima | MIT (`pyannote.audio`) | **CC BY 4.0** (VoxCeleb) |
+| `faster-whisper-small` | Transcrição (Web) | MIT (`Systran/faster-whisper-small`, conversão do `openai/whisper-small`, Apache-2.0) | Não divulgado pela OpenAI |
 
 **PENDENTE — crédito exigido pelas licenças Creative Commons.** CC BY-NC-SA e
 CC BY-SA exigem creditar autor e fonte pelo nome. Preencher abrindo os *model
@@ -49,7 +50,17 @@ cards*:
 
 - TalkMoves (dados do BERTimbau): citar os autores do dataset e o artigo de origem.
 - `pt_core_news_sm`: os dados são **UD Portuguese Bosque** e **WikiNER**; citar ambos.
-- Ao acrescentar `pyannote` e `faster-whisper` na Task 14, registrar aqui no mesmo formato.
+- `pyannote/wespeaker-voxceleb-resnet34-LM`: os dados são **VoxCeleb**; citar os
+  autores do dataset e o artigo de origem.
+
+**Nenhum dos dois modelos acrescentados na Task 14 é não comercial.** A única
+restrição `NC` do FIAS-ED continua sendo a do classificador, item 1 acima. O
+`CC BY 4.0` do embedding de voz exige crédito, não limita o uso.
+
+**Acesso.** `pyannote/speaker-diarization-3.1` e `pyannote/segmentation-3.0`
+exigem aceitar as condições de uso na página de cada um antes do download. É
+uma condição de acesso ao arquivo, não uma restrição de licença sobre o uso:
+o peso baixado é MIT. Ver "Modelos" em `fias-ed-web/README.md`.
 
 Textos canônicos das licenças (link basta, não é preciso copiar):
 

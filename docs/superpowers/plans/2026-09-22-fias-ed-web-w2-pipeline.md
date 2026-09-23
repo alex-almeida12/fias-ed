@@ -377,7 +377,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `verificar_artefatos(model_id: str, base: Path) -> None` — levanta `ModeloInvalido` se um SHA-256 divergir, um artefato faltar, ou um `forbidden_files` estiver presente.
   - `class ModeloInvalido(Exception)` com atributo `code: str`.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `backend/tests/test_ml_registry.py`. Os casos usam arquivos temporários, nunca os pesos reais.
 
@@ -456,12 +456,12 @@ def test_entrada_desconhecida_recusa(base_falsa):
     assert exc.value.code == "MODELO_NAO_REGISTRADO"
 ```
 
-- [ ] **Step 2: Rodar o teste e confirmar que falha**
+- [x] **Step 2: Rodar o teste e confirmar que falha**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_ml_registry.py`
 Expected: FAIL com `ModuleNotFoundError: No module named 'app.ml'`
 
-- [ ] **Step 3: Implementar `app/ml/registry.py`**
+- [x] **Step 3: Implementar `app/ml/registry.py`**
 
 ```python
 """Lê o registro de modelos do fias-ed-shared e confere integridade (§66, §67).
@@ -532,7 +532,7 @@ def verificar_artefatos(model_id: str, base: Path) -> None:
 
 Criar `backend/app/ml/__init__.py` vazio.
 
-- [ ] **Step 4: Acrescentar a configuração**
+- [x] **Step 4: Acrescentar a configuração**
 
 Em `app/core/config.py`, dentro de `Settings`:
 
@@ -564,12 +564,12 @@ HF_HUB_OFFLINE=1
 TRANSFORMERS_OFFLINE=1
 ```
 
-- [ ] **Step 5: Rodar o teste e confirmar que passa**
+- [x] **Step 5: Rodar o teste e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_ml_registry.py`
 Expected: PASS (5 testes)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fias-ed-web/backend fias-ed-web/.env.example
@@ -600,7 +600,7 @@ Sem esta task nenhum job é testável sem GPU. Ela não carrega modelo nenhum.
   - `class Classificador(Protocol)` com `logits(pares: list[tuple[str, str]]) -> list[list[float]]`
   - `obter_asr()`, `obter_diarizador()`, `obter_classificador()` em `loader.py`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `backend/tests/test_ml_fakes.py`:
 
@@ -632,12 +632,12 @@ def test_classificador_falso_devolve_um_vetor_por_par():
     assert all(max(range(10), key=v.__getitem__) == 3 for v in saida)
 ```
 
-- [ ] **Step 2: Rodar o teste e confirmar que falha**
+- [x] **Step 2: Rodar o teste e confirmar que falha**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_ml_fakes.py`
 Expected: FAIL com `ModuleNotFoundError: No module named 'app.ml.fakes'`
 
-- [ ] **Step 3: Implementar `app/ml/protocols.py`**
+- [x] **Step 3: Implementar `app/ml/protocols.py`**
 
 ```python
 """Interfaces finas dos três modelos.
@@ -679,7 +679,7 @@ class Classificador(Protocol):
         """Um vetor de 10 logits por par de turnos (text_a, text_b)."""
 ```
 
-- [ ] **Step 4: Implementar `app/ml/fakes.py`**
+- [x] **Step 4: Implementar `app/ml/fakes.py`**
 
 ```python
 """Implementações falsas, usadas só em teste. Nunca importadas em produção
@@ -718,7 +718,7 @@ class ClassificadorFalso:
         return [list(vetor) for _ in pares]
 ```
 
-- [ ] **Step 5: Implementar `app/ml/loader.py`**
+- [x] **Step 5: Implementar `app/ml/loader.py`**
 
 Os construtores reais só são importados quando de fato usados, para a suíte não precisar de `torch` instalado.
 
@@ -751,12 +751,12 @@ def obter_classificador() -> Classificador:
     return BertimbauClassificador()
 ```
 
-- [ ] **Step 6: Rodar o teste e confirmar que passa**
+- [x] **Step 6: Rodar o teste e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_ml_fakes.py`
 Expected: PASS (3 testes)
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -791,7 +791,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `audio_original(db, aula_id) -> Audio | None` — o áudio `is_original` da aula
   - `handle_prepare_audio(db, job)` em `handlers.py`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `backend/tests/test_audio_prepare.py`. O primeiro teste é o item 1 do Review Focus: **aula de 90 minutos com último chunk incompleto**.
 
@@ -838,12 +838,12 @@ def test_duracao_invalida_recusa():
         planejar_chunks(0, JANELA)
 ```
 
-- [ ] **Step 2: Rodar o teste e confirmar que falha**
+- [x] **Step 2: Rodar o teste e confirmar que falha**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_audio_prepare.py`
 Expected: FAIL com `ModuleNotFoundError: No module named 'app.audio.prepare'`
 
-- [ ] **Step 3: Implementar `planejar_chunks`**
+- [x] **Step 3: Implementar `planejar_chunks`**
 
 ```python
 """Cópia de trabalho, normalização e corte em chunks.
@@ -878,12 +878,12 @@ def planejar_chunks(duracao_ms: int, janela_ms: int = JANELA_PADRAO_MS) -> list[
     return plano
 ```
 
-- [ ] **Step 4: Rodar o teste e confirmar que passa**
+- [x] **Step 4: Rodar o teste e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_audio_prepare.py`
 Expected: PASS (5 testes)
 
-- [ ] **Step 5: Implementar `normalizar` e `cortar`**
+- [x] **Step 5: Implementar `normalizar` e `cortar`**
 
 No mesmo arquivo. `ffmpeg` sempre com lista de argumentos, seguindo o padrão de `app/audio/probe.py`.
 
@@ -912,7 +912,7 @@ def cortar(origem: Path, plano: list[tuple[int, int]], dir_destino: Path) -> lis
     return chunks
 ```
 
-- [ ] **Step 6: Escrever o teste do job e vê-lo falhar**
+- [x] **Step 6: Escrever o teste do job e vê-lo falhar**
 
 Acrescentar a `tests/test_audio_prepare.py`, usando o WAV sintético que `scripts/smoke.py` já sabe gerar:
 
@@ -959,7 +959,7 @@ def test_cortar_produz_pedacos_com_a_duracao_planejada(tmp_path, wav_sintetico):
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_audio_prepare.py`
 Expected: FAIL com `KeyError: 'prepare_audio'`
 
-- [ ] **Step 7: Implementar `handle_prepare_audio`**
+- [x] **Step 7: Implementar `handle_prepare_audio`**
 
 Em `app/jobs/handlers.py`, seguindo o estilo de `handle_validate_audio`:
 
@@ -1008,12 +1008,12 @@ Acrescentar `AUDIO_PREPARO_FALHOU` a `app/core/messages.py`:
     "AUDIO_PREPARO_FALHOU": "Não conseguimos preparar este áudio para análise. Tente enviar o arquivo de novo.",
 ```
 
-- [ ] **Step 8: Rodar os testes e confirmar que passam**
+- [x] **Step 8: Rodar os testes e confirmar que passam**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_audio_prepare.py`
 Expected: PASS (7 testes)
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -1053,7 +1053,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `texto_efetivo(segmento) -> str` — `texto_revisado` quando houver, senão `texto_original_asr`
   - `handle_transcribe(db, job)`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `backend/tests/test_job_transcribe.py`:
 
@@ -1119,12 +1119,12 @@ def test_chunks_sao_apagados_quando_o_asr_levanta(db, aula_preparada, dir_chunks
     assert list(dir_chunks.glob("chunk_*.wav")) == []
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_job_transcribe.py`
 Expected: FAIL com `KeyError: 'transcribe'`
 
-- [ ] **Step 3: Implementar `handle_transcribe`**
+- [x] **Step 3: Implementar `handle_transcribe`**
 
 ```python
 def handle_transcribe(db: Session, job: Job) -> None:
@@ -1173,12 +1173,12 @@ Registrar em `HANDLERS` e acrescentar a mensagem em `app/core/messages.py`:
 
 Acrescentar `n_segmentos` a `ALLOWED_FIELDS` em `app/core/logging.py` (é contagem, não conteúdo).
 
-- [ ] **Step 4: Rodar e confirmar que passa**
+- [x] **Step 4: Rodar e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_job_transcribe.py`
 Expected: PASS (4 testes)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -1208,7 +1208,7 @@ Item 4 do Review Focus. Um falso negativo aqui vaza o nome de um estudante para 
   - `nomes_por_ner(texto: str) -> set[str]` — spans marcados como pessoa pelo modelo
   - `nomes_por_heuristica(texto: str) -> set[str]` — a regra de maiúscula, mantida como rede
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `backend/tests/test_pseudonymize.py`. A regra é conservadora por decisão: na dúvida, pseudonimiza.
 
@@ -1290,12 +1290,12 @@ def test_texto_vazio():
     assert pseudonimizar("") == ""
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_pseudonymize.py`
 Expected: FAIL com `ModuleNotFoundError: No module named 'app.pipeline'`
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 ```python
 """Troca nomes próprios por [NOME] (PRIVACY.md, §48).
@@ -1352,7 +1352,7 @@ def pseudonimizar(texto: str) -> str:
 
 Siglas em caixa alta não casam com `_PALAVRA` (que exige minúsculas depois da primeira letra), então passam intactas.
 
-- [ ] **Step 4: Rodar e confirmar que passa**
+- [x] **Step 4: Rodar e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_pseudonymize.py`
 Expected: PASS (11 testes)
@@ -1360,7 +1360,7 @@ Expected: PASS (11 testes)
 > A verificação de ponta a ponta — um segmento nascer pseudonimizado ao fim do job
 > de transcrição — pertence à Task 5, que é executada depois desta.
 
-- [ ] **Step 6: Excluir a aula passa a apagar transcrição e segmentos**
+- [x] **Step 6: Excluir a aula passa a apagar transcrição e segmentos**
 
 O `PRIVACY.md` exige exclusão real (remoção física, não `soft delete`) para o
 material sensível, e a W2 cria dois tipos novos: transcrição e segmentos.
@@ -1403,7 +1403,7 @@ aula, então herda o comportamento.
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_revisao.py tests/test_aulas.py`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -1450,7 +1450,7 @@ Item 2 do Review Focus. O alinhamento é função pura e é onde a lógica mais 
     repontamento.
   - `handle_diarize(db, job)`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `backend/tests/test_align.py`:
 
@@ -1530,12 +1530,12 @@ def test_resumo_traz_no_maximo_tres_amostras_por_voz():
     assert len(grupos[0].amostras) == 3
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_align.py`
 Expected: FAIL com `ModuleNotFoundError: No module named 'app.pipeline.align'`
 
-- [ ] **Step 3: Implementar `app/pipeline/align.py`**
+- [x] **Step 3: Implementar `app/pipeline/align.py`**
 
 ```python
 """Cruza os segmentos do ASR com os turnos do diarizador.
@@ -1592,12 +1592,12 @@ def resumo_por_voz(segmentos: list[SegmentoASR], rotulos: list[str | None]) -> l
 Os turnos chegam ordenados por tempo de início, então o empate cai naturalmente
 no que começa antes — que é o que o teste fixa.
 
-- [ ] **Step 4: Rodar e confirmar que passa**
+- [x] **Step 4: Rodar e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_align.py`
 Expected: PASS (7 testes)
 
-- [ ] **Step 5: Escrever o teste do job e vê-lo falhar**
+- [x] **Step 5: Escrever o teste do job e vê-lo falhar**
 
 `backend/tests/test_job_diarize.py`:
 
@@ -1639,7 +1639,7 @@ def test_falha_da_diarizacao_vira_erro_com_mensagem_humana(db, aula_transcrita, 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_job_diarize.py`
 Expected: FAIL com `KeyError: 'diarize'`
 
-- [ ] **Step 6: Implementar `handle_diarize`**
+- [x] **Step 6: Implementar `handle_diarize`**
 
 O resultado do alinhamento é guardado em `Falante` com `role="UNASSIGNED"` para a tela de escolha consumir, e é apagado quando a escolha é feita. A tabela `job` da W1 não tem coluna de resultado e não ganha uma.
 
@@ -1675,12 +1675,12 @@ Mensagem em `app/core/messages.py`:
     "DIARIZACAO_FALHOU": "Não conseguimos separar as vozes deste áudio. Tente enviar uma gravação com menos ruído.",
 ```
 
-- [ ] **Step 7: Rodar e confirmar que passa**
+- [x] **Step 7: Rodar e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_job_diarize.py tests/test_align.py`
 Expected: PASS (11 testes)
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -1717,7 +1717,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `atribuir_papeis(db, aula, rotulo: str) -> None` — cria os dois `Falante`, liga cada segmento
     ao papel certo e apaga os rótulos provisórios; levanta `VozDesconhecida`
 
-- [ ] **Step 1: Escrever o teste de backend que falha**
+- [x] **Step 1: Escrever o teste de backend que falha**
 
 `backend/tests/test_escolha_voz.py`:
 
@@ -1766,7 +1766,7 @@ def test_aula_de_outro_professor_da_404(cliente_outro_professor, aula_diarizada)
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_escolha_voz.py`
 Expected: FAIL com 404 em todas as rotas
 
-- [ ] **Step 2: Implementar as rotas**
+- [x] **Step 2: Implementar as rotas**
 
 `app/transcricao/routes.py`, seguindo o estilo de `app/aulas/routes.py`. O rótulo interno do diarizador (`SPEAKER_00`) nunca vaza para a API: a rota numera as vozes por ordem de tempo falado.
 
@@ -1806,12 +1806,12 @@ def escolher_voz(aula_id: uuid.UUID, body: EscolhaIn, actor: Actor = Depends(cur
 `atribuir_papeis` cria dois `Falante` (PROFESSOR e ALUNO), liga cada segmento ao
 papel certo e **apaga os rótulos provisórios** do diarizador.
 
-- [ ] **Step 3: Rodar e confirmar que passa**
+- [x] **Step 3: Rodar e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_escolha_voz.py`
 Expected: PASS (5 testes)
 
-- [ ] **Step 4: Escrever o teste de frontend que falha**
+- [x] **Step 4: Escrever o teste de frontend que falha**
 
 `frontend/src/pages/EscolhaVoz.test.tsx`:
 
@@ -1852,7 +1852,7 @@ test("escolher uma voz manda o rótulo e navega para a revisão", async () => {
 Run: `cd frontend && npx vitest run src/pages/EscolhaVoz.test.tsx`
 Expected: FAIL — a rota não existe
 
-- [ ] **Step 5: Implementar a tela**
+- [x] **Step 5: Implementar a tela**
 
 `frontend/src/pages/EscolhaVoz.tsx`. Lista com divisória de 1px, não grade de cards (`DESIGN.md`). Cada voz tem um `<audio>` por amostra, com nome acessível.
 
@@ -1889,12 +1889,12 @@ export function EscolhaVoz() {
 Registrar a rota `/aulas/:id/vozes` em `App.tsx` e mandar a página da aula levar
 para lá quando o status for `READY_FOR_SPEAKER_REVIEW`.
 
-- [ ] **Step 6: Rodar e confirmar que passa**
+- [x] **Step 6: Rodar e confirmar que passa**
 
 Run: `cd frontend && npm test && npm run lint`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend fias-ed-web/frontend
@@ -2085,7 +2085,7 @@ A maior tela da fatia.
 **Interfaces:**
 - Consumes: as três rotas da Task 9.
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `frontend/src/pages/RevisaoTranscricao.test.tsx`:
 
@@ -2159,7 +2159,7 @@ test("cada segmento é um grupo rotulado com o horário", async () => {
 Run: `cd frontend && npx vitest run src/pages/RevisaoTranscricao.test.tsx`
 Expected: FAIL — a rota não existe
 
-- [ ] **Step 2: Implementar a tela**
+- [x] **Step 2: Implementar a tela**
 
 Estrutura: um `<section>` por segmento, com `role="group"` e `aria-label` com o
 horário; alternância de falante como botão de dois estados com texto; `onBlur`
@@ -2209,12 +2209,12 @@ function SegmentoLinha({ seg, onSalvo }: { seg: Segmento; onSalvo: (s: Segmento)
 O rótulo do `TextAreaField` é visível só para leitor de tela (`visually-hidden`),
 porque o horário já aparece ao lado — mas existe, como a `DESIGN.md` exige.
 
-- [ ] **Step 3: Rodar e confirmar que passa**
+- [x] **Step 3: Rodar e confirmar que passa**
 
 Run: `cd frontend && npm test && npm run lint && npm run build`
 Expected: PASS
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add fias-ed-web/frontend
@@ -2242,7 +2242,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `categoria_de(logits: list[float], offset: int) -> int`
   - `montar_pares(textos: list[str]) -> list[tuple[str, str]]` — o turno anterior e o atual
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `backend/tests/test_clf_bertimbau.py`. Os dois primeiros testes são restrições globais, não detalhes: eles reprovam se alguém voltar a confiar no checkpoint.
 
@@ -2286,12 +2286,12 @@ def test_offset_invalido_recusa():
         categoria_de([0.0] * 10, offset=0)
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_clf_bertimbau.py`
 Expected: FAIL com `ModuleNotFoundError: No module named 'app.ml.clf_bertimbau'`
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 ```python
 """BERTimbau atrás do protocolo Classificador.
@@ -2343,12 +2343,12 @@ class BertimbauClassificador:
         return saida.tolist()
 ```
 
-- [ ] **Step 4: Rodar e confirmar que passa**
+- [x] **Step 4: Rodar e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_clf_bertimbau.py`
 Expected: PASS (5 testes)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -2377,7 +2377,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `classificar_aula(db, aula) -> None`
   - `handle_classify_fias(db, job)`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 `backend/tests/test_job_fias.py`:
 
@@ -2472,12 +2472,12 @@ def test_reclassificar_apaga_o_resultado_anterior(db, aula_classificada, classif
     assert depois == antes  # não duplicou
 ```
 
-- [ ] **Step 2: Rodar e confirmar que falha**
+- [x] **Step 2: Rodar e confirmar que falha**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_job_fias.py`
 Expected: FAIL com `KeyError: 'classify_fias'`
 
-- [ ] **Step 3: Implementar `app/fias/service.py`**
+- [x] **Step 3: Implementar `app/fias/service.py`**
 
 Nenhuma conta é feita aqui: tudo vem do motor do shared.
 
@@ -2552,12 +2552,12 @@ volta ao modo de revisão e vai concluir de novo quando terminar. Enfileirar a c
 edição criaria uma tempestade de jobs — cinquenta trechos corrigidos, cinquenta
 classificações da aula inteira.
 
-- [ ] **Step 4: Rodar e confirmar que passa**
+- [x] **Step 4: Rodar e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_job_fias.py`
 Expected: PASS (5 testes)
 
-- [ ] **Step 5: Gravar o `Processamento` que torna a classificação reproduzível**
+- [x] **Step 5: Gravar o `Processamento` que torna a classificação reproduzível**
 
 O spec §5.4 e o critério 9 exigem que, dada uma aula, se saiba com qual modelo,
 com quais parâmetros e sob qual versão de regras ela foi analisada. Sem isso um
@@ -2630,12 +2630,12 @@ lista local de hashes.
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_job_fias.py`
 Expected: PASS (8 testes)
 
-- [ ] **Step 6: Rodar a suíte inteira**
+- [x] **Step 6: Rodar a suíte inteira**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend
@@ -2666,7 +2666,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Produces: `GET /api/aulas/{id}/padroes` →
   `{"faixa": [{"inicio_ms": 0, "fim_ms": 3000, "grupo": "direta"}], "observacoes": [{"texto": "...", "evidencias": [{"segmento_id": "...", "inicio_ms": 0, "trecho": "..."}]}], "matriz": [[0]*10]*10, "indices": [{"codigo": "ID", "nome": "Razão I/D", "valor": 0.62, "descricao": "..."}]}`
 
-- [ ] **Step 1: Escrever o teste de backend que falha**
+- [x] **Step 1: Escrever o teste de backend que falha**
 
 ```python
 def test_padroes_traz_faixa_matriz_e_indices(cliente, aula_classificada):
@@ -2700,18 +2700,18 @@ def test_aula_ainda_nao_classificada_da_409(cliente, aula_em_revisao):
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_padroes.py`
 Expected: FAIL com 404
 
-- [ ] **Step 2: Implementar a rota**
+- [x] **Step 2: Implementar a rota**
 
 Lê `ClassificacaoFIAS` e `IndicadorFIAS`, monta a faixa a partir dos intervalos
 agrupados por `fias_groups` do `tokens.json` (indireta, direta, estudante,
 silêncio), e usa `select_evidence_segments` do motor para as evidências.
 
-- [ ] **Step 3: Rodar e confirmar que passa**
+- [x] **Step 3: Rodar e confirmar que passa**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test_padroes.py`
 Expected: PASS (4 testes)
 
-- [ ] **Step 4: Escrever o teste de frontend que falha**
+- [x] **Step 4: Escrever o teste de frontend que falha**
 
 ```tsx
 test("a tela abre pela faixa de tempo e pelas observações", async () => {
@@ -2765,7 +2765,7 @@ test("a faixa de tempo tem alternativa textual", async () => {
 Run: `cd frontend && npx vitest run src/pages/PadroesInteracao.test.tsx`
 Expected: FAIL
 
-- [ ] **Step 5: Implementar a tela e a faixa**
+- [x] **Step 5: Implementar a tela e a faixa**
 
 `FaixaDeTempo.tsx` desenha as barras com as quatro cores de `fias_groups`
 (`--color-fias-indirect`, `--color-fias-direct`, `--color-fias-student`,
@@ -2788,12 +2788,12 @@ verificado: branco contra teal 4,50:1 e contra navy 10,44:1; navy contra sky
 `<caption>`. Os índices vêm em lista, com nome por extenso e o que cada um mede
 — nunca ao lado de um limiar.
 
-- [ ] **Step 6: Rodar e confirmar que passa**
+- [x] **Step 6: Rodar e confirmar que passa**
 
 Run: `cd frontend && npm test && npm run lint && npm run build`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend fias-ed-web/frontend
@@ -2822,13 +2822,13 @@ Primeira task que precisa de peso de modelo. Tudo que veio antes roda sem GPU.
 **Interfaces:**
 - Produces: `class WhisperASR`, `class PyannoteDiarizador`, ambos implementando os protocolos da Task 3.
 
-- [ ] **Step 1: Acrescentar as dependências e o volume**
+- [x] **Step 1: Acrescentar as dependências e o volume**
 
 `backend/pyproject.toml`: `faster-whisper`, `pyannote.audio`, `transformers`, `torch`.
 `docker-compose.yml`: volume `models:/models` em `api` e `worker`, mais
 `HF_HUB_OFFLINE=1` e `TRANSFORMERS_OFFLINE=1` no ambiente dos dois.
 
-- [ ] **Step 2: Escrever o teste lento que falha**
+- [x] **Step 2: Escrever o teste lento que falha**
 
 `backend/tests/test_modelos_reais.py`:
 
@@ -2872,7 +2872,7 @@ addopts = "-m 'not lento'"
 Run: `docker compose -f docker-compose.test.yml run --rm --build api-test pytest -q -m lento`
 Expected: FAIL com `ModuleNotFoundError: No module named 'app.ml.asr_whisper'`
 
-- [ ] **Step 3: Implementar `asr_whisper.py`**
+- [x] **Step 3: Implementar `asr_whisper.py`**
 
 ```python
 from pathlib import Path
@@ -2898,7 +2898,7 @@ class WhisperASR:
                 for s in segmentos if s.text.strip()]
 ```
 
-- [ ] **Step 4: Implementar `diar_pyannote.py`**
+- [x] **Step 4: Implementar `diar_pyannote.py`**
 
 ```python
 from pathlib import Path
@@ -2921,7 +2921,7 @@ class PyannoteDiarizador:
         return sorted(turnos, key=lambda t: t.inicio_ms)
 ```
 
-- [ ] **Step 5: Escrever `scripts/setup_models.py`**
+- [x] **Step 5: Escrever `scripts/setup_models.py`**
 
 Script de stdlib + `huggingface_hub`, rodado uma vez na instalação. Baixa o
 `pyannote` com o token do ambiente, copia os artefatos do BERTimbau dos
@@ -2951,24 +2951,31 @@ Acrescentar as entradas do `pyannote` e do `faster-whisper` a
 
 - [ ] **Step 6: Rodar o setup e os testes lentos**
 
+> **BLOQUEADO na parte da diarização.** `pyannote/speaker-diarization-3.1` e
+> `pyannote/segmentation-3.0` são repositórios com condições de uso: o token
+> volta `403 GatedRepo` ("you are not in the authorized list") enquanto a conta
+> dona do token não aceitar as condições na página de cada um. Sem isso não dá
+> para baixar o peso, nem conferir o carregamento offline do pipeline. A parte
+> do ASR foi baixada e os três testes `lento` do Whisper passam offline.
+
 Run: `docker compose run --rm -e HUGGINGFACE_TOKEN=<token> api python /app/scripts/setup_models.py`
 Expected: `MODELOS OK`
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q -m lento`
 Expected: PASS (3 testes)
 
-- [ ] **Step 7: Documentar no README**
+- [x] **Step 7: Documentar no README**
 
 Seção nova "Modelos", com: onde ficam, como obter o token do Hugging Face,
 como rodar o setup, e a observação de que o produto em execução não acessa a
 rede (`HF_HUB_OFFLINE=1`).
 
-- [ ] **Step 8: Rodar a suíte padrão e confirmar que continua sem modelo**
+- [x] **Step 8: Rodar a suíte padrão e confirmar que continua sem modelo**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest -q`
 Expected: PASS, e os testes `lento` **não** rodam
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add fias-ed-web fias-ed-shared/scientific-config/models.json

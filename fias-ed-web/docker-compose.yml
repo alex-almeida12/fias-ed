@@ -57,8 +57,16 @@ services:
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-1610612736}
       MIN_AUDIO_SECONDS: ${MIN_AUDIO_SECONDS:-60}
       MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-9000}
+      MODELS_DIR: /models
+      ASR_SIZE: ${ASR_SIZE:-small}
+      # Em execução nada sai para a rede atrás de peso. As três classes de modelo
+      # já carregam com local_files_only; isto aqui é a segunda tranca, para o
+      # caso de uma dependência resolver consultar o Hub por conta própria.
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
     volumes:
       - audio_store:/data/audio
+      - models:/models:ro
     networks: [fias_net, edge]
     depends_on:
       migrate:
@@ -75,6 +83,7 @@ services:
     environment: *api-env
     volumes:
       - audio_store:/data/audio
+      - models:/models:ro
     networks: [fias_net]
     depends_on:
       migrate:
@@ -84,6 +93,30 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  # Execução única, à mão, na instalação (veja "Modelos" no README). É o único
+  # serviço que sai para a rede atrás de peso — daí ficar atrás de um profile:
+  # `docker compose up` não o levanta.
+  setup-models:
+    <<: *api-image
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    restart: "no"
+    profiles: ["setup"]
+    command: ["python", "/app/scripts/setup_models.py"]
+    environment:
+      FIAS_ED_MODELS_DIR: /models
+      FIAS_ED_EXPERIMENTS_DIR: /experimentos
+      FIAS_ED_ASR_SIZE: ${ASR_SIZE:-small}
+      # Sem `:?` de propósito: o compose interpola o arquivo inteiro mesmo para
+      # quem só vai subir o produto, e um `:?` aqui quebraria o `up` de todo
+      # mundo que não tem token. Quem valida é o próprio script.
+      HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
+    volumes:
+      - models:/models
+      # Somente leitura: os pesos do BERTimbau saem daqui e nada volta para lá.
+      - ${FIAS_ED_EXPERIMENTS_DIR:-./deploy}:/experimentos:ro
+    networks: [edge]
 
   web:
     <<: *hardening
@@ -111,3 +144,4 @@ networks:
 volumes:
   pgdata:
   audio_store:
+  models:

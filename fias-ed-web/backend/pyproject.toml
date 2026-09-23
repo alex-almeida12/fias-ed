@@ -19,6 +19,17 @@ dependencies = [
   # Modelo de NER de português (MIT + CC BY-SA 4.0), instalado como wheel local do release
   # oficial do spaCy: baixado uma vez no build da imagem, nunca em tempo de execução.
   "pt_core_news_sm @ https://github.com/explosion/spacy-models/releases/download/pt_core_news_sm-3.8.0/pt_core_news_sm-3.8.0-py3-none-any.whl",
+  # Modelos reais (Task 14). O alvo é CPU: o Dockerfile instala torch/torchaudio do
+  # índice de wheels CPU do PyTorch antes deste pip, senão vem o wheel com CUDA e a
+  # imagem cresce alguns gigabytes sem serventia nenhuma aqui.
+  # <2.9: a partir do torchaudio 2.9 o `torchaudio.AudioMetaData` sumiu e o
+  # pyannote.audio 3.x quebra na importação. Teto de versão, não capricho.
+  "torch>=2.2,<2.9",
+  "torchaudio>=2.2,<2.9",
+  "transformers>=4.44,<5",
+  "faster-whisper>=1.0,<2",
+  "pyannote.audio>=3.3,<4",
+  "huggingface-hub>=0.24,<1",
 ]
 
 [project.optional-dependencies]
@@ -29,4 +40,7 @@ include = ["app*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-p no:cacheprovider"
+markers = ["lento: usa modelo real; fora da suíte padrão"]
+# -m 'not lento' mantém a suíte padrão rodando sem peso de modelo e sem GPU; o
+# -p no:cacheprovider é anterior (imagem com /app somente leitura) e continua valendo.
+addopts = "-p no:cacheprovider -m 'not lento'"

@@ -14,6 +14,7 @@ from app.main import create_app
 from app.ml.protocols import SegmentoASR
 from app.models import Audio, Base
 from app.transcricao.service import criar_transcricao, falante_provisorio, gravar_segmentos
+from tests.audio_fixtures import VOZ_A, VOZ_B, make_fala
 from tests.helpers import make_aula, make_user
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -95,3 +96,26 @@ def aula_transcrita(db):
     gravar_segmentos(db, transcricao, segmentos, provisorio)
     db.commit()
     return aula
+
+
+# ---- fala sintética para os testes de modelo real (marcador `lento`) ----------------
+
+# Frases curtas e repetidas: o libflite lê com pronúncia inglesa, então o texto
+# que o Whisper devolve não bate palavra por palavra com o que foi sintetizado —
+# e não é isso que os testes checam. O que importa é que há fala de verdade no
+# arquivo, com envelope e formantes, e não um tom puro que o VAD descarta.
+_FRASE_A = "hoje a gente vai falar sobre o problema da aula passada"
+_FRASE_B = "professor eu nao entendi a parte do meio dessa conta"
+
+
+@pytest.fixture
+def wav_fala(tmp_path):
+    """Uma voz só, alguns segundos de fala contínua."""
+    return make_fala(tmp_path / "fala.wav", [(_FRASE_A, VOZ_A)] * 3)
+
+
+@pytest.fixture
+def wav_duas_vozes(tmp_path):
+    """Duas vozes alternando: é o mínimo para a diarização ter o que separar."""
+    return make_fala(tmp_path / "duas-vozes.wav",
+                     [(_FRASE_A, VOZ_A), (_FRASE_B, VOZ_B)] * 3)

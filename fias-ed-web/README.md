@@ -52,13 +52,70 @@ Todos os comandos rodam dentro de `fias-ed-web/`.
      printf '%s\n%s\n' "$PW" "$PW" | docker compose run -T --rm api python -m app.cli create-admin --username <usuario> --display-name "<Nome>"
      unset PW
      ```
-5. Abra **http://localhost:8080** (use `localhost`, não o IP: o cookie de
+5. Popule o diretório de modelos (veja **Modelos**, logo abaixo). Sem isso a
+   entrada de áudio funciona, mas o processamento da aula para no primeiro
+   passo que precisa de modelo.
+6. Abra **http://localhost:8080** (use `localhost`, não o IP: o cookie de
    sessão é `Secure` e o navegador só o aceita em HTTP puro para `localhost`).
 
 O projeto Compose se chama `fias-ed-web` e o banco `fias_ed_web` (os volumes
 ficam como `fias-ed-web_pgdata` e `fias-ed-web_audio_store`). O nome
 `fias-ed` não é usado de propósito: pode existir outro projeto com esse nome
 na mesma máquina.
+
+### Modelos
+
+Os três modelos ficam no volume `fias-ed-web_models`, montado em `/models`.
+Eles **não** estão no Git (pesam cerca de 1 GB) e não são baixados quando o
+sistema sobe: `api` e `worker` montam `/models` **somente leitura** e rodam com
+`HF_HUB_OFFLINE=1` e `TRANSFORMERS_OFFLINE=1`. Em execução, nada sai para a
+rede atrás de peso — se faltar um arquivo, o serviço recusa em vez de baixar.
+
+| Modelo | Para quê | De onde vem |
+|---|---|---|
+| `faster-whisper-small` | Transformar áudio em texto | Hugging Face |
+| `pyannote/speaker-diarization-3.1` | Separar as vozes da sala | Hugging Face |
+| BERTimbau FIAS (Frente 3) | Classificação FIAS das falas | `artigos selecionados/experimentos/` |
+
+Quem popula o volume é `scripts/setup_models.py`, uma vez, na instalação.
+Cada repositório é baixado numa revisão fixada no próprio script, para que
+duas máquinas instaladas em semanas diferentes fiquem com os mesmos pesos.
+
+**Antes de rodar o setup**, três coisas:
+
+1. Crie um token de **leitura** em <https://huggingface.co/settings/tokens>.
+2. Abra as duas páginas abaixo **logado na conta dona do token** e aceite as
+   condições de uso de cada uma. Sem isso o download volta `403`, e o script
+   diz exatamente isso:
+   - <https://huggingface.co/pyannote/speaker-diarization-3.1>
+   - <https://huggingface.co/pyannote/segmentation-3.0>
+3. Preencha no `.env`:
+   ```
+   HUGGINGFACE_TOKEN=<o token>
+   FIAS_ED_EXPERIMENTS_DIR=../../artigos selecionados/experimentos
+   ```
+   O `.env` é ignorado pelo Git. **O token nunca entra em arquivo versionado,
+   em log nem em mensagem de erro** — nem o `.env.example`, que traz só o nome
+   da variável.
+
+Depois:
+
+```bash
+docker compose --profile setup run --rm setup-models
+```
+
+O script termina com `MODELOS OK`. Ele é o único serviço do Compose que usa
+rede para buscar peso, e por isso fica atrás do profile `setup`: um
+`docker compose up` não o levanta. Ele lê o diretório dos experimentos
+**somente leitura** e nunca escreve lá.
+
+Os testes que carregam os modelos de verdade são marcados `lento` e ficam
+**fora** da suíte padrão (que roda sem peso e sem GPU). Para rodar só eles,
+com o volume dos modelos:
+
+```bash
+docker compose -f docker-compose.test.yml run --rm -v fias-ed-web_models:/models:ro api-test pytest -q -m lento
+```
 
 ### Tamanho máximo do áudio
 
@@ -190,6 +247,12 @@ Nenhuma dependência envia telemetria.
 | psycopg 3 | LGPL-3.0 | driver PostgreSQL |
 | argon2-cffi | MIT | hash de senha Argon2id |
 | FFmpeg (ffprobe) | LGPL/GPL (pacote Debian) | leitura dos metadados do áudio |
+| PyTorch, torchaudio (wheels de CPU) | BSD-3 | base dos modelos; sem CUDA, o alvo é CPU |
+| Transformers | Apache-2.0 | carregamento do classificador |
+| faster-whisper, CTranslate2 | MIT | transcrição |
+| pyannote.audio | MIT | separação de vozes |
+| huggingface-hub | Apache-2.0 | download dos pesos, só na instalação |
+| spaCy, `pt_core_news_sm` | MIT, MIT + CC BY-SA 4.0 | pseudonimização de nomes |
 | PostgreSQL 16 | PostgreSQL License | banco de dados |
 | nginx (nginx-unprivileged) | BSD-2 | servidor web e proxy |
 | React, React DOM, React Router | MIT | interface |
