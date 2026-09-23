@@ -1436,12 +1436,18 @@ Item 2 do Review Focus. O alinhamento é função pura e é onde a lógica mais 
   - `alinhar(segmentos: list[SegmentoASR], turnos: list[TurnoDiar]) -> list[str | None]` — um rótulo de voz por segmento, na mesma ordem; `None` quando não há sobreposição alguma.
   - `resumo_por_voz(segmentos, rotulos) -> list[GrupoDeVoz]`
   - `@dataclass(frozen=True) GrupoDeVoz(rotulo: str, tempo_total_ms: int, n_segmentos: int, amostras: list[tuple[int, int]])`
-  - `criar_falantes_provisorios(db, transcricao, segmentos, rotulos: list[str | None]) -> None` —
+  - `criar_falantes_provisorios(db, transcricao, linhas: list[Segmento], rotulos: list[str | None]) -> None` —
     cria um `Falante` por voz com `role="UNASSIGNED"` e o `diarization_label` do
     diarizador, **repointa cada segmento** para o falante da sua voz, e apaga o
     falante provisório `"pendente"` que a Task 5 criou. Segmento sem rótulo
     (nenhuma sobreposição com turno algum) fica no provisório, que por isso só é
-    apagado quando ficar sem segmentos
+    apagado quando ficar sem segmentos.
+
+    **Recebe as linhas do banco, não refaz a consulta.** Casar duas consultas
+    independentes por posição — ambas `ORDER BY start_ms`, sem chave de
+    desempate — deixa dois trechos com `start_ms` idêntico trocarem de voz em
+    silêncio. Uma consulta só, e a mesma lista percorre o alinhamento e o
+    repontamento.
   - `handle_diarize(db, job)`
 
 - [ ] **Step 1: Escrever o teste que falha**
@@ -1494,6 +1500,28 @@ def test_resumo_agrega_tempo_e_contagem_por_voz():
     assert por_rotulo["B"].tempo_total_ms == 1_000
     # ordenado do que mais falou para o que menos falou
     assert [g.rotulo for g in grupos] == ["A", "B"]
+
+
+def test_segmento_que_contem_o_turno_inteiro():
+    """O inverso do caso anterior: turno curto dentro de um trecho longo. A
+    sobreposição é a duração do turno."""
+    segs = [SegmentoASR(0, 10_000, "fala longa")]
+    turnos = [TurnoDiar(3_000, 4_000, "A")]
+    assert alinhar(segs, turnos) == ["A"]
+
+
+def test_segmentos_com_start_ms_identico_nao_trocam_de_voz(db, aula_transcrita):
+    """Dois trechos começando no mesmo milissegundo. Se o repontamento casar por
+    posição entre consultas independentes, um recebe a voz do outro."""
+    linhas = segmentos_ordenados(db, transcricao_da(db, aula_transcrita))
+    linhas[0].start_ms = linhas[1].start_ms = 5_000
+    db.commit()
+    rotulos = ["A", "B"] + [None] * (len(linhas) - 2)
+    criar_falantes_provisorios(db, transcricao_da(db, aula_transcrita), linhas, rotulos)
+    db.refresh(linhas[0]); db.refresh(linhas[1])
+    rotulo_de = {f.id: f.diarization_label for f in falantes_da(db, aula_transcrita)}
+    assert rotulo_de[linhas[0].falante_id] == "A"
+    assert rotulo_de[linhas[1].falante_id] == "B"
 
 
 def test_resumo_traz_no_maximo_tres_amostras_por_voz():
@@ -1631,9 +1659,10 @@ def handle_diarize(db: Session, job: Job) -> None:
         db.commit()
         log_event("diarizacao_falhou", aula_id=aula.id, job_id=job.id)
         return
-    segmentos = segmentos_asr(db, transcricao)
-    rotulos = alinhar(segmentos, turnos)
-    criar_falantes_provisorios(db, transcricao, segmentos, rotulos)
+    # Uma consulta só: as mesmas linhas alimentam o alinhamento e o repontamento.
+    linhas = segmentos_ordenados(db, transcricao)
+    rotulos = alinhar([para_protocolo(l) for l in linhas], turnos)
+    criar_falantes_provisorios(db, transcricao, linhas, rotulos)
     aula.status, aula.error_code = "READY_FOR_SPEAKER_REVIEW", None
     finish_job(db, job)
     db.commit()
