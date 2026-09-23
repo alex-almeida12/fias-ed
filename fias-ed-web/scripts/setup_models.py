@@ -5,12 +5,20 @@ produto em execução nunca faz isso — os serviços sobem com HF_HUB_OFFLINE=1
 TRANSFORMERS_OFFLINE=1, e as três classes de modelo carregam com
 `local_files_only`.
 
-Cada repositório é baixado numa **revisão fixada** (o commit abaixo), não em
-`main`. É o que torna a instalação reprodutível: sem isso, duas máquinas
-instaladas em semanas diferentes rodariam pesos diferentes sem ninguém notar,
-e o §44 ("a mesma aula reprocessada dá o mesmo texto") deixaria de valer entre
-elas. O `huggingface_hub` confere o hash de cada arquivo contra o que o
-repositório declara naquela revisão.
+Cada repositório é baixado numa **revisão fixada**, não em `main`. É o que
+torna a instalação reprodutível: sem isso, duas máquinas instaladas em semanas
+diferentes rodariam pesos diferentes sem ninguém notar, e o §44 ("a mesma aula
+reprocessada dá o mesmo texto") deixaria de valer entre elas. O
+`huggingface_hub` confere o hash de cada arquivo contra o que o repositório
+declara naquela revisão.
+
+**O pino não mora aqui.** Qual commit de cada repositório é fato científico —
+define qual peso produziu os números do registro —, então ele vive em
+`scientific-config/models.json`, no bloco `integrity.repos` de cada modelo, e
+este script apenas o lê (`revisao_fixada`). Enquanto o script guardava a
+própria cópia da revisão, os dois lados podiam divergir em silêncio: ninguém
+lia o `integrity`, e o registro passaria a afirmar uma procedência que não era
+a baixada.
 
 O BERTimbau não vem da rede: é copiado dos experimentos e conferido contra
 `scientific-config/models.json`, que é onde os sha256 dele vivem.
@@ -38,21 +46,6 @@ import shutil
 import sys
 from pathlib import Path
 
-# repo_id -> revisão fixada
-# `tiny` e `base` estão aqui por causa da medição do §21 (scripts/medir_asr.py):
-# só dá para comparar tamanhos com os três em disco. Os dois **não** estão
-# declarados em scientific-config/models.json, que é somente leitura para este
-# repositório — adotar um deles em produção exige a entrada lá antes, senão
-# `app/ml/asr_whisper.py` recusa a carregar.
-REVISOES = {
-    "Systran/faster-whisper-tiny": "d90ca5fe260221311c53c58e660288d3deb8d356",
-    "Systran/faster-whisper-base": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
-    "Systran/faster-whisper-small": "536b0662742c02347bc0e980a01041f333bce120",
-    "pyannote/speaker-diarization-3.1": "84fd25912480287da0247647c3d2b4853cb3ee5d",
-    "pyannote/segmentation-3.0": "e66f3d3b9eb0873085418a7b813d3b369bf160bb",
-    "pyannote/wespeaker-voxceleb-resnet34-LM": "837717ddb9ff5507820346191109dc79c958d614",
-}
-
 REPO_ASR = "Systran/faster-whisper-{tamanho}"
 ARQUIVOS_ASR = ("config.json", "model.bin", "tokenizer.json", "vocabulary.txt")
 
@@ -73,13 +66,42 @@ class FalhaDeModelo(Exception):
     """
 
 
+def revisao_fixada(repo_id: str) -> str:
+    """A revisão de um repositório, lida do registro científico.
+
+    Única fonte do pino. `app.ml.registry` já é o caminho por onde este
+    repositório lê `scientific-config/models.json` (com cache), e é ele que se
+    usa aqui — abrir o JSON por conta própria criaria de novo duas leituras que
+    podem discordar.
+
+    Sem pino declarado não há valor padrão: baixar `main` daria uma instalação
+    que ninguém consegue reproduzir, e o registro continuaria afirmando outra
+    procedência. Um pino ausente é erro de configuração científica, e é assim
+    que sai daqui.
+
+    Exige `_sem_banco()` antes: o registro chega por `get_settings()`.
+    """
+    from app.ml.registry import carregar_registro
+
+    for modelo in carregar_registro().get("models", []):
+        for repo in modelo.get("integrity", {}).get("repos", []):
+            if repo.get("repo_id") == repo_id and repo.get("revision"):
+                return repo["revision"]
+    raise FalhaDeModelo(
+        f"{repo_id} não tem revisão fixada no registro científico"
+        " (scientific-config/models.json, bloco integrity.repos da entrada do modelo)."
+        " O pino de versão é o que torna a instalação reprodutível e é fato científico:"
+        " ele vive no registro, não neste script."
+        f" Declare lá o commit de https://huggingface.co/{repo_id} e rode de novo.")
+
+
 def _baixar(repo_id: str, arquivo: str, destino: Path, token: str, cache: Path) -> Path:
     from huggingface_hub import hf_hub_download
     from huggingface_hub.errors import GatedRepoError
 
     destino.parent.mkdir(parents=True, exist_ok=True)
     try:
-        baixado = hf_hub_download(repo_id, arquivo, revision=REVISOES[repo_id],
+        baixado = hf_hub_download(repo_id, arquivo, revision=revisao_fixada(repo_id),
                                   token=token, cache_dir=str(cache))
     except GatedRepoError:
         raise FalhaDeModelo(
@@ -240,10 +262,10 @@ def _exigir_ambiente(nome: str, dica: str) -> str:
 def somente_asr(base: Path, tamanho: str, token: str) -> int:
     """Só os pesos do Whisper, para a medição do §21.
 
-    Sem conferência no registro: ele declara `faster-whisper-small` e mais nada,
-    e mora em fias-ed-shared, que este repositório não altera. A garantia
-    de integridade aqui é a mesma do resto do script — a revisão fixada,
-    conferida pelo huggingface_hub no download.
+    Sem conferência de artefato contra o registro: ele declara
+    `faster-whisper-small` e mais nada. A garantia de integridade aqui é a mesma
+    do resto do script — a revisão fixada que o registro declara, conferida pelo
+    huggingface_hub no download. Tamanho sem pino lá não baixa (veja `main`).
     """
     try:
         whisper = baixar_whisper(base, tamanho, token)
@@ -264,13 +286,16 @@ def main(argv: list[str] | None = None) -> int:
     token = _exigir_ambiente(
         "HUGGINGFACE_TOKEN",
         "Crie um token de leitura em https://huggingface.co/settings/tokens e ponha no .env.")
-    if REPO_ASR.format(tamanho=tamanho) not in REVISOES:
-        raise SystemExit(
-            f"FIAS_ED_ASR_SIZE={tamanho} não tem revisão fixada neste script. Acrescente o"
-            f" commit de https://huggingface.co/{REPO_ASR.format(tamanho=tamanho)} em REVISOES"
-            " e a entrada correspondente em scientific-config/models.json.")
     base.mkdir(parents=True, exist_ok=True)
+    # Antes da primeira leitura do registro, e não depois: `revisao_fixada` passa
+    # por `get_settings()`, que exige `database_url`, e este serviço não tem banco.
     _sem_banco()
+    try:
+        revisao_fixada(REPO_ASR.format(tamanho=tamanho))
+    except FalhaDeModelo as erro:
+        # Aqui ainda é configuração, não modelo: sem pino não há passo que faça
+        # sentido tentar, e `SystemExit` para antes de tocar a rede.
+        raise SystemExit(f"FIAS_ED_ASR_SIZE={tamanho}: {erro}") from None
 
     if "--somente-asr" in argumentos:
         print(f"baixando o faster-whisper ({tamanho})…", flush=True)

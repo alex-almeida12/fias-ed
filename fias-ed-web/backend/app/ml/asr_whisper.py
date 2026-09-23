@@ -29,7 +29,8 @@ class WhisperASR:
         # os pesos que vêm do Hugging Face para models_dir não cabem na lista de
         # sha256 de lá. O que dá para exigir aqui é que o modelo em uso esteja
         # declarado no registro; a integridade do arquivo é do huggingface_hub,
-        # contra a revisão fixada em scripts/setup_models.py.
+        # contra a revisão fixada que o próprio registro declara (integrity.repos)
+        # e que scripts/setup_models.py lê de lá no download.
         entrada(s.asr_model_id)
         # device="cpu": não há GPU no alvo, e "auto" trocaria o backend conforme a
         # máquina — dois computadores dariam textos diferentes para a mesma aula.

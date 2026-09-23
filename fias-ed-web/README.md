@@ -206,16 +206,21 @@ Três ressalvas, para o que está escrito aqui não valer mais do que vale:
   estavam nesta máquina. Estão, e a medição está em "Custo da diarização",
   abaixo: ele cabe com folga, mas custa 3,6x o tempo do ASR — é a diarização, e
   não o tamanho do Whisper, que manda no relógio de uma aula.
-- **`tiny` e `base` não são adotáveis como estão.** Eles têm revisão fixada em
-  `scripts/setup_models.py` (para a medição), mas não têm entrada em
-  `fias-ed-shared/scientific-config/models.json`, que este repositório não
-  altera — e `app/ml/asr_whisper.py` recusa carregar um modelo que o registro
-  não declare. Trocar o tamanho em produção exige a entrada lá primeiro.
+- **`tiny` e `base` não são adotáveis, e hoje nem baixáveis.** Os números
+  acima foram medidos quando `scripts/setup_models.py` guardava a própria
+  revisão fixada dos dois. Não guarda mais: o pino de versão é fato científico
+  e vive só em `fias-ed-shared/scientific-config/models.json`
+  (`integrity.repos`), de onde o script o lê. `tiny` e `base` não têm entrada
+  lá — e `app/ml/asr_whisper.py` já recusava carregar um modelo que o registro
+  não declare. Sem pino declarado o script para com a mensagem dizendo isso, em
+  vez de baixar `main` e produzir uma instalação que ninguém reproduz. Repetir a
+  medição com eles exige a entrada no registro primeiro.
 
-Para baixar os pesos de um tamanho só (a medição precisa dos três em disco):
+Para baixar os pesos de um tamanho só (a medição precisa dos três em disco), com
+o tamanho declarado no registro:
 
 ```bash
-docker compose --profile setup run --rm -e FIAS_ED_ASR_SIZE=tiny \
+docker compose --profile setup run --rm -e FIAS_ED_ASR_SIZE=small \
     setup-models python /app/scripts/setup_models.py --somente-asr
 ```
 

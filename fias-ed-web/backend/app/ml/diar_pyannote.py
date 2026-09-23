@@ -47,7 +47,8 @@ class PyannoteDiarizador:
         # os pesos que vêm do Hugging Face para models_dir não cabem na lista de
         # sha256 de lá. O que dá para exigir aqui é que o modelo em uso esteja
         # declarado no registro; a integridade do arquivo é do huggingface_hub,
-        # contra a revisão fixada em scripts/setup_models.py.
+        # contra a revisão fixada que o próprio registro declara (integrity.repos)
+        # e que scripts/setup_models.py lê de lá no download.
         entrada(s.diar_model_id)
         config = Path(s.models_dir) / "pyannote" / "config.yaml"
         if not config.is_file():

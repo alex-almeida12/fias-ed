@@ -59,7 +59,7 @@
       "format": "ctranslate2",
       "artifacts": [],
       "integrity": {
-        "note": "Sem sha256 por artefato: este registro é enraizado em FIAS_ED_EXPERIMENTS_DIR (campo base_dir_env) e recusa artefato .bin (engine-py/tests/test_models_registry.py). Os pesos vêm do Hugging Face para FIAS_ED_MODELS_DIR, fora dessa raiz, e são .bin. A integridade deles é a da revisão fixada em fias-ed-web/scripts/setup_models.py, conferida pelo huggingface_hub no download.",
+        "note": "Sem sha256 por artefato: este registro é enraizado em FIAS_ED_EXPERIMENTS_DIR (campo base_dir_env) e recusa artefato .bin (engine-py/tests/test_models_registry.py). Os pesos vêm do Hugging Face para FIAS_ED_MODELS_DIR, fora dessa raiz, e são .bin. A integridade deles é a da revisão fixada, e o pino mora aqui: repos[].revision abaixo é a fonte única, lida por fias-ed-web/scripts/setup_models.py (revisao_fixada) e passada em revision= ao huggingface_hub, que confere o hash de cada arquivo no download. Enquanto o script guardava a própria cópia da revisão, este bloco era documentação morta que podia divergir em silêncio do peso baixado.",
         "install_dir_env": "FIAS_ED_MODELS_DIR",
         "install_relative_path": "faster-whisper-small/",
         "repos": [{"repo_id": "Systran/faster-whisper-small", "role": "weights", "revision": "536b0662742c02347bc0e980a01041f333bce120"}]
@@ -84,7 +84,7 @@
       "format": "pytorch",
       "artifacts": [],
       "integrity": {
-        "note": "Sem sha256 por artefato: este registro é enraizado em FIAS_ED_EXPERIMENTS_DIR (campo base_dir_env) e recusa artefato .bin (engine-py/tests/test_models_registry.py). Os pesos vêm do Hugging Face para FIAS_ED_MODELS_DIR, fora dessa raiz, e são .bin. A integridade deles é a da revisão fixada em fias-ed-web/scripts/setup_models.py, conferida pelo huggingface_hub no download.",
+        "note": "Sem sha256 por artefato: este registro é enraizado em FIAS_ED_EXPERIMENTS_DIR (campo base_dir_env) e recusa artefato .bin (engine-py/tests/test_models_registry.py). Os pesos vêm do Hugging Face para FIAS_ED_MODELS_DIR, fora dessa raiz, e são .bin. A integridade deles é a da revisão fixada, e o pino mora aqui: repos[].revision abaixo é a fonte única, lida por fias-ed-web/scripts/setup_models.py (revisao_fixada) e passada em revision= ao huggingface_hub, que confere o hash de cada arquivo no download. Enquanto o script guardava a própria cópia da revisão, este bloco era documentação morta que podia divergir em silêncio do peso baixado.",
         "install_dir_env": "FIAS_ED_MODELS_DIR",
         "install_relative_path": "pyannote/",
         "repos": [
