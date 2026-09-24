@@ -16,7 +16,7 @@ from app.jobs.queue import enqueue, fail_job, finish_job
 from app.ml.loader import obter_asr, obter_diarizador
 from app.ml.protocols import SegmentoASR
 from app.models import Audio, Aula, Job
-from app.pipeline.align import alinhar, criar_falantes_provisorios
+from app.pipeline.align import alinhar, criar_falantes_provisorios, gravar_fala_detectada
 from app.transcricao.service import (criar_transcricao, falante_provisorio, gravar_segmentos,
                                      para_protocolo, segmentos_ordenados, transcricao_da_aula)
 
@@ -193,6 +193,13 @@ def handle_diarize(db: Session, job: Job) -> None:
     linhas = segmentos_ordenados(db, transcricao)
     rotulos = alinhar([para_protocolo(linha) for linha in linhas], turnos)
     criar_falantes_provisorios(db, transcricao, linhas, rotulos)
+    # A linha do tempo de fala fica gravada — quando houve voz e quantas ao
+    # mesmo tempo, nunca quais (§48) —, porque daqui a três linhas a cópia de
+    # trabalho do áudio some. A classificação FIAS, que roda depois da revisão
+    # de vozes, precisa dela para aplicar a regra 4 de Flanders (silêncio de
+    # 3 s ou mais = categoria 10) contra a fala de verdade, e não contra as
+    # lacunas do ASR.
+    gravar_fala_detectada(db, transcricao, turnos)
     aula.status, aula.error_code = "READY_FOR_SPEAKER_REVIEW", None
     finish_job(db, job)
     db.commit()

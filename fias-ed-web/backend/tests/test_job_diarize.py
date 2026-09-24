@@ -177,3 +177,63 @@ def test_diarize_que_falha_nao_deixa_a_copia_de_trabalho(db, aula_transcrita, di
     db.refresh(aula_transcrita)
     assert aula_transcrita.error_code == "DIARIZACAO_FALHOU"
     assert not caminho.exists()
+
+
+# ---- evidência de fala/não-fala -----------------------------------------------------
+
+
+def test_diarize_grava_a_linha_do_tempo_de_fala(db, aula_transcrita, diarizador_falso_duas_vozes):
+    """A cópia de trabalho do áudio some no fim deste job, e a classificação
+    FIAS só roda depois da revisão de vozes. Se a linha do tempo de fala não
+    ficar gravada aqui, a regra 4 de Flanders (silêncio de 3 s ou mais =
+    categoria 10) perde para sempre a única fonte de "onde não houve fala"."""
+    from app.models import TrechoDeFala
+    _rodar(db, aula_transcrita)
+    t = transcricao_da_aula(db, aula_transcrita.id)
+    trechos = db.query(TrechoDeFala).filter_by(transcricao_id=t.id).order_by(
+        TrechoDeFala.inicio_ms).all()
+    # duas vozes em sequência, uma de cada vez: uma linha só, de uma voz —
+    # a troca de turno entre elas não sobrevive à fusão, e é isso que se quer.
+    assert [(x.inicio_ms, x.fim_ms, x.n_vozes) for x in trechos] == [(0, 9_000, 1)]
+
+
+def test_diarize_nao_grava_o_rotulo_da_voz_em_lugar_nenhum(db, aula_transcrita,
+                                                           diarizador_falso_duas_vozes):
+    """§48: não existe agrupamento de voz por estudante em lugar nenhum, nem no
+    banco. Com (início, fim, rótulo) gravados, "a voz 01 falou nestes momentos
+    da aula" sairia de um SELECT — e é exatamente isso que a LGPD veda aqui. O
+    que fica é quando houve fala e quantas vozes, nunca quais."""
+    from app.models import TrechoDeFala
+    _rodar(db, aula_transcrita)
+    t = transcricao_da_aula(db, aula_transcrita.id)
+    colunas = {c.name for c in TrechoDeFala.__table__.columns}
+    assert "rotulo" not in colunas and "diarization_label" not in colunas
+    trechos = db.query(TrechoDeFala).filter_by(transcricao_id=t.id).all()
+    valores = {str(v) for x in trechos for v in (x.inicio_ms, x.fim_ms, x.n_vozes)}
+    assert not any("SPEAKER" in v for v in valores)
+
+
+def test_vozes_simultaneas_sao_contadas_sem_dizer_quais(db, aula_transcrita, monkeypatch):
+    """A contagem é o que a confusão vai precisar (fias_rules.confusion, ainda
+    não implementada), e é o máximo que dá para guardar sem reidentificar."""
+    from app.models import TrechoDeFala
+    diarizador = DiarizadorFalso([TurnoDiar(0, 6_000, "SPEAKER_00"),
+                                  TurnoDiar(3_000, 9_000, "SPEAKER_01")])
+    monkeypatch.setattr(handlers, "obter_diarizador", lambda: diarizador)
+    _rodar(db, aula_transcrita)
+    t = transcricao_da_aula(db, aula_transcrita.id)
+    trechos = db.query(TrechoDeFala).filter_by(transcricao_id=t.id).order_by(
+        TrechoDeFala.inicio_ms).all()
+    assert [(x.inicio_ms, x.fim_ms, x.n_vozes) for x in trechos] == [
+        (0, 3_000, 1), (3_000, 6_000, 2), (6_000, 9_000, 1)]
+
+
+def test_reprocessar_a_diarizacao_nao_duplica_a_linha_do_tempo(db, aula_transcrita,
+                                                               diarizador_falso_duas_vozes):
+    """`recover_stale` devolve um job travado à fila e o handler refaz o estágio
+    do início. Trecho duplicado viraria fala onde não houve — e silêncio a menos."""
+    from app.models import TrechoDeFala
+    _rodar(db, aula_transcrita)
+    _rodar(db, aula_transcrita)
+    t = transcricao_da_aula(db, aula_transcrita.id)
+    assert db.query(TrechoDeFala).filter_by(transcricao_id=t.id).count() == 1

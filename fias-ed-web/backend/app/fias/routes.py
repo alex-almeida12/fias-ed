@@ -8,8 +8,9 @@ faixa de tempo e observações primeiro — o que ajuda a entender —, matriz e
 Faixa e matriz NÃO são persistidas (ruling da Task 12: "transition_matrix não
 é chamada — não há onde guardar e a Task 13 recalcula"): remontadas aqui a
 partir de `ClassificacaoFIAS`/`Segmento`, com as mesmas funções do motor que a
-classificação usa (`segments_to_intervals`, `transition_matrix`) — nenhuma
-regra científica é reimplementada. Os índices, ao contrário, já estão
+classificação usa (`code_lesson`, `transition_matrix`) — nenhuma regra
+científica é reimplementada, nem a aritmética de quando cada marca começa e
+acaba. Os índices, ao contrário, já estão
 persistidos em `IndicadorFIAS` pela Task 12: esta rota só lê, nunca recalcula.
 
 Nenhuma observação ou descrição de índice compara um número a um limiar: os
@@ -26,7 +27,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from fias_ed_engine.intervals import CodedSegment, segments_to_intervals, transition_matrix
+from fias_ed_engine.intervals import CodedSegment, Mark, code_lesson, transition_matrix
 from fias_ed_engine.mtss import select_evidence_segments
 from fias_ed_engine.rules import load_rules
 
@@ -36,6 +37,7 @@ from app.aulas.service import current_audio, get_owned_aula
 from app.core.db import get_db
 from app.core.errors import AppError
 from app.models import ClassificacaoFIAS, IndicadorFIAS, Segmento
+from app.pipeline.align import fala_detectada
 from app.transcricao.service import POS_CLASSIFICACAO, texto_efetivo, transcricao_da_aula
 
 router = APIRouter()
@@ -56,18 +58,26 @@ def _grupo_por_categoria(rules: dict) -> dict[int, str]:
     return grupos
 
 
-def _faixa(intervalos: list[int], total_ms: int, rules: dict) -> list[dict]:
-    passo_ms = int(rules["coding"]["interval_seconds"] * 1000)
+def _faixa(marcas: list[Mark], rules: dict) -> list[dict]:
+    """Os tempos vêm da marca, nunca de `índice × passo`.
+
+    A conta antiga (`i * passo_ms`) pressupunha uma marca por intervalo de 3 s.
+    Desde que o motor passou a registrar toda mudança de categoria (regra 3 de
+    Flanders), a sequência é mais longa que `duração / 3 s` — 549 marcas contra
+    482 na aula medida — e a faixa pintava 3,3 min além do fim da aula, com o
+    último trecho começando depois do fim. Quem sabe quando cada marca começa e
+    acaba é o motor, e é ele quem diz."""
     grupos = _grupo_por_categoria(rules)
-    return [{"inicio_ms": i * passo_ms, "fim_ms": min((i + 1) * passo_ms, total_ms), "grupo": grupos[cat]}
-           for i, cat in enumerate(intervalos)]
+    return [{"inicio_ms": m.start_ms, "fim_ms": m.end_ms, "grupo": grupos[m.category]}
+           for m in marcas]
 
 
 # Um fato descritivo por categoria FIAS que de fato ocorreu na aula — nunca uma
 # interpretação (isso é MTSS, fora do escopo da W2). Só as categorias 1-9
-# aparecem: a 10 (silêncio) é só a categoria de preenchimento de
-# transition_matrix, nunca atribuída a um segmento real
-# (classifier.role_categories não a lista para nenhum papel).
+# aparecem: as observações saem de SEGMENTO classificado, e nenhum segmento
+# recebe 10 (classifier.role_categories não a lista para nenhum papel). A
+# categoria 10 existe na linha do tempo — é o silêncio que o motor encontra
+# entre as falas —, mas não é um segmento de que se possa citar um trecho.
 _OBSERVACAO_POR_CATEGORIA = {
     1: "Em algum momento, o professor acolheu o que os estudantes sentiram sobre a aula.",
     2: "O professor elogiou ou incentivou os estudantes.",
@@ -105,7 +115,7 @@ def _observacoes(linhas: list[tuple[Segmento, ClassificacaoFIAS]]) -> list[dict]
 _DESCRICAO_INDICE = {
     "TT": "Proporção do tempo da aula ocupada pela fala do professor, somando as sete categorias docentes do FIAS.",
     "PT": "Proporção do tempo da aula ocupada pela fala dos estudantes, respondendo ou tomando iniciativa.",
-    "SC": "Proporção do tempo da aula sem fala reconhecível, incluindo silêncio e trechos de confusão.",
+    "SC": ("Proporção do tempo da aula em silêncio — trechos de 3 segundos ou mais sem fala. A categoria 10 do FIAS também abriga trechos de confusão, que esta versão não detecta e não conta aqui."),
     "ID_RATIO": ("Razão entre os momentos de influência indireta do professor (acolher, elogiar, usar ideias dos "
                 "estudantes, perguntar) e os de influência direta (expor, instruir, criticar)."),
     "PIR": ("Proporção da fala dos estudantes que partiu da iniciativa deles, sem ser resposta a uma pergunta "
@@ -148,13 +158,22 @@ def padroes_de_interacao(aula_id: uuid.UUID, actor: Actor = Depends(current_acto
     total_ms = audio.duration_ms if audio is not None else 0
     codificados = [CodedSegment(start_ms=seg.start_ms, end_ms=seg.end_ms, category=cls.pred_role_constrained)
                   for seg, cls in linhas]
-    intervalos = segments_to_intervals(codificados, total_ms=total_ms, rules=regras)
+    # Mesma chamada da classificação (app/fias/service.py), com a mesma evidência
+    # de fala: a tela não pode mostrar uma codificação diferente da que produziu
+    # os índices que ela exibe ao lado.
+    codificacao = code_lesson(codificados, total_ms=total_ms, rules=regras,
+                              speech=fala_detectada(db, transcricao.id))
 
     audit(db, actor, "aula", aula.id, "read")
     db.commit()
     return {
-        "faixa": _faixa(intervalos, total_ms, regras),
+        "faixa": _faixa(codificacao.marks, regras),
         "observacoes": _observacoes(linhas),
-        "matriz": transition_matrix(intervalos, regras),
+        "matriz": transition_matrix(codificacao.intervals, regras),
         "indices": _indices(db, aula.id, regras),
+        # Rastreabilidade, não índice: quanto tempo da aula a categoria 10
+        # recebeu por silêncio. Não há número de confusão porque confusão não é
+        # medida nesta versão (fias_rules.confusion.implemented = false), e um
+        # zero em toda aula se leria como "esta aula não teve confusão".
+        "tempo_de_silencio_ms": codificacao.silence_ms,
     }

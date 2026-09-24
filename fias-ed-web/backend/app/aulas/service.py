@@ -9,7 +9,8 @@ from app.audit import last_admin_change
 from app.core.errors import AppError
 from app.core.messages import error_message
 from app.models import (Audio, AudioUpload, Aula, ClassificacaoFIAS, Disciplina, Falante,
-                        IndicadorFIAS, Job, Processamento, Segmento, Transcricao, Turma, utcnow)
+                        IndicadorFIAS, Job, Processamento, Segmento, Transcricao, Turma,
+                        TrechoDeFala, utcnow)
 
 
 def get_owned_aula(db: Session, actor, aula_id: uuid.UUID) -> Aula:
@@ -97,6 +98,10 @@ def apagar_transcricao(db: Session, aula_id: uuid.UUID) -> None:
         db.execute(delete(ClassificacaoFIAS).where(ClassificacaoFIAS.segmento_id.in_(segmento_ids)))
     db.execute(delete(Segmento).where(Segmento.transcricao_id.in_(transcricao_ids)))
     db.execute(delete(Falante).where(Falante.transcricao_id.in_(transcricao_ids)))
+    # A linha do tempo de fala é derivada do áudio, diz quando houve voz na sala
+    # e depende de Transcricao por FK: sai junto, pela mesma regra do PRIVACY.md
+    # que manda apagar de verdade áudio e transcrição.
+    db.execute(delete(TrechoDeFala).where(TrechoDeFala.transcricao_id.in_(transcricao_ids)))
     db.execute(delete(Transcricao).where(Transcricao.id.in_(transcricao_ids)))
 
 

@@ -150,6 +150,40 @@ class Falante(EntityMixin, Base):
                                       default="UNASSIGNED", nullable=False)
 
 
+class TrechoDeFala(Base):
+    """A linha do tempo de fala da aula: de quando a quando houve voz, e
+    QUANTAS ao mesmo tempo — nunca quais.
+
+    Evidência de fala/não-fala, e é o único lugar onde ela existe depois que a
+    cópia de trabalho do áudio é apagada no fim da diarização. Sem esta tabela a
+    classificação FIAS — que só roda depois da revisão de vozes, horas ou dias
+    depois — não teria como saber onde não houve fala, e mediria silêncio pelas
+    lacunas entre segmentos do ASR, que é a medida errada: o vad_filter do
+    Whisper cola as pausas para dentro dos segmentos.
+
+    `n_vozes`, e não o rótulo do diarizador. O §48 proíbe agrupamento de voz por
+    estudante em qualquer lugar, inclusive no banco: com (início, fim, rótulo)
+    gravados, "o estudante da voz 01 falou nestes 45 momentos da aula" sai de um
+    SELECT. Que o rótulo não signifique nada entre execuções não ajuda — dentro
+    de uma aula ele significa, e é dentro de uma aula que a reidentificação
+    acontece. A contagem basta para as duas regras que precisam desta evidência:
+    silêncio quer saber se houve fala, e confusão (fias_rules.confusion, ainda
+    não implementada) quer saber se havia mais de uma voz ao mesmo tempo.
+
+    Tabela do Web, não do shared: não há entidade correspondente em
+    fias-ed-shared/schemas/entities, e por isso ela não carrega o EntityMixin —
+    não é um objeto do modelo de dados científico, é a evidência bruta de um
+    estágio do pipeline. Sai junto com a transcrição em `apagar_transcricao`."""
+    __tablename__ = "trecho_de_fala"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    transcricao_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("transcricao.id"), index=True,
+                                                      nullable=False)
+    inicio_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    fim_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    n_vozes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 class Segmento(EntityMixin, Base):
     __tablename__ = "segmento"
     transcricao_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("transcricao.id"), index=True,

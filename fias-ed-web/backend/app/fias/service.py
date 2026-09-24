@@ -2,7 +2,7 @@
 decidiu.
 
 Nenhuma regra científica é implementada aqui: `constrain_by_role`,
-`segments_to_intervals` e `compute_indices` (fias_ed_engine) decidem. Este
+`code_lesson` e `compute_indices` (fias_ed_engine) decidem. Este
 módulo só produz (segmento, logits, papel) para o motor e persiste
 exatamente o que ele devolveu — inclusive a predição crua, que é
 rastreabilidade científica (o que o modelo disse antes da restrição por
@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from fias_ed_engine.classifier import constrain_by_role, divergence_rate
 from fias_ed_engine.indices import compute_indices
-from fias_ed_engine.intervals import CodedSegment, segments_to_intervals
+from fias_ed_engine.intervals import CodedSegment, code_lesson
 from fias_ed_engine.rules import load_rules
 
 from app import APP_VERSION
@@ -29,6 +29,7 @@ from app.ml.loader import obter_classificador
 from app.ml.registry import carregar_registro, entrada
 from app.models import (Aula, ClassificacaoFIAS, Falante, IndicadorFIAS, ModeloIA, Processamento,
                         Segmento)
+from app.pipeline.align import fala_detectada
 from app.transcricao.service import texto_efetivo, transcricao_da_aula
 
 
@@ -196,8 +197,13 @@ def classificar_aula(db: Session, aula: Aula) -> None:
 
     audio = audio_original(db, aula.id)
     total_ms = audio.duration_ms if audio is not None else 0
-    intervalos = segments_to_intervals(codificados, total_ms=total_ms, rules=regras)
-    indices = compute_indices(intervalos, regras, n_segments=len(codificados))
+    # A evidência de fala/não-fala do separador de vozes entra aqui: o motor
+    # precisa dela para a regra 4 (silêncio de 3 s ou mais = categoria 10). Sem
+    # ela ele cairia nas lacunas entre segmentos do ASR, que o vad_filter do
+    # Whisper fecha — mediria 0,4% de silêncio onde o diarizador mede 5,4%.
+    codificacao = code_lesson(codificados, total_ms=total_ms, rules=regras,
+                              speech=fala_detectada(db, transcricao.id))
+    indices = compute_indices(codificacao.intervals, regras, n_segments=len(codificados))
     gravar_indicadores(db, aula, indices, regras["rules_version"])
 
     stage_times_ms = {"fias_classification_ms": int((time.monotonic() - inicio) * 1000)}

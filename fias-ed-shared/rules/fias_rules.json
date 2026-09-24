@@ -1,9 +1,40 @@
 {
-  "rules_version": "1.0.0",
+  "rules_version": "2.0.0",
   "coding": {"interval_seconds": 3, "source_reference": "CAP4 l.56 (protocolo de codificação a cada 3 s; Flanders 1970)", "validation_status": "validated"},
   "aggregation": {"method": "largest_coverage", "tie_break": "earliest_start", "gap_category": 10,
-    "source_reference": "Spec 2026-09-21 §4.3 — regra turno→intervalo não definida nas fontes (inventário item 11)",
+    "notes": "A partir de rules_version 2.0.0, `method` NÃO governa mais a codificação em intervalos: a regra de balde (uma marca por 3 s, vence quem cobre mais) foi substituída por `interval_coding`. O que sobreviveu aqui é `tie_break` (desempate entre segmentos codificados que cobrem o mesmo instante) e `gap_category`. O campo `method` permanece só porque o schema o fixa como const.",
+    "source_reference": "Spec 2026-09-21 §4.3 — regra turno→intervalo não definida nas fontes (inventário item 11); superada por `interval_coding` em 2026-09-23",
     "validation_status": "PENDING_SCIENTIFIC_VALIDATION"},
+  "interval_coding": {
+    "policy": "record_every_change",
+    "clock": "restart_on_change",
+    "merge_adjacent_same_category": true,
+    "notes": "3 s é a taxa MÍNIMA de amostragem, não um balde: toda mudança de categoria vira marca, e dentro de um trecho de categoria constante a marca se repete a cada 3 s, com o relógio contado a partir do último registro (e não de uma grade fixa em 0, 3, 6 s). Trechos vizinhos de mesma categoria são fundidos ANTES de marcar, senão a contagem mede o picotamento do ASR e não a aula.",
+    "source_reference": "Flanders (1970), regra 3: \"If more than one category is active in a span of 3 seconds, all the categories should be recorded. If after 3 seconds, no category changes, then the same serial number should be repeated.\"; CAP4 l.56",
+    "validation_status": "validated"
+  },
+  "silence": {
+    "rule": "non_speech_run",
+    "min_seconds": 3,
+    "category": 10,
+    "speech_source": "diarization_speech_activity",
+    "overrides_speech_segments": true,
+    "notes": "A fonte da não-fala é a atividade de fala do diarizador, nunca a lacuna entre segmentos do ASR: o vad_filter do Whisper cola as pausas para dentro dos segmentos. Medição de 2026-09-23 numa aula de 1 445 588 ms: as lacunas entre segmentos do ASR somam 21,5 s (20 das 21 abaixo de 3 s), as lacunas entre turnos do diarizador somam 78,2 s em 18 lacunas de 3 s ou mais (5,4% da aula). Pausa abaixo de 3 s não é categoria 10: é absorvida pela categoria em curso.",
+    "source_reference": "Flanders (1970), regra 4: \"If the time period of silence exceeds 3 seconds, it should be recorded under the category No.10\"; a escolha do diarizador como fonte da não-fala é decisão de engenharia (medição 2026-09-23)",
+    "validation_status": "engineering_decision"
+  },
+  "confusion": {
+    "implemented": false,
+    "category": 10,
+    "definition": "communication cannot be understood by the observer",
+    "requires": ["sobreposição de falantes", "inintelegibilidade do que foi dito"],
+    "why_not_implemented": "Sobreposição de fala SOZINHA não é confusão: falar por cima e se entender é comportamento normal de sala de aula, e costuma ser sinal de engajamento, não de desordem. A segunda condição — não dar para entender — precisa do sinal de confiança de decodificação do ASR (avg_logprob, no_speech_prob, compression_ratio do faster-whisper) e do segmento de texto vazio que o pipeline hoje descarta. Nada disso chega à codificação em rules_version 2.0.0. Nenhum limiar de inteligibilidade foi medido nesta aula, e inventar um seria pior que declarar a ausência.",
+    "consequence": "A categoria 10 recebe SÓ silêncio nesta versão. Um resultado desta versão NÃO autoriza a leitura \"esta aula não teve confusão\": autoriza só \"confusão não foi medida\". O índice SC mede silêncio, não silêncio-ou-confusão.",
+    "never": "Limiar de energia, ruído ou relação sinal-ruído está fora de questão como detector: confusão acústica e silêncio são fenômenos opostos, e energia mede a coisa errada — mediria alto justamente onde há mais gente falando junto e se entendendo.",
+    "guard": "Fala que o diarizador ouviu e o ASR não transcreveu NÃO vira silêncio: é absorvida pela categoria em curso. Trocar silêncio por confusão é o pior erro possível entre dois opostos acústicos, e o silêncio vir do diarizador é o que impede a troca.",
+    "source_reference": "Flanders (1970), categoria 10 = \"silêncio ou confusão\", confusão = \"communication cannot be understood by the observer\"; correção do pesquisador em 2026-09-23 sobre a operacionalização por sobreposição pura",
+    "validation_status": "PENDING_SCIENTIFIC_VALIDATION"
+  },
   "matrix": {"pad_category": 10, "source_reference": "CAP4 l.52 e l.279 (\"Convenciona-se acrescentar 10 no início e no fim da sequência\")", "validation_status": "validated"},
   "classifier": {
     "logit_index_offset": 1,

@@ -11,7 +11,8 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from app.models import Audio, ClassificacaoFIAS, Falante, IndicadorFIAS, Segmento, Transcricao
+from app.models import (Audio, ClassificacaoFIAS, Falante, IndicadorFIAS, Segmento, Transcricao,
+                        TrechoDeFala)
 from tests.helpers import login, make_aula, make_user
 
 
@@ -38,6 +39,7 @@ def _transcricao_completa(db, aula):
     db.add(ClassificacaoFIAS(segmento_id=segmento.id, transcript_source="ASR_ORIGINAL", pred_raw=1,
                              pred_role_constrained=1, confidence_raw=0.9, confidence=0.9, uncertain=False,
                              model_id="fake", rules_version="v1"))
+    db.add(TrechoDeFala(transcricao_id=transcricao.id, inicio_ms=0, fim_ms=1000, n_vozes=1))
     indicador = IndicadorFIAS(aula_id=aula.id, index_id="I1", value=0.5, numerator_count=1,
                               denominator_count=2, n_intervals=1, rules_version="v1",
                               validation_status="engineering_decision")
@@ -62,6 +64,9 @@ def test_excluir_aula_apaga_transcricao_e_segmentos(client, db):
     assert _segmentos_da_aula(db, aula.id) == []
     assert db.query(Falante).count() == 0
     assert db.query(ClassificacaoFIAS).count() == 0
+    # A linha do tempo de fala é derivada do áudio e sai de verdade, pela mesma
+    # regra do PRIVACY.md.
+    assert db.query(TrechoDeFala).count() == 0
     # IndicadorFIAS é o índice agregado de pesquisa (sem texto, sem nome, sem FK para
     # Segmento/Transcricao): o PRIVACY.md pede soft delete aqui, não remoção física,
     # para preservar o histórico necessário à reprodutibilidade científica — como já

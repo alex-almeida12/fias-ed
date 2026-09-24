@@ -70,7 +70,9 @@ export function PadroesInteracao() {
           <section>
             <h2>Matriz de transições</h2>
             <p>
-              Quantas vezes a aula passou de uma categoria FIAS para outra, a cada três segundos. As categorias
+              Quantas vezes a aula passou de uma categoria FIAS para outra. Cada mudança é registrada onde ela
+              acontece, e uma categoria que dura mais de três segundos é registrada de novo a cada três segundos.
+              As categorias
               vão de 1 a 10: 1 a 4 são influência indireta do professor, 5 a 7 são influência direta, 8 e 9 são
               fala dos estudantes, e 10 é silêncio ou confusão.
             </p>

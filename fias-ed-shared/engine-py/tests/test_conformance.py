@@ -5,7 +5,7 @@ import pytest
 
 from fias_ed_engine.classifier import constrain_by_role
 from fias_ed_engine.indices import compute_indices
-from fias_ed_engine.intervals import CodedSegment, segments_to_intervals, transition_matrix
+from fias_ed_engine.intervals import CodedSegment, SpeechSpan, segments_to_intervals, transition_matrix
 from fias_ed_engine.mtss import build_facts, evaluate
 from fias_ed_engine.paths import CONFORMANCE_DIR
 from fias_ed_engine.qti import aggregate, score_response
@@ -21,7 +21,11 @@ def _ik(a):
 
 def run(fn, i):
     if fn == "segments_to_intervals":
-        return segments_to_intervals([CodedSegment(**s) for s in i["segments"]], i["total_ms"], F)
+        # "speech" (atividade de fala do diarizador) é opcional no vetor:
+        # ausente significa "sem diarização", e o motor cai no único sinal que
+        # sobra, que são os próprios segmentos.
+        fala = [SpeechSpan(**f) for f in i["speech"]] if "speech" in i else None
+        return segments_to_intervals([CodedSegment(**s) for s in i["segments"]], i["total_ms"], F, fala)
     if fn == "transition_matrix":
         return transition_matrix(i["intervals"], F)
     if fn == "compute_indices":

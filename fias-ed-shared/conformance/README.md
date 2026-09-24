@@ -8,7 +8,7 @@ Funções e entradas:
 
 | function | input | expected |
 |---|---|---|
-| segments_to_intervals | {segments:[{start_ms,end_ms,category}], total_ms} | [int] |
+| segments_to_intervals | {segments:[{start_ms,end_ms,category}], total_ms, speech?:[{start_ms,end_ms}]} | [int] |
 | transition_matrix | {intervals:[int]} | [[int]] 10×10 |
 | compute_indices | {intervals, n_segments, confidences} | {id: {value, reason, numerator_count, denominator_count}} |
 | constrain_by_role | {logits:[10 floats], role} | {pred_raw, pred_role_constrained, confidence_raw, confidence, uncertain} |
@@ -16,6 +16,11 @@ Funções e entradas:
 | aggregate_qti | {responses:[answers]} | {response_count, displayable, octants, agency, communion} |
 | evaluate_mtss | {intervals} | [rule_id] (ordem de disparo) |
 | triangulate | {intervals, qti_responses:[answers]} | [{pair_id, fias_value, qti_available, qti_values}] |
+
+`speech` (a atividade de fala do diarizador) é opcional: ausente significa
+"sem diarização", e o motor cai nos próprios segmentos como evidência de fala —
+o que faz o silêncio ser medido pelo VAD do ASR em vez da fala da sala. Os casos
+que trazem `speech` são os que travam essa diferença.
 
 Regras usadas: sempre os arquivos de `rules/` da mesma versão (`rules_version`).
 Floats: tolerância absoluta 1e-9. Chaves de `answers` são strings ("1".."24").

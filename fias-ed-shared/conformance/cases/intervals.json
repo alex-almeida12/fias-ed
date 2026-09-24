@@ -1,5 +1,5 @@
 {
-  "rules_version": "1.0.0",
+  "rules_version": "2.0.0",
   "cases": [
     {
       "id": "seg-empty",
@@ -30,9 +30,9 @@
       ]
     },
     {
-      "id": "seg-largest",
+      "id": "seg-toda-mudanca-registrada",
       "function": "segments_to_intervals",
-      "description": "Maior cobertura vence",
+      "description": "Regra 3: duas categorias em 3 s são as duas registradas — a menor não é engolida",
       "input": {
         "segments": [
           {
@@ -49,22 +49,23 @@
         "total_ms": 3000
       },
       "expected": [
+        5,
         4
       ]
     },
     {
-      "id": "seg-tie",
+      "id": "seg-segmento-curto-aparece",
       "function": "segments_to_intervals",
-      "description": "Empate: segmento que começa antes",
+      "description": "Segmento curto e minoritário aparece no seu lugar da linha do tempo",
       "input": {
         "segments": [
           {
             "start_ms": 0,
-            "end_ms": 1500,
+            "end_ms": 2800,
             "category": 5
           },
           {
-            "start_ms": 1500,
+            "start_ms": 2800,
             "end_ms": 3000,
             "category": 8
           }
@@ -72,13 +73,14 @@
         "total_ms": 3000
       },
       "expected": [
-        5
+        5,
+        8
       ]
     },
     {
       "id": "seg-span",
       "function": "segments_to_intervals",
-      "description": "Segmento cobrindo vários intervalos",
+      "description": "Segmento cobrindo vários intervalos repete a marca a cada 3 s",
       "input": {
         "segments": [
           {
@@ -98,7 +100,7 @@
     {
       "id": "seg-gap",
       "function": "segments_to_intervals",
-      "description": "Intervalo sem fala = 10",
+      "description": "Trecho sem fala de 3 s ou mais = 10",
       "input": {
         "segments": [
           {
@@ -143,6 +145,121 @@
         4,
         10,
         8
+      ]
+    },
+    {
+      "id": "seg-funde-vizinhos-iguais",
+      "function": "segments_to_intervals",
+      "description": "Trechos vizinhos de mesma categoria são fundidos antes de marcar: o picotamento do ASR não vira contagem",
+      "input": {
+        "segments": [
+          {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "category": 5
+          },
+          {
+            "start_ms": 1000,
+            "end_ms": 2000,
+            "category": 5
+          },
+          {
+            "start_ms": 2000,
+            "end_ms": 3000,
+            "category": 5
+          }
+        ],
+        "total_ms": 3000
+      },
+      "expected": [
+        5
+      ]
+    },
+    {
+      "id": "seg-silencio-vem-do-diarizador",
+      "function": "segments_to_intervals",
+      "description": "Pausa colada dentro do segmento do ASR: quem diz que não houve fala é o diarizador",
+      "input": {
+        "segments": [
+          {
+            "start_ms": 0,
+            "end_ms": 9000,
+            "category": 5
+          }
+        ],
+        "speech": [
+          {
+            "start_ms": 0,
+            "end_ms": 2000
+          },
+          {
+            "start_ms": 6000,
+            "end_ms": 9000
+          }
+        ],
+        "total_ms": 9000
+      },
+      "expected": [
+        5,
+        10,
+        10,
+        5
+      ]
+    },
+    {
+      "id": "seg-micropausa-nao-e-silencio",
+      "function": "segments_to_intervals",
+      "description": "Trecho sem fala abaixo de 3 s é absorvido pela categoria em curso, não vira 10",
+      "input": {
+        "segments": [
+          {
+            "start_ms": 0,
+            "end_ms": 9000,
+            "category": 5
+          }
+        ],
+        "speech": [
+          {
+            "start_ms": 0,
+            "end_ms": 2000
+          },
+          {
+            "start_ms": 4000,
+            "end_ms": 9000
+          }
+        ],
+        "total_ms": 9000
+      },
+      "expected": [
+        5,
+        5,
+        5
+      ]
+    },
+    {
+      "id": "seg-fala-sem-transcricao-nao-e-silencio",
+      "function": "segments_to_intervals",
+      "description": "Fala que o diarizador ouviu e o ASR não transcreveu é absorvida pela categoria em curso — nunca silêncio",
+      "input": {
+        "segments": [
+          {
+            "start_ms": 0,
+            "end_ms": 3000,
+            "category": 5
+          }
+        ],
+        "speech": [
+          {
+            "start_ms": 0,
+            "end_ms": 9000
+          }
+        ],
+        "total_ms": 9000
+      },
+      "expected": [
+        5,
+        5,
+        5
       ]
     }
   ]

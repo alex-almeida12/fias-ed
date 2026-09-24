@@ -6,11 +6,13 @@ de alguém interromper o professor no meio da frase.
 """
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from fias_ed_engine.intervals import SpeechSpan
+
 from app.ml.protocols import SegmentoASR, TurnoDiar
-from app.models import Falante, Segmento, Transcricao
+from app.models import Falante, Segmento, Transcricao, TrechoDeFala
 
 MAX_AMOSTRAS = 3
 
@@ -96,3 +98,63 @@ def criar_falantes_provisorios(db: Session, transcricao: Transcricao, linhas: li
         if restantes == 0:
             db.delete(provisorio)
             db.flush()
+
+
+def _fala_por_numero_de_vozes(turnos: list[TurnoDiar]) -> list[tuple[int, int, int]]:
+    """A linha do tempo de fala com quantas vozes ao mesmo tempo — sem quais.
+
+    O rótulo do diarizador entra aqui e não sai: serve só para contar vozes
+    DISTINTAS no mesmo instante, e some com o fim da função (§48, e o aviso que
+    o próprio `TurnoDiar.rotulo` carrega). Trechos vizinhos com a mesma
+    contagem são fundidos, o que apaga de quebra a troca de turno entre duas
+    vozes: A falando e B falando viram um trecho só de uma voz.
+
+    Trecho sem voz nenhuma não vira linha: ausência de linha É a não-fala, e
+    gravar os dois lados duplicaria a mesma informação em duas versões que
+    poderiam discordar."""
+    pontos = sorted({t.inicio_ms for t in turnos} | {t.fim_ms for t in turnos})
+    trechos: list[list[int]] = []
+    for a, b in zip(pontos, pontos[1:]):
+        vozes = len({t.rotulo for t in turnos if t.inicio_ms <= a < t.fim_ms})
+        if vozes == 0:
+            continue
+        if trechos and trechos[-1][1] == a and trechos[-1][2] == vozes:
+            trechos[-1][1] = b
+        else:
+            trechos.append([a, b, vozes])
+    return [(a, b, n) for a, b, n in trechos]
+
+
+def gravar_fala_detectada(db: Session, transcricao: Transcricao, turnos: list[TurnoDiar]) -> None:
+    """Guarda a linha do tempo de fala que o separador de vozes encontrou.
+
+    É a única cópia da evidência de fala/não-fala: logo depois desta função a
+    cópia de trabalho do áudio é apagada, e a classificação FIAS só roda depois
+    da revisão de vozes. Sem isto o motor mediria silêncio pelas lacunas entre
+    segmentos do ASR, que o vad_filter do Whisper fecha — na aula medida, 21,5 s
+    de lacuna de ASR contra 78,2 s de não-fala segundo o diarizador.
+
+    Apaga o que houver antes de gravar: um retry do job de diarização reprocessa
+    o estágio do início, e evidência duplicada viraria fala onde não houve."""
+    db.execute(delete(TrechoDeFala).where(TrechoDeFala.transcricao_id == transcricao.id))
+    db.add_all([TrechoDeFala(transcricao_id=transcricao.id, inicio_ms=a, fim_ms=b, n_vozes=n)
+                for a, b, n in _fala_por_numero_de_vozes(turnos)])
+
+
+def fala_detectada(db: Session, transcricao_id) -> list[SpeechSpan] | None:
+    """Os trechos em que o separador de vozes ouviu fala, para o motor.
+
+    `None`, e não lista vazia, quando não há trecho gravado: o motor precisa
+    distinguir "o diarizador diz que não houve fala nenhuma" de "não se sabe
+    onde houve fala" — no segundo caso ele cai nos próprios segmentos, que é
+    pior, mas honesto. Aula diarizada antes da versão que passou a gravar a
+    linha do tempo de fala cai nesse caso.
+
+    `n_vozes` não viaja: nenhuma regra implementada hoje o usa. Ele fica
+    gravado para a confusão (fias_rules.confusion), que vai precisar saber se
+    havia mais de uma voz ao mesmo tempo — e que não se reconstrói depois, com
+    o áudio já apagado."""
+    linhas = db.scalars(select(TrechoDeFala)
+                        .where(TrechoDeFala.transcricao_id == transcricao_id)
+                        .order_by(TrechoDeFala.inicio_ms)).all()
+    return [SpeechSpan(start_ms=t.inicio_ms, end_ms=t.fim_ms) for t in linhas] or None
