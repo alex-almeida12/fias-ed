@@ -80,6 +80,15 @@ def test_sem_coleta_vigente_regras_mapeadas_saem_no_qti_e_recomendacoes_gravadas
         assert por_regra[rule_id]["qti_evidence"] is None
     assert recs  # sem QTI o MTSS continua gravando recomendações
 
+    # O contrato do retorno não prova o que ficou na tabela -- só quem lê o
+    # banco pega uma coluna gravada errada. A tela do relatório lê daqui, não
+    # do retorno de `interpretar`.
+    gravadas_por_regra = {g.rule_id: g for g in db.scalars(
+        select(InterpretacaoMTSS).where(InterpretacaoMTSS.aula_id == aula_classificada.id)).all()}
+    for rule_id in disparadas_mapeadas:
+        assert gravadas_por_regra[rule_id].qti_agreement == "no_qti"
+        assert gravadas_por_regra[rule_id].qti_evidence is None
+
 
 def test_regras_sem_par_saem_unpaired_e_nao_e_erro(db, aula_classificada):
     qualificadas, _ = interpretar(db, aula_classificada)
@@ -91,6 +100,15 @@ def test_regras_sem_par_saem_unpaired_e_nao_e_erro(db, aula_classificada):
         assert por_regra[rule_id]["qti_agreement"] == "unpaired"
         assert por_regra[rule_id]["qti_evidence"] is None
         assert por_regra[rule_id]["divergence_question"] is None
+
+    # Mesmo motivo do teste anterior: o retorno de `interpretar` é o contrato
+    # da função, não prova do que foi gravado -- a tabela é o que a tela lê.
+    gravadas_por_regra = {g.rule_id: g for g in db.scalars(
+        select(InterpretacaoMTSS).where(InterpretacaoMTSS.aula_id == aula_classificada.id)).all()}
+    for rule_id in disparadas_sem_par:
+        assert gravadas_por_regra[rule_id].qti_agreement == "unpaired"
+        assert gravadas_por_regra[rule_id].qti_evidence is None
+        assert gravadas_por_regra[rule_id].divergence_question is None
 
 
 def test_com_coleta_vigente_regra_correspondente_concorda(db, ciclo, coleta_em, aula_classificada):
