@@ -229,6 +229,16 @@ class IndicadorFIAS(EntityMixin, Base):
     mean_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
+class Ciclo(EntityMixin, Base):
+    __tablename__ = "ciclo"
+    turma_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("turma.id"), index=True, nullable=False)
+    disciplina_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("disciplina.id"), nullable=False)
+    professor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("professor.id"), index=True, nullable=False)
+    n_aulas_previstas: Mapped[int] = mapped_column(Integer, nullable=False)
+    iniciado_em: Mapped[date] = mapped_column(Date, nullable=False)
+    encerrado_em: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
 class ModeloIA(EntityMixin, Base):
     __tablename__ = "modelo_ia"
     model_id: Mapped[str] = mapped_column(String, nullable=False)

@@ -12,7 +12,7 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal, get_engine
 from app.main import create_app
 from app.ml.protocols import SegmentoASR
-from app.models import Audio, Base
+from app.models import Audio, Base, Disciplina, Escola, Turma
 from app.transcricao.service import criar_transcricao, falante_provisorio, gravar_segmentos
 from tests.audio_fixtures import VOZ_A, VOZ_B, make_fala
 from tests.helpers import make_aula, make_user
@@ -74,6 +74,30 @@ def _clean_tables(migrator_engine):
 def db():
     with SessionLocal(bind=get_engine()) as session:
         yield session
+
+
+@pytest.fixture
+def professor(db):
+    return make_user(db, "professora-ciclo")
+
+
+@pytest.fixture
+def turma(db, professor):
+    escola = Escola(name="Escola Teste", name_key="escola teste")
+    db.add(escola)
+    db.flush()
+    turma = Turma(escola_id=escola.id, professor_id=professor.id, name="9º Ano B")
+    db.add(turma)
+    db.commit()
+    return turma
+
+
+@pytest.fixture
+def disciplina(db, professor):
+    disciplina = Disciplina(professor_id=professor.id, name="Matemática")
+    db.add(disciplina)
+    db.commit()
+    return disciplina
 
 
 @pytest.fixture
