@@ -9,6 +9,8 @@ app/qti/service.py, no ponto onde a checagem de versão deixou de existir.
 """
 import datetime as dt
 
+from fias_ed_engine.rules import load_rules
+
 from app.models import AcessoAdmin, Ciclo, ColetaQTI, Disciplina, Escola, RespostaQTI, Turma
 from tests.helpers import login, make_user
 
@@ -142,3 +144,30 @@ def test_arquivo_fora_de_utf8_devolve_422(db, client, ciclo):
     assert r.status_code == 422
     assert r.json()["error_code"] == "QTI_ARQUIVO_ILEGIVEL"
     assert db.query(ColetaQTI).count() == 0
+
+
+def test_a_resposta_traz_o_minimo_de_respostas_vindo_do_motor(client, ciclo):
+    """O limiar de exibição mora na configuração do motor, não na tela: o React monta
+    a frase com o número que recebe daqui."""
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    assert r.json()["min_responses"] == load_rules("qti_config")["instrument"]["min_responses"]
+
+
+def test_o_minimo_e_lido_do_motor_a_cada_pedido_e_nao_fixado_na_rota(client, ciclo, monkeypatch):
+    """Comparar a resposta com load_rules não basta: hoje o motor diz 10, então um 10
+    escrito à mão na rota passaria naquele teste. Aqui a configuração é trocada por uma
+    que diz 7 — só passa se a rota realmente consultar o motor ao responder.
+
+    O monkeypatch atinge só o nome importado em app.qti.routes; o service importa
+    load_rules no próprio espaço e continua pontuando com a configuração de verdade."""
+    monkeypatch.setattr("app.qti.routes.load_rules", lambda _nome: {"instrument": {"min_responses": 7}})
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    assert r.json()["min_responses"] == 7
