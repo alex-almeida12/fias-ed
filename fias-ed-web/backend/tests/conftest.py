@@ -1,5 +1,6 @@
 import os
 import uuid
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -8,14 +9,15 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 
+from app.ciclos.service import posicao_no_ciclo
 from app.core.config import get_settings
 from app.core.db import SessionLocal, get_engine
 from app.main import create_app
 from app.ml.protocols import SegmentoASR
-from app.models import Audio, Base, Disciplina, Escola, Turma
+from app.models import Audio, Aula, Base, Ciclo, Disciplina, Escola, Turma
 from app.transcricao.service import criar_transcricao, falante_provisorio, gravar_segmentos
 from tests.audio_fixtures import VOZ_A, VOZ_B, make_fala
-from tests.helpers import make_aula, make_user
+from tests.helpers import login, make_aula, make_user
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -77,8 +79,12 @@ def db():
 
 
 @pytest.fixture
-def professor(db):
-    return make_user(db, "professora-ciclo")
+def professor(db, client):
+    # Os testes de ciclo batem em rotas autenticadas (POST /api/ciclos, .../encerrar) sem
+    # chamar login() explicitamente — então o fixture de professor já deixa o client logado.
+    user = make_user(db, "professora-ciclo")
+    login(client, "professora-ciclo")
+    return user
 
 
 @pytest.fixture
@@ -98,6 +104,48 @@ def disciplina(db, professor):
     db.add(disciplina)
     db.commit()
     return disciplina
+
+
+@pytest.fixture
+def ciclo(db, turma, disciplina, professor):
+    c = Ciclo(turma_id=turma.id, disciplina_id=disciplina.id, professor_id=professor.id,
+              n_aulas_previstas=8, iniciado_em=date(2026, 3, 1))
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return c
+
+
+@pytest.fixture
+def aula_em(db, professor):
+    """Grava uma aula dentro de um ciclo dado, na data indicada. Aceita tanto o objeto
+    Ciclo quanto o id (str/UUID) devolvido pela API — os testes usam as duas formas."""
+    def _aula_em(ciclo_ou_id, lesson_date: str) -> Aula:
+        c = ciclo_ou_id if isinstance(ciclo_ou_id, Ciclo) else db.get(Ciclo, uuid.UUID(str(ciclo_ou_id)))
+        aula = Aula(professor_id=professor.id, turma_id=c.turma_id, disciplina_id=c.disciplina_id,
+                    lesson_date=date.fromisoformat(lesson_date), status="DRAFT")
+        db.add(aula)
+        db.commit()
+        db.refresh(aula)
+        return aula
+    return _aula_em
+
+
+@pytest.fixture
+def posicao(db):
+    def _posicao(aula: Aula) -> str:
+        # client.post(".../encerrar") grava em outra sessão; sem isso o identity map
+        # desta sessão devolveria o Ciclo com o encerrado_em antigo (None).
+        db.expire_all()
+        return posicao_no_ciclo(db, aula)
+    return _posicao
+
+
+@pytest.fixture
+def aula_avulsa(db):
+    """Aula cuja turma/disciplina não têm ciclo nenhum associado."""
+    prof = make_user(db, "professor-avulso")
+    return make_aula(db, prof)
 
 
 @pytest.fixture
