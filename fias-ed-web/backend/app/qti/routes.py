@@ -2,6 +2,7 @@ import datetime as dt
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fias_ed_engine.rules import load_rules
 from sqlalchemy.orm import Session
 
 from app.audit import audit
@@ -41,4 +42,5 @@ async def importar_qti(ciclo_id: uuid.UUID, coletado_em: dt.date = Form(...), ar
     db.commit()
     return {"id": str(coleta.id), "coletado_em": coleta.coletado_em.isoformat(),
            "origem": coleta.origem, "response_count": coleta.response_count,
-           "displayable": coleta.displayable}
+           "displayable": coleta.displayable,
+           "min_responses": load_rules("qti_config")["instrument"]["min_responses"]}

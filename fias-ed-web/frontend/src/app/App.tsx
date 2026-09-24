@@ -4,6 +4,7 @@ import { TrocarSenha } from "../pages/TrocarSenha";
 import { AulaPage } from "../pages/AulaPage";
 import { Dashboard } from "../pages/Dashboard";
 import { EscolhaVoz } from "../pages/EscolhaVoz";
+import { ImportarQTI } from "../pages/ImportarQTI";
 import { NovaAula } from "../pages/NovaAula";
 import { NovoCiclo } from "../pages/NovoCiclo";
 import { PadroesInteracao } from "../pages/PadroesInteracao";
@@ -26,6 +27,7 @@ export function App() {
             <Route path="/aulas" element={<Dashboard />} />
             <Route path="/aulas/nova" element={<NovaAula />} />
             <Route path="/ciclos/novo" element={<NovoCiclo />} />
+            <Route path="/ciclos/:id/qti" element={<ImportarQTI />} />
             <Route path="/aulas/:id" element={<AulaPage />} />
             <Route path="/aulas/:id/vozes" element={<EscolhaVoz />} />
             <Route path="/aulas/:id/transcricao" element={<RevisaoTranscricao />} />
