@@ -5,6 +5,7 @@ import { AulaPage } from "../pages/AulaPage";
 import { Dashboard } from "../pages/Dashboard";
 import { EscolhaVoz } from "../pages/EscolhaVoz";
 import { NovaAula } from "../pages/NovaAula";
+import { NovoCiclo } from "../pages/NovoCiclo";
 import { PadroesInteracao } from "../pages/PadroesInteracao";
 import { RevisaoTranscricao } from "../pages/RevisaoTranscricao";
 import { AdminAulas } from "../pages/admin/AdminAulas";
@@ -24,6 +25,7 @@ export function App() {
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route path="/aulas" element={<Dashboard />} />
             <Route path="/aulas/nova" element={<NovaAula />} />
+            <Route path="/ciclos/novo" element={<NovoCiclo />} />
             <Route path="/aulas/:id" element={<AulaPage />} />
             <Route path="/aulas/:id/vozes" element={<EscolhaVoz />} />
             <Route path="/aulas/:id/transcricao" element={<RevisaoTranscricao />} />
