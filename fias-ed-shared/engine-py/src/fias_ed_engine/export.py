@@ -1,4 +1,14 @@
-"""Exportação do dataset de uma ou mais aulas (JSON e ZIP de CSVs). Sem áudio, sem texto por padrão."""
+"""Exportação do dataset de uma ou mais aulas (JSON e ZIP de CSVs). Sem áudio, sem texto por padrão.
+
+Cada item de `lessons` traz `lesson`, `segments`, `qti_responses`, `processing`
+e, opcionalmente, `speech`: a linha do tempo de fala do diarizador
+(`list[SpeechSpan]`), a mesma evidência que a tela do professor usa para medir
+silêncio. Sem ela o motor cai nos próprios segmentos do ASR e mede outra coisa —
+o dataset diria SC ≈ 0,0038 para a aula em que a tela mostra 0,0725 —, então
+`manifest.processing` declara, por aula, qual das duas fontes foi usada.
+
+`processing.rules_version` é obrigatório: é por ele que a exportação recusa
+juntar aulas de versões de regra diferentes (ver `_versao_unica`)."""
 import csv
 import hashlib
 import io
@@ -7,18 +17,36 @@ import zipfile
 from pathlib import Path
 
 from .indices import compute_indices
-from .intervals import CodedSegment, segments_to_intervals, transition_matrix
+from .intervals import CodedSegment, code_lesson, transition_matrix
 from .mtss import build_facts, evaluate, recommendations
 from .qti import aggregate
 from .rules import load_rules
 from .triangulation import triangulate
 
-EXPORT_VERSION = "1.0.0"
+# 2.0.0 porque o conteúdo de `intervals` e `indices` mudou de significado com
+# rules_version 2.0.0, e não só de valor: uma linha de `intervals` deixou de ser
+# um balde fixo de 3 s (`start_ms` = índice × 3 s) e passou a ser a marca que o
+# protocolo registra, com o tempo que ela cobre de fato; `n_intervals` deixou de
+# ser duração / 3 s; e a categoria 10 passou a existir, com o silêncio medido
+# pela evidência de fala do diarizador. Quem empilhar um dataset 1.0.0 com um
+# desta versão soma grandezas diferentes — o mesmo defeito que `_versao_unica`
+# recusa dentro de um dataset, um nível acima. O número da versão é o único
+# aviso que chega a quem abrir os arquivos meses depois.
+EXPORT_VERSION = "2.0.0"
 TABLES = ("lessons", "segments", "intervals", "matrix", "indices", "qti_responses",
           "qti_results", "mtss", "recommendations", "triangulation")
 _LESSON_FIELDS = ("lesson_id", "lesson_date", "disciplina", "turma_id", "duration_ms", "transcript_source")
 _SEGMENT_FIELDS = ("segment_id", "start_ms", "end_ms", "role", "pred_raw", "pred_role_constrained", "confidence", "uncertain")
-_PROCESSING_FIELDS = ("app_version", "fias_model", "fias_model_hash", "asr_model", "asr_model_hash", "diarization_model")
+_PROCESSING_FIELDS = ("app_version", "fias_model", "fias_model_hash", "asr_model", "asr_model_hash",
+                      "diarization_model", "rules_version")
+
+# Como o silêncio (categoria 10) foi medido em cada aula. Fica no manifesto, por
+# aula, porque um dataset em que metade das aulas mede silêncio pela detecção de
+# fala e metade pela extensão dos segmentos do ASR, sem dizer qual é qual, não
+# permite ao analista separar as duas — e as duas medidas diferem por uma ordem
+# de grandeza (na aula medida em 2026-09-23: 78 249 ms contra 4 000 ms).
+_SPEECH_DECLARED = "diarization_speech_activity"
+_SPEECH_ABSENT = "asr_segments"
 
 # Colunas fixas por tabela do CSV, na ordem em que o cabeçalho é escrito —
 # sempre as mesmas colunas, com ou sem linhas, para que Web e Android
@@ -41,11 +69,50 @@ class ExportPrivacyError(ValueError):
     pass
 
 
+class ExportRulesVersionError(ValueError):
+    pass
+
+
+def _versao_unica(lessons: list[dict], motor: str) -> None:
+    """Recusa o dataset que misturaria versões de regra.
+
+    `build_dataset` é o único ponto do sistema em que aulas diferentes entram na
+    mesma tabela, então é aqui que a mistura tem de parar. Entre 1.0.0 e 2.0.0 a
+    mudança não é de valor: `n_intervals` deixou de ser duração / 3 s, a
+    sequência passou a registrar cada mudança de categoria e a categoria 10
+    passou a existir. Uma média entre um SC de 1.0.0 e um de 2.0.0 não mede
+    coisa nenhuma.
+
+    Recusa, e não aviso: o aviso mora no manifesto de um arquivo que vai ser
+    aberto meses depois, provavelmente por outra pessoa, e o dano da mistura é
+    silencioso — a tabela sai bonita e a média sai errada. Recusar custa uma
+    exportação repetida; não recusar custa um resultado de dissertação.
+
+    A versão declarada tem de ser a do motor que vai codificar, e não só igual
+    entre as aulas: `build_dataset` recodifica tudo com as regras carregadas
+    agora, de modo que exportar uma aula de 1.0.0 produziria tabelas 2.0.0 com
+    carimbo 1.0.0. Não há conversão entre as versões, e inventar uma seria o
+    mesmo defeito com outra roupa."""
+    por_versao: dict[str, list[str]] = {}
+    for item in lessons:
+        declarada = item["processing"].get("rules_version") or "(não declarada)"
+        por_versao.setdefault(declarada, []).append(str(item["lesson"]["lesson_id"]))
+    if set(por_versao) == {motor}:
+        return
+    detalhe = "; ".join(f"{v}: {', '.join(sorted(ids))}" for v, ids in sorted(por_versao.items()))
+    raise ExportRulesVersionError(
+        f"Exportação recusada: as aulas selecionadas não estão todas na versão de regras do motor "
+        f"({motor}). Indicadores de versões diferentes não são a mesma grandeza — de 1.0.0 para "
+        f"2.0.0, n_intervals deixou de ser duração / 3 s, a sequência passou a registrar cada "
+        f"mudança de categoria e a categoria 10 passou a existir —, e não existe conversão entre "
+        f"elas. Aulas por versão declarada: {detalhe}.")
+
+
 def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> dict:
     if not lessons:
         raise ValueError("Nenhuma aula selecionada para exportação.")
     F, Q, M, P = (load_rules(n) for n in ("fias_rules", "qti_config", "mtss_rules", "pedagogical_rules"))
-    step = int(F["coding"]["interval_seconds"] * 1000)
+    _versao_unica(lessons, F["rules_version"])
     ds: dict = {t: [] for t in TABLES}
     processing = []
     for item in lessons:
@@ -54,7 +121,14 @@ def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> 
         if include_text and any(not s.get("text_pseudonymized") for s in segs):
             raise ExportPrivacyError(f"Aula {lid}: há falas sem versão pseudonimizada; exportação com texto recusada.")
         coded = [CodedSegment(s["start_ms"], s["end_ms"], s["pred_role_constrained"]) for s in segs]
-        intervals = segments_to_intervals(coded, meta["duration_ms"], F)
+        # `speech` é a linha do tempo de fala do diarizador (list[SpeechSpan]),
+        # a mesma que a tela do professor usa. Ausente (ou None) significa "não
+        # se sabe", e o motor cai nos próprios segmentos: é a medida pior, mas
+        # nunca inventa silêncio. Aula processada antes da versão que passou a
+        # gravar a evidência cai nesse caso, e o manifesto diz que caiu.
+        fala = item.get("speech")
+        coding = code_lesson(coded, meta["duration_ms"], F, fala)
+        intervals = coding.intervals
         indices = compute_indices(intervals, F, n_segments=len(segs), confidences=[s["confidence"] for s in segs])
         answers = [{int(k): v for k, v in r.items()} for r in item["qti_responses"]]
         qti = aggregate(answers, Q)
@@ -67,8 +141,12 @@ def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> 
             if include_text:
                 row["text_pseudonymized"] = s["text_pseudonymized"]
             ds["segments"].append(row)
-        ds["intervals"] += [{"lesson_id": lid, "interval_index": i, "start_ms": i * step, "category": c}
-                            for i, c in enumerate(intervals)]
+        # O tempo vem da marca, nunca de `índice × 3 s`: com o relógio que
+        # reinicia a cada mudança (rules_version 2.0.0) a enésima marca não
+        # começa mais em n × 3 s, e quem calculasse assim exportaria marcas
+        # começando depois do fim da aula.
+        ds["intervals"] += [{"lesson_id": lid, "interval_index": i, "start_ms": m.start_ms, "category": m.category}
+                            for i, m in enumerate(coding.marks)]
         m = transition_matrix(intervals, F)
         ds["matrix"] += [{"lesson_id": lid, "from_category": a + 1, "to_category": b + 1, "count": m[a][b]}
                          for a in range(10) for b in range(10) if m[a][b]]
@@ -88,7 +166,8 @@ def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> 
         ds["triangulation"] += [{"lesson_id": lid, "pair_id": t["pair_id"], "fias_value": t["fias"]["value"],
                                  "qti_available": t["qti_available"], "qti_values": [q["value"] for q in t["qti"]]}
                                 for t in triangulate(intervals, indices, qti, P, Q)]
-        processing.append({"lesson_id": lid, **{f: item["processing"].get(f) for f in _PROCESSING_FIELDS}})
+        processing.append({"lesson_id": lid, **{f: item["processing"].get(f) for f in _PROCESSING_FIELDS},
+                           "speech_source": _SPEECH_ABSENT if fala is None else _SPEECH_DECLARED})
     ds["manifest"] = {"export_version": EXPORT_VERSION, "rules_version": F["rules_version"], "exported_at": exported_at,
                       "include_text": include_text, "lesson_count": len(lessons), "processing": processing}
     return ds

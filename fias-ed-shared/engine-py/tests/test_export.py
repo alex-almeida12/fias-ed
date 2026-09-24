@@ -8,12 +8,17 @@ import jsonschema
 import pytest
 from jsonschema import Draft202012Validator, FormatChecker
 
-from fias_ed_engine.export import TABLES, ExportPrivacyError, build_dataset, to_csv_files, to_json, write_zip
+from fias_ed_engine.export import (TABLES, ExportPrivacyError, ExportRulesVersionError, build_dataset,
+                                   to_csv_files, to_json, write_zip)
+from fias_ed_engine.intervals import SpeechSpan
 from fias_ed_engine.paths import SCHEMAS_DIR
+from fias_ed_engine.rules import load_rules
 
 SCHEMA = json.loads((SCHEMAS_DIR / "export" / "lesson_dataset.schema.json").read_text(encoding="utf-8"))
+RULES_VERSION = load_rules("fias_rules")["rules_version"]
 PROC = {"app_version": "web-0.1.0", "fias_model": "fias-bertimbau-ptbr-frente3", "fias_model_hash": "625d32a2",
-        "asr_model": "faster-whisper-small", "asr_model_hash": "x", "diarization_model": "pyannote"}
+        "asr_model": "faster-whisper-small", "asr_model_hash": "x", "diarization_model": "pyannote",
+        "rules_version": RULES_VERSION}
 
 
 def lesson(lid="01926b3e-7a1c-7c3e-9f00-000000000001", text=True):
@@ -124,3 +129,110 @@ def test_csv_and_zip(tmp_path):
         manifest = json.loads(z.read("manifest.json"))
         for name, digest in manifest["files"].items():
             assert hashlib.sha256(z.read(name)).hexdigest() == digest
+
+
+# ---- Defeito A: o silêncio do dataset vem da evidência de fala ----------------
+
+def aula_com_pausa(speech=None, lid="01926b3e-7a1c-7c3e-9f00-00000000000a"):
+    """Os 30 s da armadilha do motor: o ASR entrega UM segmento contínuo porque
+    o vad_filter colou a pausa para dentro dele, e o diarizador diz que dos 30 s
+    só 12 s tiveram fala. As duas fontes dão o mesmo número de marcas (10) e
+    categorias diferentes — por isso "mudou" não prova nada, só o número certo."""
+    item = lesson(lid=lid)
+    item["lesson"]["duration_ms"] = 30_000
+    item["segments"] = [{"segment_id": "s1", "start_ms": 0, "end_ms": 30_000, "role": "PROFESSOR",
+                         "pred_raw": 5, "pred_role_constrained": 5, "confidence": 0.9, "uncertain": False,
+                         "text_pseudonymized": "Vamos ao exercício da página dez."}]
+    if speech is not None:
+        item["speech"] = speech
+    return item
+
+
+def test_export_mede_silencio_pela_evidencia_de_fala_quando_a_aula_a_traz():
+    fala = [SpeechSpan(0, 6000), SpeechSpan(24_000, 30_000)]
+    ds = build_dataset([aula_com_pausa(fala)], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    validate(ds)
+    # 18 s de não-fala em dois trechos de 9 s: regra 4 (lacuna >= 3 s) = categoria 10.
+    assert [r["category"] for r in ds["intervals"]] == [5, 5, 10, 10, 10, 10, 10, 10, 5, 5]
+    assert ds["lessons"][0]["n_intervals"] == 10
+    sc = {r["index_id"]: r for r in ds["indices"]}["SC"]
+    assert sc["value"] == pytest.approx(0.6) and sc["numerator_count"] == 6 and sc["denominator_count"] == 10
+    assert ds["manifest"]["processing"][0]["speech_source"] == "diarization_speech_activity"
+
+
+def test_export_sem_evidencia_de_fala_cai_nos_segmentos_e_nao_inventa_silencio():
+    """A aula processada antes da versão que grava a evidência: mesmo `total_ms`,
+    mesmas marcas em quantidade, nenhuma categoria 10 — e o manifesto diz que o
+    silêncio desta aula foi medido pela outra fonte."""
+    ds = build_dataset([aula_com_pausa()], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    validate(ds)
+    assert [r["category"] for r in ds["intervals"]] == [5] * 10
+    sc = {r["index_id"]: r for r in ds["indices"]}["SC"]
+    assert sc["value"] == pytest.approx(0.0) and sc["numerator_count"] == 0
+    assert ds["manifest"]["processing"][0]["speech_source"] == "asr_segments"
+
+
+def test_manifesto_separa_as_duas_fontes_no_mesmo_dataset():
+    """Metade das aulas com a evidência, metade sem: o dataset é permitido (as
+    duas estão na mesma versão de regras), mas tem de dizer qual é qual."""
+    com = aula_com_pausa([SpeechSpan(0, 6000), SpeechSpan(24_000, 30_000)])
+    sem = aula_com_pausa(lid="01926b3e-7a1c-7c3e-9f00-00000000000b")
+    ds = build_dataset([com, sem], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    validate(ds)
+    assert {p["lesson_id"]: p["speech_source"] for p in ds["manifest"]["processing"]} == {
+        "01926b3e-7a1c-7c3e-9f00-00000000000a": "diarization_speech_activity",
+        "01926b3e-7a1c-7c3e-9f00-00000000000b": "asr_segments"}
+
+
+def test_start_ms_do_intervalo_e_o_tempo_da_marca_e_nao_indice_vezes_3_s():
+    """Com o relógio que reinicia a cada mudança, a enésima marca não começa em
+    n × 3 s: aqui a mudança cai em 1000 ms e as marcas seguem dali. Calcular por
+    índice daria [0, 3000, 6000, 9000] — a última começando no fim da aula."""
+    item = lesson()
+    item["segments"] = [
+        {"segment_id": "s1", "start_ms": 0, "end_ms": 1000, "role": "PROFESSOR", "pred_raw": 4,
+         "pred_role_constrained": 4, "confidence": 0.9, "uncertain": False, "text_pseudonymized": "Quanto é?"},
+        {"segment_id": "s2", "start_ms": 1000, "end_ms": 9000, "role": "PROFESSOR", "pred_raw": 5,
+         "pred_role_constrained": 5, "confidence": 0.9, "uncertain": False, "text_pseudonymized": "Explico assim."}]
+    item["speech"] = [SpeechSpan(0, 9000)]
+    ds = build_dataset([item], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    validate(ds)
+    assert [(r["interval_index"], r["start_ms"], r["category"]) for r in ds["intervals"]] == [
+        (0, 0, 4), (1, 1000, 5), (2, 4000, 5), (3, 7000, 5)]
+
+
+# ---- Defeito B: versões de regra não se misturam ------------------------------
+
+def test_versoes_de_regra_misturadas_recusadas_dizendo_quais_aulas():
+    velha = lesson(lid="01926b3e-7a1c-7c3e-9f00-000000000002")
+    velha["processing"] = {**PROC, "rules_version": "1.0.0"}
+    with pytest.raises(ExportRulesVersionError) as erro:
+        build_dataset([lesson(), velha], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    msg = str(erro.value)
+    assert "1.0.0: 01926b3e-7a1c-7c3e-9f00-000000000002" in msg
+    assert f"{RULES_VERSION}: 01926b3e-7a1c-7c3e-9f00-000000000001" in msg
+
+
+def test_aula_fora_da_versao_do_motor_recusada_mesmo_sozinha():
+    """`build_dataset` recodifica com as regras carregadas agora: exportar uma
+    aula de 1.0.0 sozinha produziria tabelas 2.0.0 com carimbo 1.0.0."""
+    velha = lesson()
+    velha["processing"] = {**PROC, "rules_version": "1.0.0"}
+    with pytest.raises(ExportRulesVersionError):
+        build_dataset([velha], include_text=False, exported_at="2026-09-21T12:00:00Z")
+
+
+def test_aula_sem_versao_declarada_recusada():
+    muda = lesson()
+    muda["processing"] = {k: v for k, v in PROC.items() if k != "rules_version"}
+    with pytest.raises(ExportRulesVersionError) as erro:
+        build_dataset([muda], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    assert "(não declarada)" in str(erro.value)
+
+
+def test_export_version_acompanha_a_mudanca_de_significado_das_tabelas():
+    """`intervals` e `indices` mudaram de grandeza com rules_version 2.0.0;
+    um dataset 1.0.0 e um desta versão não se empilham."""
+    ds = build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    assert ds["manifest"]["export_version"] == "2.0.0"
+    assert ds["manifest"]["rules_version"] == RULES_VERSION
