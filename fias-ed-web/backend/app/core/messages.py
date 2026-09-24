@@ -46,5 +46,9 @@ def error_message(code: str | None) -> str | None:
                                    "para ver a versão atual."),
         "QTI_SEM_RESPOSTAS": ("O arquivo não traz nenhuma resposta. Confira se a turma respondeu "
                               "antes de exportar."),
+        "QTI_ARQUIVO_ILEGIVEL": ("Não conseguimos ler este arquivo. Exporte o relatório de novo, "
+                                "sem abrir e salvar no Excel antes."),
+        "QTI_ARQUIVO_GRANDE": ("Este arquivo é grande demais para um relatório de questionário. "
+                              "Confira se é o arquivo certo."),
     }
     return messages.get(code, "Algo deu errado. Tente novamente.")

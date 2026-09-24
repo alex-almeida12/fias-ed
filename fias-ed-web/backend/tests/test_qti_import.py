@@ -9,7 +9,7 @@ app/qti/service.py, no ponto onde a checagem de versão deixou de existir.
 """
 import datetime as dt
 
-from app.models import Ciclo, ColetaQTI, Disciplina, Escola, RespostaQTI, Turma
+from app.models import AcessoAdmin, Ciclo, ColetaQTI, Disciplina, Escola, RespostaQTI, Turma
 from tests.helpers import login, make_user
 
 CABECALHO = "response_id," + ",".join(f"q{i}" for i in range(1, 25))
@@ -100,4 +100,45 @@ def test_importar_qti_com_ciclo_de_outro_professor_devolve_404(db, client, ciclo
                     files={"arquivo": ("export.csv", _csv(12), "text/csv")},
                     data={"coletado_em": "2026-03-01"})
     assert r.status_code == 404
+    assert db.query(ColetaQTI).count() == 0
+
+
+def test_importacao_via_agir_como_e_auditada(client_factory, db, ciclo, professor):
+    """Conserto 1: é o dado mais sensível da fatia (percepção dos estudantes sobre o
+    professor); sem audit(), seria a única escrita do sistema sem rastro de quem a fez.
+    O recurso auditado é a coleta (não o ciclo): resource_id só existe depois que a
+    coleta é criada, e "ciclo"/"create" já é usado para a criação do ciclo em si."""
+    make_user(db, "admin-qti", role="ADMIN_LOCAL")
+    admin = client_factory()
+    login(admin, "admin-qti")
+    admin.post("/api/admin/agir-como", json={"professor_id": str(professor.id)})
+
+    r = admin.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                   files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                   data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    coleta_id = r.json()["id"]
+    row = db.query(AcessoAdmin).filter_by(resource="coleta_qti", action="create").one()
+    assert str(row.resource_id) == coleta_id
+
+
+def test_importacao_na_propria_conta_nao_e_auditada(db, client, ciclo):
+    """Prova que o conserto usa audit() (que é no-op fora de 'agir como'), não um
+    record() direto que gravaria também para o professor operando na própria conta."""
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    assert db.query(AcessoAdmin).count() == 0
+
+
+def test_arquivo_fora_de_utf8_devolve_422(db, client, ciclo):
+    login(client, "professora-ciclo")
+    conteudo = "seção".encode("cp1252")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", conteudo, "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 422
+    assert r.json()["error_code"] == "QTI_ARQUIVO_ILEGIVEL"
     assert db.query(ColetaQTI).count() == 0
