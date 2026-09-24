@@ -1,5 +1,5 @@
 {
-  "rules_version": "2.0.0",
+  "rules_version": "3.0.0",
   "cases": [
     {
       "id": "seg-empty",

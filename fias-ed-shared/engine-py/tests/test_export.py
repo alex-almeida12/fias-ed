@@ -252,11 +252,26 @@ def test_versoes_de_regra_misturadas_recusadas_dizendo_quais_aulas():
 
 def test_aula_fora_da_versao_do_motor_recusada_mesmo_sozinha():
     """`build_dataset` recodifica com as regras carregadas agora: exportar uma
-    aula de 1.0.0 sozinha produziria tabelas 2.0.0 com carimbo 1.0.0."""
+    aula de 1.0.0 sozinha produziria tabelas da versão do motor com carimbo
+    1.0.0."""
     velha = lesson()
     velha["processing"] = {**PROC, "rules_version": "1.0.0"}
     with pytest.raises(ExportRulesVersionError):
         build_dataset([velha], include_text=False, exported_at="2026-09-21T12:00:00Z")
+
+
+def test_recusa_explica_a_diferenca_que_chega_ate_a_versao_do_motor():
+    """A recusa é lida por quem abre os arquivos meses depois, e o que ela
+    precisa dizer é o que mudou ATÉ a versão do motor — não só até onde a prosa
+    parou da última vez. Ancorado em RULES_VERSION de propósito: subir a versão
+    de regras sem escrever o que mudou nela derruba este teste."""
+    velha = lesson()
+    velha["processing"] = {**PROC, "rules_version": "1.0.0"}
+    with pytest.raises(ExportRulesVersionError) as erro:
+        build_dataset([velha], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    msg = str(erro.value)
+    assert f"para {RULES_VERSION}" in msg
+    assert "troca de falante" in msg
 
 
 def test_aula_sem_versao_declarada_recusada():

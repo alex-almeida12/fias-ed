@@ -9,7 +9,7 @@ from fias_ed_engine.traceability import find_untraced
 
 def test_fias_rules_valid_and_versioned():
     r = load_rules("fias_rules")
-    assert r["rules_version"] == "2.0.0"
+    assert r["rules_version"] == "3.0.0"
     assert [c["id"] for c in r["categories"]] == list(range(1, 11))
 
 

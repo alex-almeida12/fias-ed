@@ -1,5 +1,5 @@
 {
-  "rules_version": "2.0.0",
+  "rules_version": "3.0.0",
   "coding": {"interval_seconds": 3, "source_reference": "CAP4 l.56 (protocolo de codificação a cada 3 s; Flanders 1970)", "validation_status": "validated"},
   "aggregation": {"method": "largest_coverage", "tie_break": "earliest_start", "gap_category": 10,
     "notes": "A partir de rules_version 2.0.0, `method` NÃO governa mais a codificação em intervalos: a regra de balde (uma marca por 3 s, vence quem cobre mais) foi substituída por `interval_coding`. O que sobreviveu aqui é `tie_break` (desempate entre segmentos codificados que cobrem o mesmo instante) e `gap_category`. O campo `method` permanece só porque o schema o fixa como const.",

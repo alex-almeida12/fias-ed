@@ -97,7 +97,10 @@ def _versao_unica(lessons: list[dict], motor: str) -> None:
     mudança não é de valor: `n_intervals` deixou de ser duração / 3 s, a
     sequência passou a registrar cada mudança de categoria e a categoria 10
     passou a existir. Uma média entre um SC de 1.0.0 e um de 2.0.0 não mede
-    coisa nenhuma.
+    coisa nenhuma. Entre 2.0.0 e 3.0.0 as tabelas têm as mesmas colunas, e por
+    isso a mistura é ainda mais silenciosa: o que mudou foi a categoria gravada
+    em cada segmento, porque o contexto passou a chegar ao classificador só
+    quando há troca de falante.
 
     Recusa, e não aviso: o aviso mora no manifesto de um arquivo que vai ser
     aberto meses depois, provavelmente por outra pessoa, e o dano da mistura é
@@ -106,9 +109,9 @@ def _versao_unica(lessons: list[dict], motor: str) -> None:
 
     A versão declarada tem de ser a do motor que vai codificar, e não só igual
     entre as aulas: `build_dataset` recodifica tudo com as regras carregadas
-    agora, de modo que exportar uma aula de 1.0.0 produziria tabelas 2.0.0 com
-    carimbo 1.0.0. Não há conversão entre as versões, e inventar uma seria o
-    mesmo defeito com outra roupa."""
+    agora, de modo que exportar uma aula de 1.0.0 produziria tabelas da versão
+    do motor com carimbo 1.0.0. Não há conversão entre as versões, e inventar
+    uma seria o mesmo defeito com outra roupa."""
     por_versao: dict[str, list[str]] = {}
     for item in lessons:
         declarada = item["processing"].get("rules_version") or "(não declarada)"
@@ -120,8 +123,11 @@ def _versao_unica(lessons: list[dict], motor: str) -> None:
         f"Exportação recusada: as aulas selecionadas não estão todas na versão de regras do motor "
         f"({motor}). Indicadores de versões diferentes não são a mesma grandeza — de 1.0.0 para "
         f"2.0.0, n_intervals deixou de ser duração / 3 s, a sequência passou a registrar cada "
-        f"mudança de categoria e a categoria 10 passou a existir —, e não existe conversão entre "
-        f"elas. Aulas por versão declarada: {detalhe}.")
+        f"mudança de categoria e a categoria 10 passou a existir; de 2.0.0 para 3.0.0, o turno "
+        f"anterior passou a ser enviado ao classificador como contexto apenas quando há troca de "
+        f"falante, e com isso mudou a categoria da maioria dos segmentos e os índices calculados "
+        f"a partir delas —, e não existe conversão entre elas. Aulas por versão declarada: "
+        f"{detalhe}.")
 
 
 def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> dict:
