@@ -8,9 +8,11 @@
 
 ## Sumário para leitura rápida
 
-O FIAS-ED processa o áudio de uma aula e devolve uma descrição dos padrões de interação segundo o sistema de Flanders (FIAS). O caminho completo — do envio do áudio ao resultado — está **implementado e verificado como engenharia**: roda de ponta a ponta, sem acesso à rede, com os modelos reais, e está coberto por 711 testes automatizados.
+O FIAS-ED processa o áudio de uma aula e devolve uma descrição dos padrões de interação segundo o sistema de Flanders (FIAS). O caminho completo — do envio do áudio ao resultado — está **implementado e verificado como engenharia**: roda de ponta a ponta, sem acesso à rede, com os modelos reais, e está coberto por 798 testes automatizados.
 
 O que **não** está estabelecido é a acurácia desse resultado em uma aula brasileira real. Há cinco fontes de incerteza encadeadas, descritas na seção 4, e nenhuma delas foi medida sobre gravação autêntica de sala de aula. O classificador tem métricas publicadas (F1 macro 0,7246), mas obtidas sobre texto limpo de outro domínio — não sobre a saída de transcrição automática que ele recebe em operação.
+
+**Advertência sobre os números desta versão.** Desde a versão anterior deste documento, três mudanças alteraram a codificação e a entrada do classificador: o par que o classificador recebe passou a ser montado como o conjunto de treino o monta (seção 4.2), o silêncio passou a ser medido em vez de sair sempre zerado (seção 3.3) e a codificação passou a registrar cada mudança de categoria, e não uma marca por intervalo de 3 segundos (seção 3.3). **Resultado obtido antes dessas mudanças não é comparável com resultado obtido depois.** A versão das regras de codificação subiu de 2.0.0 para 3.0.0 exatamente para que essa incomparabilidade seja detectável e não silenciosa: o sistema recusa-se a reunir na mesma tabela aulas carimbadas com versões diferentes. Nenhuma aula já processada foi reprocessada.
 
 Este documento existe para que essa distinção não precise ser inferida.
 
@@ -18,11 +20,13 @@ Este documento existe para que essa distinção não precise ser inferida.
 
 ## 1. O que o sistema se propõe a fazer
 
-O FIAS-ED recebe a gravação de uma aula e produz uma descrição de como o tempo da aula se distribuiu entre quatro grupos de interação: influência indireta do professor, influência direta do professor, fala do estudante e silêncio. A codificação segue o protocolo de Flanders, com intervalos de 3 segundos (Flanders, 1970).
+O FIAS-ED recebe a gravação de uma aula e produz uma descrição de como o tempo da aula se distribuiu entre quatro grupos de interação: influência indireta do professor, influência direta do professor, fala do estudante e silêncio. A codificação segue o protocolo de Flanders (1970): registra-se uma categoria **a cada 3 segundos e a cada mudança de categoria** — os 3 segundos são a taxa mínima de amostragem, e não um balde em que a categoria dominante vence o intervalo.
 
 O sistema **não** atribui nota, não compara professores e não emite juízo de qualidade. Essa restrição é de projeto, não de implementação: o vocabulário da interface proíbe os termos "avaliação", "nota", "desempenho" e "ranking", e há verificação automatizada que falha se qualquer um deles aparecer em texto visível ao usuário.
 
 O processamento ocorre inteiramente na máquina local, sem envio de áudio a serviços externos. Os modelos são baixados uma única vez, na instalação, e o sistema em operação roda com acesso à rede desabilitado — condição verificada experimentalmente.
+
+A décima categoria de Flanders é "silêncio **ou** confusão". O sistema mede a primeira metade e não mede a segunda, pelas razões apresentadas na seção 4.3. Onde este documento fala em silêncio, trata-se de silêncio, e não de silêncio-ou-confusão.
 
 ---
 
@@ -32,11 +36,13 @@ O processamento ocorre inteiramente na máquina local, sem envio de áudio a ser
 |---|---|
 | Percurso completo pela interface, com modelos reais | Confirmado: de áudio validado a resultado FIAS, sem intervenção no banco de dados |
 | Operação sem acesso à rede | Confirmado: separação de vozes carregada e executada com a rede desabilitada |
-| Testes automatizados | 352 (serviço) + 151 (interface) + 208 (motor científico) = 711, todos passando |
+| Testes automatizados | 404 (serviço) + 151 (interface) + 243 (motor científico) = 798, todos passando |
 | Reprodutibilidade da transcrição | A mesma gravação reprocessada produz o mesmo texto (parâmetros fixos, processador fixo) |
 | Integridade dos modelos | Cada artefato conferido por resumo criptográfico contra um registro versionado antes do uso |
 
 Durante a construção desta etapa foram identificados **47 defeitos**, todos em especificação e planejamento, nenhum sobrevivendo à implementação. Quatro deles eram da mesma natureza e merecem registro metodológico: **código que passava em todos os testes e falharia em operação real** — etapas do processamento que nenhum caminho de produção acionava, porque apenas os testes as acionavam. Foram encontrados por inspeção da cadeia completa contra a especificação, não pelos testes.
+
+**Um quinto defeito dessa família sobreviveu à implementação, e é o assunto da seção 4.2.** O classificador recebia sua entrada montada de um modo que o conjunto de treino não usa, e nenhum teste poderia detectá-lo: todos verificavam que o par era montado como o código o montava, que é precisamente a pergunta errada. Foi encontrado comparando o código de produção com o código que **construiu o conjunto de treino** — a mesma técnica de inspeção da cadeia contra a fonte, aplicada uma fronteira adiante: a fronteira entre o produto e o experimento que o originou. O registro importa porque corrige a afirmação anterior de que nenhum defeito dessa natureza havia sobrevivido à implementação. Um sobreviveu, e produziu números que tinham aparência de medida.
 
 ---
 
@@ -60,6 +66,8 @@ Modelo `fias-bertimbau-ptbr-frente3`, ajustado sobre o BERTimbau (`neuralmind/be
 2. **Os dados de origem são aulas de matemática de educação básica dos Estados Unidos, traduzidas automaticamente para o português** por modelo de linguagem (Mistral Small). Há risco de deslocamento de domínio em aulas brasileiras reais.
 3. **Os rótulos FIAS não são anotação nativa**: foram derivados do conjunto TalkMoves por mapeamento conceitual acrescido de heurísticas.
 
+Às três convém acrescentar uma quarta observação, que não é ressalva sobre o valor do número e sim condição para citá-lo: **essas métricas só descrevem o comportamento em operação enquanto a entrada em operação tiver a mesma forma que a entrada de treino.** Até a correção relatada na seção 4.2 ela não tinha, e nesse período as métricas acima não descreviam o que o sistema fazia com uma aula real. O número não mudou; mudou o que ele passa a ter o direito de descrever.
+
 A versão embarcada para dispositivo móvel (`fias-bertimbau-ptbr-frente3-onnx-int8`) atinge acurácia de 0,7773 em aparelho de entrada, com latência média de 713 ms por segmento e pico de 182 MB de memória.
 
 ### 3.2 Transcrição e separação de vozes
@@ -68,6 +76,29 @@ Ambos os componentes estão registrados como **decisão de engenharia**, não co
 
 - **Transcrição** (`faster-whisper-small`): a taxa de erro de palavra não foi medida em áudio de sala de aula brasileira. A quantização em 8 bits, necessária para operar sem placa gráfica dedicada, degrada levemente o resultado em relação à precisão plena.
 - **Separação de vozes** (`pyannote/speaker-diarization-3.1`): o erro de diarização não foi medido em áudio de sala de aula brasileira. O número de falantes não é fixado previamente, pois em uma sala não se sabe quantas vozes aparecerão; ele é estimado pelo próprio modelo.
+
+### 3.3 Fidelidade da codificação ao protocolo
+
+Esta subseção é de natureza distinta das duas anteriores: aqui não se mede acerto contra a aula, mede-se **conformidade do procedimento ao texto do protocolo**, o que é verificável por leitura da fonte. Duas correções desta versão são desse tipo, e ambas foram medidas sobre a aula real de referência (24 minutos, 213 trechos de fala).
+
+**Medição — o registro a cada mudança de categoria.** A regra 3 de Flanders (1970) determina que, havendo mais de uma categoria ativa num intervalo de 3 segundos, todas devem ser registradas, e que a repetição do mesmo número serial só ocorre quando nada muda depois de 3 segundos. O sistema emitia exatamente uma marca por intervalo, com a categoria de maior cobertura vencendo — o que descarta toda mudança mais rápida que a grade.
+
+| Grandeza medida na aula real | Regra anterior | Regra atual |
+|---|---|---|
+| Trechos de categoria constante preservados na ordem (de 106) | 74 (69,8 %) | **106 (100 %)** |
+| Segmentos sem marca alguma sobre o próprio tempo | 3 | 0 |
+| Células povoadas na matriz de transições | 16 | **22** |
+
+*Interpretação.* Nenhuma célula da matriz foi perdida: as seis novas são transições que ocorreram na aula e que a regra de balde apagava. Como a matriz de transições é o instrumento em que o FIAS lê **padrões** de interação — quem segue quem —, um quarto das mudanças da aula ausente dela não é imprecisão de valor: é ausência do objeto que se pretende observar. Os índices agregados quase não se moveram (a proporção de fala docente passa de 1,000 para 0,928), o que ilustra a diferença entre os dois tipos de resultado: proporções toleram a perda de mudanças rápidas, matrizes não.
+
+**Medição — a fonte do silêncio.** A regra 4 de Flanders determina registrar a categoria 10 quando o silêncio ultrapassa 3 segundos. Até esta versão a categoria saía zerada em toda aula, porque a não-fala era procurada nas lacunas **entre segmentos de transcrição** — e o detector de voz do transcritor cola as pausas para dentro dos segmentos, de modo que quase não resta lacuna a encontrar. A fonte passou a ser a atividade de fala da separação de vozes, com o mesmo limiar de 3 segundos do protocolo.
+
+| Fonte da não-fala | Fala declarada | Silêncio medido na aula |
+|---|---|---|
+| Lacunas entre segmentos de transcrição | 98,6 % do áudio | 4 s (uma única lacuna alcança os 3 s do protocolo) |
+| Atividade de fala da separação de vozes | 64,4 % do áudio | **78,2 s em 18 lacunas** (5,4 % da aula; a maior de 9,6 s) |
+
+*Interpretação.* Duas medidas do mesmo fenômeno, na mesma aula, diferindo por uma ordem de grandeza. A diferença não é ruído: é a resposta à pergunta de qual sinal descreve ausência de fala. A extensão dos segmentos de transcrição descreve o que o transcritor decidiu agrupar; a atividade de fala descreve quando houve voz. Escolher a primeira produz um sistema que relata, de qualquer aula, que não houve silêncio. A escolha permanece registrada como **decisão de engenharia** — não há anotação humana de silêncio nesta gravação contra a qual conferi-la —, e o conjunto de dados exportado declara, por aula e em coluna própria, qual das duas fontes mediu aquela linha, para que médias entre aulas medidas de formas diferentes não passem despercebidas.
 
 ---
 
@@ -89,75 +120,65 @@ O item 5 merece destaque. Mesmo que o classificador mantivesse o F1 de 0,7246 so
 
 Duas circunstâncias atenuam parcialmente o item 2 no desenho do produto, sem eliminá-lo: o professor confirma qual voz é a sua, e pode corrigir texto e atribuição de falante antes da classificação. A classificação sempre roda sobre o material que o professor aprovou. Isso desloca parte do erro para uma etapa humana revisável, mas não o mede.
 
+**Por que o defeito descrito em 4.2 não acrescenta uma sexta linha.** A pergunta se impõe, porque aquele defeito produziu, em aula real, um desacordo maior do que qualquer uma das cinco fontes chegou a produzir em medição. A resposta é que ele não é da mesma espécie. As cinco linhas são propriedades do instrumento que ninguém mediu: taxas de erro desconhecidas e limitações declaradas da procedência dos rótulos. O formato de entrada violado não era propriedade desconhecida de coisa alguma — era discrepância entre o que o material de treino documenta e o que o código de produção fazia, com resposta certa disponível na própria fonte. Erro de emparelhamento tem conserto; incerteza não medida tem medição, que é outro verbo. Acrescentar uma sexta linha declararia aberta uma lacuna que está fechada.
+
+*Convém registrar, porém, que a versão anterior deste documento sugeria o contrário.* Ao atribuir o desacordo de 55,4 % a alguma combinação dos itens 2 e 3 — separação de vozes ou deslocamento de domínio —, ela classificou como propriedade do domínio o que era defeito na montagem da entrada. A distinção não é acadêmica: deslocamento de domínio se enfrenta com dados de outro domínio, ao custo de meses; este defeito se enfrentava lendo o código que gerou o conjunto de treino. O que o episódio acrescenta à tabela não é uma linha, é uma advertência sobre como lê-la: **um número grande observado em aula real pode ser o rastro de um defeito de implementação, e não a medida da incerteza a que se atribui.** Nenhuma das cinco foi medida, e nenhuma delas explicava aquele número.
+
 ### 4.1 Por que as medições existentes não fecham essa lacuna
 
 As medições de custo computacional (seção 5) foram feitas com **fala sintetizada**, gerada por um sintetizador de voz cujo modelo acústico é de língua inglesa. Esse material serve para medir **custo** — tempo de processamento e consumo de memória são determinados pela duração do áudio e pelo tamanho do modelo, não pelo conteúdo. Ele **não** serve para medir **acerto**: a pronúncia não é português brasileiro, e qualquer taxa de erro calculada sobre ele seria artefato do método.
 
 Essa distinção está registrada tanto no código de medição quanto na documentação técnica.
 
-### 4.2 A confiança declarada pelo classificador, e por que a fração "incerta" não é uma medida
+### 4.2 O que a fração "incerta" media, afinal: um defeito na montagem da entrada
 
-Para cada trecho de fala o sistema publica um número de confiança e marca como "incerta" toda classificação abaixo de 0,5. Uma leitura preliminar desse material em uma aula real havia registrado **58,2 % das falas marcadas como incertas, com confiança média de 0,3985**. A reclassificação descrita a seguir reproduz esses dois números exatamente — e mostra que eles não medem o que aparentam medir.
+A versão anterior deste documento registrava, em aula real, **58,2 % das falas marcadas como incertas, com confiança média de 0,3985**, e concluía que esse número não media incerteza do classificador, e sim a taxa de desacordo entre o classificador e a atribuição de falante — desacordo de 55,4 %, cuja causa declarava desconhecida entre os itens 2 e 3 da tabela acima. A conclusão de que o número não media incerteza permanece. **A causa do desacordo, que era o que faltava, foi encontrada, e não é nenhum dos dois itens: era um defeito na montagem da entrada do classificador.**
 
-**Procedência do limiar.** O valor de 0,5 **não tem origem declarada**. O registro científico do projeto o classifica como decisão de engenharia, e a referência de fonte associada ao classificador remete ao roteiro do experimento original apenas para o índice de rótulo, o tokenizador e o comprimento máximo de sequência — o limiar não é mencionado em ponto algum. É uma linha convencional, e nenhuma afirmação deve repousar sobre ela.
+**O formato de entrada.** O classificador recebe um par: um campo de **contexto** e o **turno a classificar**. No conjunto de treino, o contexto não é "o turno anterior": é o turno anterior **de outro falante**, e fica vazio quando o mesmo falante continua. Isso não é inferência sobre os dados — está escrito no código que montou o conjunto, cujo ramo para professor depois de professor grava literalmente um contexto vazio. As taxas do conjunto de treino (186.955 linhas) confirmam: o contexto está vazio em 89,8 % das linhas de "dá instruções", em 83,5 % das de "expõe" e em apenas 33,2 % das de "aceita ou utiliza ideias dos alunos" — que é, por definição, a categoria que depende de haver ideia de aluno no contexto para o professor acolher.
 
-**Medição.** Os 213 trechos de fala de uma gravação autêntica de 24 minutos foram reclassificados pelo modelo de produção, todos atribuídos ao professor — que foi o que a separação de vozes produziu na execução real daquela aula. A distribuição da confiança publicada:
+Em produção, o contexto era preenchido **sempre** com o turno anterior, sem olhar quem havia falado. Numa aula expositiva isso significa o professor depois do próprio professor, configuração que no treino teria contexto vazio. Na aula de referência, **212 dos 213 pares** levavam um contexto que o treino nunca teria colocado ali.
 
-| Estatística | Valor |
-|---|---|
-| Mínimo | 0,0001 |
-| Primeiro quartil | 0,0018 |
-| Mediana | 0,1073 |
-| Terceiro quartil | 0,8930 |
-| Máximo | 0,9984 |
-| Média | 0,3985 |
-| Desvio-padrão | 0,4253 |
+**Medição — o efeito na aula real.** Os 213 trechos foram reclassificados pelo caminho de produção, antes e depois da correção. A revisão de vozes marcara os 213 como fala do professor.
 
-*Interpretação.* A distribuição não tem centro: 47,9 % das falas ficam abaixo de 0,05 e 17,8 % ficam acima de 0,95, enquanto apenas 20 das 213 (9,4 %) caem entre 0,30 e 0,70. **A média de 0,3985 não descreve fala nenhuma** — é o resultado de somar duas populações separadas, e citá-la como "a confiança do classificador nesta aula" descreve um valor que o sistema praticamente nunca produz.
-
-**Medição — sensibilidade ao limiar.** A fração marcada como incerta, variando a linha de corte:
-
-| Limiar | Falas abaixo | Fração |
+| Grandeza | Antes | Depois |
 |---|---|---|
-| 0,30 | 113 de 213 | 53,1 % |
-| 0,40 | 116 de 213 | 54,5 % |
-| 0,50 | 124 de 213 | **58,2 %** |
-| 0,60 | 130 de 213 | 61,0 % |
-| 0,70 | 133 de 213 | 62,4 % |
+| Segmentos em categoria de fala do estudante | 100 | 0 |
+| Segmentos em categoria de silêncio | 18 | 0 |
+| Desacordo entre classificação e papel do falante | 55,4 % | **0,0 %** |
+| Classificações marcadas como incertas | 58,2 % | **0,5 %** |
+| Confiança publicada (mediana) | 0,1073 | 0,9565 |
+| Confiança bruta do modelo (média) | 0,8917 | 0,8990 |
+| Confiança bruta do modelo (mediana) | 0,9668 | 0,9565 |
 
-*Interpretação.* Ao contrário do que a arbitrariedade do limiar faria supor, **a fração quase não depende dele**: dobrar o limiar, de 0,30 para 0,60, move o resultado em oito pontos percentuais. A razão é a forma da distribuição — não há massa na faixa intermediária para a linha atravessar. A fragilidade dessa estatística, portanto, não está na escolha do limiar. Está no que o número conta.
+**A categoria crua de 138 dos 213 segmentos (64,8 %) mudou.**
 
-**Medição — antes e depois da restrição por papel.** O sistema aplica, após a classificação, uma restrição que impede que uma fala atribuída ao professor receba categoria de aluno. Comparando a confiança na escolha livre do modelo com a confiança publicada após essa restrição:
+*Interpretação.* As duas últimas linhas da tabela são as que mais importam, e são as que não melhoram. **A confiança bruta do modelo não subiu com a correção: ele sempre esteve confiante — estava confiante sobre a pergunta errada.** A confiança publicada despencava não porque o modelo hesitasse, mas porque ele depositava a massa de probabilidade numa categoria de aluno e a restrição por papel a arrastava de volta para a melhor categoria de professor, publicando o resíduo. A restrição por papel, que a versão anterior deste documento identificou como origem aparente da incerteza, não estava medindo dúvida: estava mascarando um defeito a montante. Vale notar que, ao mascará-lo, também o conteve — sem ela, aquela aula teria sido relatada ao professor como tendo quase metade do tempo em fala de estudante, numa aula sem um único turno de estudante.
 
-| Grandeza | Média | Mediana | Mínimo |
-|---|---|---|---|
-| Confiança na escolha livre do modelo | 0,8917 | 0,9668 | 0,3920 |
-| Confiança publicada, após a restrição | 0,3985 | 0,1073 | 0,0001 |
+**Consequência que altera um resultado.** A razão de influência indireta, com que o FIAS compara a influência indireta e a direta do professor, **cai de 0,5375 para 0,3575** — queda de 34 %. A causa é localizada: a categoria "aceita ou utiliza ideias dos alunos" passa de 22 segmentos a zero, e essa categoria sustenta metade do numerador do índice. Numa aula em que não houve um só turno de estudante não existe ideia de estudante para o professor acolher; as 22 marcas anteriores eram **fabricadas pelo contexto indevido**, que apresentava ao modelo a fala anterior do próprio professor como se fosse contribuição alheia. Num cenário com alternância real de falantes a categoria continua permitida e continua a ser escolhida — poucas vezes, e agora por haver de fato fala de outro no contexto. A correção não elimina a categoria: faz com que ela seja merecida.
 
-Em **118 dos 213 trechos (55,4 %)** a categoria que o modelo escolheu por conta própria não era categoria de professor: 95 vezes "resposta do aluno", 18 vezes "silêncio ou confusão" e 5 vezes "iniciativa do aluno". Nesses casos a restrição substitui a escolha pela categoria de professor mais provável, e a confiança publicada passa a ser a probabilidade que o modelo havia deixado como resíduo — de mediana 0,0019. Nos outros 95 trechos, em que o modelo já havia escolhido uma categoria de professor, a confiança tem média 0,8507 e apenas 6 (6,3 %) ficam abaixo de 0,5. Nos 118 restantes, ficam todos os 118.
+A influência indireta medida até aqui, portanto, estava inflada. Os índices que não dependem de **qual** categoria de professor foi atribuída quase não se movem — a proporção de fala docente vai de 0,9275 a 0,9266 —, porque quem os governa é a restrição por papel e a atividade de fala do separador de vozes, e não a escolha livre do modelo. O que muda é a distribuição **dentro** da fala do professor, que é de onde saem a razão de influência indireta e a matriz de transições: exatamente as duas leituras que o FIAS existe para produzir.
 
-*Interpretação.* **A incerteza não é do modelo: é produzida pela restrição por papel.** O classificador, nesta aula, é confiante — sua confiança mediana na própria escolha é 0,9668, e em nenhum dos 213 trechos cai abaixo de 0,39. A fração "incerta" é, quase inteiramente, a taxa de divergência entre o classificador e a atribuição de falante, grandeza que o sistema já registra em separado e que nesta execução vale exatamente 0,5540. Dito de outro modo: dos 58,2 %, cerca de 55,4 pontos são divergência e menos de 3 pontos são hesitação do modelo.
+**Procedência do limiar.** Registro que permanece válido, e que a correção não torna dispensável: o valor de 0,5 abaixo do qual uma classificação é marcada como incerta **não tem origem declarada**. O registro científico do projeto o classifica como decisão de engenharia, e a referência de fonte associada ao classificador remete ao roteiro do experimento original apenas para o índice de rótulo, o tokenizador e o comprimento máximo de sequência — o limiar não é mencionado em ponto algum. É uma linha convencional. A queda de 58,2 % para 0,5 % nas classificações marcadas como incertas não a legitima: apenas retira dela a ocasião de ser citada.
 
-Convém registrar que essa reatribuição não redistribui a probabilidade entre as sete categorias admitidas ao professor — publica a probabilidade original da categoria escolhida. Como exercício contrafactual sobre as mesmas saídas, se houvesse redistribuição a confiança teria mediana 0,7742 e 16,4 % das falas ficariam abaixo de 0,5, em vez de 58,2 %. O número muda por uma convenção de cálculo, não por uma propriedade da aula — mais uma razão para não citá-lo como medida.
+**O que esta medição autoriza dizer.** Que o sistema violava, em toda aula, o formato de entrada com que o classificador foi treinado; que a violação alterava a categoria de dois terços dos segmentos de uma aula real e um índice publicado em 34 %; e que o número lido até aqui como incerteza do modelo era o rastro dessa violação.
 
-**Medição — o piso do acaso.** A confiança publicada é a probabilidade que o modelo atribui a uma categoria entre as **dez** que ele distingue, sem redistribuição. O piso do acaso aplicável a esse número é, portanto, 1/10 = **0,100** — e não 1/7 ≈ 0,143, que valeria apenas se houvesse redistribuição entre as sete categorias de professor. A média de 0,3985 é 4,0 vezes esse piso; a mediana, 0,1073, é 1,07 vez. **106 das 213 falas (49,8 %) ficam abaixo do piso do acaso.**
+**O que esta medição não resolve, e é a maior parte.** Nenhuma das cinco lacunas da tabela da seção 4. Confiança não é acerto, e uma confiança bruta de 0,90 é tão compatível com um modelo certo quanto com um modelo seguro e errado — antes da correção ela já valia 0,89, sobre classificações que hoje se sabem erradas. A aula de referência continua sem transcrição de referência e sem anotação FIAS nativa, de modo que **não se sabe se as 213 categorias atribuídas depois da correção estão certas**; sabe-se apenas que agora são perguntadas na forma em que o modelo foi treinado a responder, e que não contradizem mais a atribuição de falante. Um defeito encontrado e corrigido é mérito do procedimento de verificação — inspeção da cadeia contra a fonte —, e não evidência sobre a acurácia do sistema, que segue desconhecida pelas mesmas cinco razões de antes.
 
-*Interpretação.* Confiança abaixo do acaso não é confiança baixa — é sinal de que, para aquelas falas, o número não está em escala de confiança. Nos 95 trechos em que está, a média de 0,8507 é 8,5 vezes o piso.
+### 4.3 O que o instrumento atual não consegue medir: a confusão
 
-**Medição — por categoria.** Das sete categorias de professor, apenas quatro foram atribuídas nesta aula; "aceita sentimentos", "elogia ou encoraja" e "critica ou justifica autoridade" não aparecem uma única vez. Entre as quatro atribuídas, a confiança publicada difere bastante (média 0,3214 em "expõe" contra 0,6788 em "dá instruções"), mas a diferença desaparece quando se olham apenas os 95 trechos não reatribuídos:
+A décima categoria de Flanders é "silêncio **ou** confusão", definida esta última como comunicação que o observador não consegue compreender. O sistema implementa o silêncio (seção 3.3) e **não** implementa a confusão. A ausência não é omissão: foi medida, e o resultado é negativo. Resultado negativo é resultado, e convém registrá-lo com os números que o sustentam.
 
-| Categoria atribuída | Confiança média (todas as falas) | Confiança média (só as não reatribuídas) |
-|---|---|---|
-| Aceita ou usa ideias | 0,2836 (n = 22) | 0,7168 (n = 8) |
-| Faz perguntas | 0,6372 (n = 49) | 0,8878 (n = 34) |
-| Expõe | 0,3214 (n = 137) | 0,8473 (n = 49) |
-| Dá instruções | 0,6788 (n = 5) | 0,8440 (n = 4) |
+Detectar confusão exigiria duas condições simultâneas: sobreposição de falantes **e** ininteligibilidade. A primeira a separação de vozes fornece. A segunda dependeria dos sinais de qualidade da decodificação do transcritor, e estes não servem, por dois motivos independentes.
 
-*Interpretação.* **Não há categoria sistematicamente incerta.** A aparência de que "expõe" e "aceita ou usa ideias" seriam categorias frágeis é efeito de destino: 88 dos 118 trechos reatribuídos caem em "expõe". Onde o modelo decide sozinho, as quatro categorias ficam entre 0,72 e 0,89, sem padrão que distinga uma das outras.
+**Medição — resolução.** Os três sinais de qualidade do transcritor não descrevem o segmento: descrevem a **janela de decodificação de 30 segundos** que o produziu, e são idênticos em todos os segmentos nascidos da mesma janela. Os 213 segmentos da aula vieram de 51 janelas, com mediana de 28,0 segundos de aula por janela e máximo de 48,5. A sobreposição de vozes, por sua vez, é nesta aula um fenômeno de **0,7 segundo** (mediana de 658 ms; máximo de 1.957 ms; 13 ocorrências, 0,6 % do tempo). Um limiar aplicado a um sinal que descreve 28 segundos arrastaria a janela inteira para a categoria 10 — meio minuto de aula marcado como confusão por 0,7 segundo de sobreposição.
 
-**O que esta medição autoriza dizer.** A distribuição acima é medida e pode ser citada, com a ressalva de que provém de uma única aula. A frase "58,2 % das categorias foram marcadas como incertas" **não deve ser citada como medida de incerteza do classificador**: ela é quase inteiramente a taxa de divergência entre classificador e atribuição de falante, expressa numa escala em que metade dos valores fica abaixo do acaso. A grandeza correspondente, quando for necessário citá-la, é a própria taxa de divergência — 55,4 % nesta aula —, que é o que de fato foi observado.
+**Medição — separação.** No nível da janela, que é a unidade que o sinal de fato descreve, os trechos com sobreposição não se distinguem do resto da aula em nenhum dos três sinais (teste de Mann-Whitney bilateral: p = 0,62; 0,74; 0,23), e suas faixas de valores ficam inteiramente contidas nas faixas dos trechos sem sobreposição. No nível do segmento um dos sinais chegaria a p = 0,037, mas é pseudorreplicação: 4 das 13 ocorrências de sobreposição caem num único segmento. O outro sinal considerado — segmento com duração e sem texto — não ocorreu uma única vez nesta aula (0 de 213).
 
-**O que esta medição não resolve.** Nenhuma das cinco lacunas da tabela acima. Confiança não é acerto: um modelo confiante e errado produz exatamente os números da coluna da escolha livre. Esta gravação não tem transcrição de referência nem anotação FIAS nativa, de modo que não se sabe qual das duas fontes da divergência de 55,4 % predomina — se a separação de vozes atribuiu ao professor falas que eram de aluno (item 2 da tabela), se o classificador erra fora do domínio em que foi treinado (item 3), ou ambas. O que a medição acrescenta é que essa divergência **existe e é grande em aula real**, e que o número que vinha sendo lido como incerteza do modelo é, na verdade, o rastro dela.
+*Interpretação qualitativa, e é ela que fecha o caso.* A janela com a **pior** qualidade de decodificação da aula inteira é fala perfeitamente inteligível do professor dando instruções em frases curtas. Ali o sinal mede ritmo e vocabulário, não ininteligibilidade. Um limiar extraído desses números seria um valor inventado com aparência de medida, e uma categoria do protocolo passaria a ser governada por ele.
+
+**Consequência declarada.** A categoria 10 recebe só silêncio nesta versão, e o índice correspondente mede silêncio. Um resultado deste sistema autoriza dizer "confusão não foi medida"; **não** autoriza dizer "esta aula não teve confusão". A distinção está registrada no próprio arquivo de regras, junto da medição que a sustenta.
+
+**O que mudaria isso.** Um sinal com resolução de segmento ou menor — alinhamento por palavra do próprio transcritor, com probabilidade por palavra, ou um detector de fala sobreposta treinado —, calibrado contra um trecho anotado por um humano como "não dá para saber quem está falando". Sem esse trecho de referência não há limiar calibrável, até porque a sobreposição desta aula, 13 ocorrências em 24 minutos, não chega a ser amostra. Nesta versão a confiança de decodificação passou a ser **gravada** por segmento, o que antes não acontecia; gravar não é detectar, e nenhuma regra de codificação lê esse campo. Sem ele, porém, nem esta medição se repetiria sem reprocessar o áudio.
 
 ---
 
@@ -223,8 +244,9 @@ A restrição decorre dos **dados de treino**, não do código: os pesos base do
 Em ordem de valor científico:
 
 1. **Obter gravação autêntica de aula brasileira com transcrição de referência**, ainda que de 10 a 15 minutos. Com ela é possível medir, pela primeira vez, a taxa de erro de transcrição, o erro de separação de vozes e — o mais importante — o efeito da composição desses erros sobre a classificação FIAS. Esse único insumo converte três lacunas em três resultados.
-2. **Anotação FIAS nativa de ao menos uma aula brasileira**, para verificar se o mapeamento conceitual derivado do TalkMoves se sustenta fora do domínio de origem.
+2. **Anotação FIAS nativa de ao menos uma aula brasileira**, para verificar se o mapeamento conceitual derivado do TalkMoves se sustenta fora do domínio de origem. É também a única forma de saber se as categorias atribuídas depois da correção da seção 4.2 estão certas: hoje sabe-se apenas que a pergunta feita ao modelo passou a ter a forma com que ele foi treinado.
 3. **Conjunto de validação separado do conjunto de teste**, caso o classificador venha a ser retreinado, eliminando o viés otimista declarado na seção 3.1.
+4. **Trecho de aula anotado por humano como ininteligível**, com alinhamento por palavra ou detector de fala sobreposta, caso se pretenda medir a metade "confusão" da categoria 10. Sem ele não há limiar calibrável, e a categoria continua recebendo só silêncio (seção 4.3).
 
 O item 1 é o de melhor relação entre esforço e retorno: é o único que, isoladamente, transforma "o sistema funciona" em "o sistema mede o que afirma medir".
 
@@ -235,6 +257,8 @@ O item 1 é o de melhor relação entre esforço e retorno: é o único que, iso
 Cada modelo utilizado está declarado em um registro versionado (`fias-ed-shared/scientific-config/models.json`) com identificador, revisão fixada, licença, métricas quando existem, limitações e referência à fonte.
 
 O sistema recusa-se a executar com modelo que o registro não declare — **e também com modelo que o registro declare sem ter adotado**. A distinção importa: alguns pesos constam do registro apenas para preservar a procedência de uma medição publicada, e não por terem sido validados para uso. É o caso dos dois tamanhos menores de modelo de transcrição que aparecem na tabela da seção 5.2. A autorização de uso é uma lista de estados explicitamente permitidos, de modo que um estado novo entra recusado por padrão, e não adotado por omissão.
+
+As regras de codificação também são versionadas, e pelo mesmo motivo. A versão vigente é **3.0.0**; a anterior, 2.0.0, produziu resultados que **não são comparáveis** com os atuais, porque a entrada do classificador mudou de forma e dois terços das categorias de uma aula real mudaram com ela. O sistema recusa reunir na mesma tabela aulas carimbadas com versões diferentes, e a recusa nomeia quais aulas estão em qual versão. Não há conversão entre as versões, e inventar uma seria o mesmo defeito com outra roupa. As aulas já gravadas sob 2.0.0 permanecem como estão: o que fazer com elas é decisão de pesquisa, e não de engenharia.
 
 As fontes científicas — documentação dos experimentos e pesos treinados — são conferidas por instantâneo criptográfico a cada verificação, de modo que alteração silenciosa é detectável.
 
