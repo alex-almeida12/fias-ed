@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -148,11 +148,20 @@ def aula_avulsa(db):
 def coleta_em(db):
     """Grava uma ColetaQTI viva no ciclo dado, na data indicada, com um
     ResultadoQTI associado — displayable=True e octantes plausíveis (escala
-    1-5 do QTI-24), prontos para a triangulação ler."""
-    def _coleta_em(ciclo: Ciclo, coletado_em: str) -> ColetaQTI:
-        coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=date.fromisoformat(coletado_em),
-                           origem="COLETA_NATIVA", response_count=12, displayable=True,
-                           qti_config_version="1.0.0")
+    1-5 do QTI-24), prontos para a triangulação ler.
+
+    `displayable` e `created_at` são aceitos explicitamente para os testes que
+    precisam forçar o caso "coleta existe mas não é exibível" ou empatar duas
+    coletas no mesmo instante — `created_at` é `default=utcnow` do lado do
+    Python (não do banco), então dá para sobrescrevê-lo na construção."""
+    def _coleta_em(ciclo: Ciclo, coletado_em: str, *, displayable: bool = True,
+                   created_at: datetime | None = None) -> ColetaQTI:
+        kwargs = dict(ciclo_id=ciclo.id, coletado_em=date.fromisoformat(coletado_em),
+                      origem="COLETA_NATIVA", response_count=12, displayable=displayable,
+                      qti_config_version="1.0.0")
+        if created_at is not None:
+            kwargs["created_at"] = created_at
+        coleta = ColetaQTI(**kwargs)
         db.add(coleta)
         db.flush()
         octantes = {"oc1": 4.0, "oc2": 3.5, "oc3": 2.0, "oc4": 4.5,
@@ -165,13 +174,18 @@ def coleta_em(db):
 
 
 @pytest.fixture
-def aula_classificada(db, monkeypatch):
+def aula_classificada(db, monkeypatch, ciclo, aula_em):
     """Uma aula com transcrição, segmentos, ClassificacaoFIAS e IndicadorFIAS,
-    pronta para triangular — mesmo molde de `aula_transcrita`, sem ciclo
-    associado (por isso `coleta_vigente` nunca acha uma coleta para ela): serve
-    aos testes de triangulação que não dependem de uma coleta QTI vigente."""
-    prof = make_user(db, "aula-classificada-fixture")
-    aula = make_aula(db, prof, status="READY_FOR_FIAS")
+    pronta para triangular — mesmo molde de `aula_transcrita`. Vive no ciclo da
+    fixture `ciclo`, mas por padrão nenhuma `coleta_em` é criada nele, então
+    `coleta_vigente` ainda não acha nada para ela: serve aos testes de
+    triangulação que não dependem de uma coleta QTI vigente. Um teste que peça
+    `ciclo` junto desta fixture recebe o mesmo ciclo (fixtures são cacheadas por
+    teste) e pode gravar ali uma coleta que `coleta_vigente` realmente escolha
+    para esta aula."""
+    aula = aula_em(ciclo, "2026-09-22")
+    aula.status = "READY_FOR_FIAS"
+    db.commit()
     classificar_para_triangulacao(db, aula, monkeypatch)
     db.refresh(aula)
     return aula
