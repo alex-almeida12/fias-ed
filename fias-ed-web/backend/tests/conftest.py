@@ -14,10 +14,10 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal, get_engine
 from app.main import create_app
 from app.ml.protocols import SegmentoASR
-from app.models import Audio, Aula, Base, Ciclo, Disciplina, Escola, Turma
+from app.models import Audio, Aula, Base, Ciclo, ColetaQTI, Disciplina, Escola, ResultadoQTI, Turma
 from app.transcricao.service import criar_transcricao, falante_provisorio, gravar_segmentos
 from tests.audio_fixtures import VOZ_A, VOZ_B, make_fala
-from tests.helpers import make_aula, make_user
+from tests.helpers import classificar_para_triangulacao, make_aula, make_user
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -142,6 +142,39 @@ def aula_avulsa(db):
     """Aula cuja turma/disciplina não têm ciclo nenhum associado."""
     prof = make_user(db, "professor-avulso")
     return make_aula(db, prof)
+
+
+@pytest.fixture
+def coleta_em(db):
+    """Grava uma ColetaQTI viva no ciclo dado, na data indicada, com um
+    ResultadoQTI associado — displayable=True e octantes plausíveis (escala
+    1-5 do QTI-24), prontos para a triangulação ler."""
+    def _coleta_em(ciclo: Ciclo, coletado_em: str) -> ColetaQTI:
+        coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=date.fromisoformat(coletado_em),
+                           origem="COLETA_NATIVA", response_count=12, displayable=True,
+                           qti_config_version="1.0.0")
+        db.add(coleta)
+        db.flush()
+        octantes = {"oc1": 4.0, "oc2": 3.5, "oc3": 2.0, "oc4": 4.5,
+                    "oc5": 1.0, "oc6": 2.5, "oc7": 3.0, "oc8": 3.8}
+        db.add(ResultadoQTI(coleta_id=coleta.id, octantes=octantes, agency=0.0, communion=0.0))
+        db.commit()
+        db.refresh(coleta)
+        return coleta
+    return _coleta_em
+
+
+@pytest.fixture
+def aula_classificada(db, monkeypatch):
+    """Uma aula com transcrição, segmentos, ClassificacaoFIAS e IndicadorFIAS,
+    pronta para triangular — mesmo molde de `aula_transcrita`, sem ciclo
+    associado (por isso `coleta_vigente` nunca acha uma coleta para ela): serve
+    aos testes de triangulação que não dependem de uma coleta QTI vigente."""
+    prof = make_user(db, "aula-classificada-fixture")
+    aula = make_aula(db, prof, status="READY_FOR_FIAS")
+    classificar_para_triangulacao(db, aula, monkeypatch)
+    db.refresh(aula)
+    return aula
 
 
 @pytest.fixture

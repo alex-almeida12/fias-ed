@@ -18,11 +18,12 @@ from sqlalchemy.orm import Session
 
 from fias_ed_engine.classifier import constrain_by_role, divergence_rate
 from fias_ed_engine.indices import compute_indices
-from fias_ed_engine.intervals import CodedSegment, code_lesson
+from fias_ed_engine.intervals import CodedSegment, Coding, code_lesson
 from fias_ed_engine.rules import load_rules
 
 from app import APP_VERSION
 from app.audio.prepare import audio_original
+from app.aulas.service import current_audio
 from app.core.config import get_settings
 from app.ml.clf_bertimbau import Turno, montar_pares
 from app.ml.loader import obter_classificador
@@ -46,6 +47,31 @@ def _segmentos_com_papel(db: Session, transcricao_id: uuid.UUID) -> list[tuple[S
         .order_by(Segmento.start_ms)
     ).all()
     return [(seg, papel) for seg, papel in linhas]
+
+
+def codificacao_da_aula(db: Session, aula: Aula, regras: dict) -> Coding:
+    """A codificação em intervalos da aula, recomputada a partir dos segmentos
+    classificados. Não fica no banco: é derivada, e recomputá-la é a única forma
+    de garantir que a tela de padrões, os índices e a triangulação enxerguem
+    exatamente a mesma aula.
+
+    Extraída de app/fias/routes.py (padroes_de_interacao): antes desta função
+    o mesmo bloco existia duas vezes — a tela e a triangulação recalculando a
+    mesma coisa cada uma a seu modo. Uma triangulação computada sobre uma
+    codificação diferente da que o professor vê na tela seria um erro
+    silencioso e difícil de achar."""
+    transcricao = transcricao_da_aula(db, aula.id)
+    linhas = db.execute(
+        select(Segmento, ClassificacaoFIAS)
+        .join(ClassificacaoFIAS, ClassificacaoFIAS.segmento_id == Segmento.id)
+        .where(Segmento.transcricao_id == transcricao.id)
+        .order_by(Segmento.start_ms)
+    ).all()
+    codificados = [CodedSegment(start_ms=seg.start_ms, end_ms=seg.end_ms, category=cls.pred_role_constrained)
+                  for seg, cls in linhas]
+    audio = current_audio(db, aula.id)
+    total_ms = audio.duration_ms if audio is not None else 0
+    return code_lesson(codificados, total_ms=total_ms, rules=regras, speech=fala_detectada(db, transcricao.id))
 
 
 def apagar_resultado_anterior(db: Session, transcricao_id: uuid.UUID) -> None:

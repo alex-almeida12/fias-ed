@@ -27,17 +27,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from fias_ed_engine.intervals import CodedSegment, Mark, code_lesson, transition_matrix
+from fias_ed_engine.intervals import Mark, transition_matrix
 from fias_ed_engine.mtss import select_evidence_segments
 from fias_ed_engine.rules import load_rules
 
 from app.audit import audit
 from app.auth.deps import Actor, current_actor
-from app.aulas.service import current_audio, get_owned_aula
+from app.aulas.service import get_owned_aula
 from app.core.db import get_db
 from app.core.errors import AppError
+from app.fias.service import codificacao_da_aula
 from app.models import ClassificacaoFIAS, IndicadorFIAS, Segmento
-from app.pipeline.align import fala_detectada
 from app.transcricao.service import POS_CLASSIFICACAO, texto_efetivo, transcricao_da_aula
 
 router = APIRouter()
@@ -154,15 +154,10 @@ def padroes_de_interacao(aula_id: uuid.UUID, actor: Actor = Depends(current_acto
         .where(Segmento.transcricao_id == transcricao.id)
         .order_by(Segmento.start_ms)
     ).all()
-    audio = current_audio(db, aula.id)
-    total_ms = audio.duration_ms if audio is not None else 0
-    codificados = [CodedSegment(start_ms=seg.start_ms, end_ms=seg.end_ms, category=cls.pred_role_constrained)
-                  for seg, cls in linhas]
-    # Mesma chamada da classificação (app/fias/service.py), com a mesma evidência
-    # de fala: a tela não pode mostrar uma codificação diferente da que produziu
-    # os índices que ela exibe ao lado.
-    codificacao = code_lesson(codificados, total_ms=total_ms, rules=regras,
-                              speech=fala_detectada(db, transcricao.id))
+    # codificacao_da_aula (app/fias/service.py): a tela não pode mostrar uma
+    # codificação diferente da que produziu os índices que ela exibe ao lado,
+    # nem da que a triangulação usa para o mesmo par (professor, aula).
+    codificacao = codificacao_da_aula(db, aula, regras)
 
     audit(db, actor, "aula", aula.id, "read")
     db.commit()

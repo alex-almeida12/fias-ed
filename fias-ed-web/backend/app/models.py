@@ -293,6 +293,33 @@ class ResultadoQTI(EntityMixin, Base):
     communion: Mapped[float] = mapped_column(Float, nullable=False)
 
 
+TRIANGULACAO_FIAS_KIND = ("index", "categories")
+
+
+class Triangulacao(EntityMixin, Base):
+    """Um par (evidência do FIAS, percepção do QTI) por aula, para cada linha
+    de `pedagogical_rules.triangulation_pairs`. Nenhum campo aqui nasce de uma
+    conta feita neste módulo: tudo vem de `fias_ed_engine.triangulation.
+    triangulate`, que também escreve `validation_status` sempre como
+    PENDING_SCIENTIFIC_VALIDATION — a triangulação justapõe evidências, não
+    julga o professor."""
+    __tablename__ = "triangulacao"
+    aula_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aula.id"), index=True, nullable=False)
+    pair_id: Mapped[str] = mapped_column(String, nullable=False)
+    fias_kind: Mapped[str] = mapped_column(_enum(TRIANGULACAO_FIAS_KIND, "triangulacao_fias_kind"),
+                                           nullable=False)
+    # string quando fias_kind="index" (o id do índice), lista quando "categories"
+    # (as categorias FIAS somadas) — o motor decide qual é qual, não esta coluna.
+    fias_ref: Mapped[str | list] = mapped_column(JSON, nullable=False)
+    fias_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    qti_available: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    qti_values: Mapped[list] = mapped_column(JSON, nullable=False)
+    reflection_question: Mapped[str] = mapped_column(String, nullable=False)
+    source_reference: Mapped[str] = mapped_column(String, nullable=False)
+    validation_status: Mapped[str] = mapped_column(
+        _enum(VALIDATION_STATUS, "triangulacao_validation_status"), nullable=False)
+
+
 class ModeloIA(EntityMixin, Base):
     __tablename__ = "modelo_ia"
     model_id: Mapped[str] = mapped_column(String, nullable=False)
