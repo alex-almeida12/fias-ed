@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, timezone
 
 from sqlalchemy import (BigInteger, Boolean, Date, DateTime, Enum, Float, ForeignKey, Index, Integer,
-                        MetaData, String, literal_column)
+                        JSON, MetaData, String, literal_column)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -237,6 +237,53 @@ class Ciclo(EntityMixin, Base):
     n_aulas_previstas: Mapped[int] = mapped_column(Integer, nullable=False)
     iniciado_em: Mapped[date] = mapped_column(Date, nullable=False)
     encerrado_em: Mapped[date | None] = mapped_column(Date, nullable=True)
+
+
+ORIGEM_QTI = ("COLETA_NATIVA", "IMPORTACAO_EXTERNA")
+
+
+class ColetaQTI(EntityMixin, Base):
+    __tablename__ = "coleta_qti"
+    ciclo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ciclo.id"), index=True, nullable=False)
+    coletado_em: Mapped[date] = mapped_column(Date, nullable=False)
+    origem: Mapped[str] = mapped_column(_enum(ORIGEM_QTI, "origem_qti"), nullable=False)
+    response_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    displayable: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    qti_config_version: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class RespostaQTI(Base):
+    """Sem identidade, por construção. O respondente é um índice sequencial
+    dentro da coleta — é o que o formato de exportação do motor espera.
+
+    Não usa EntityMixin: o `device_id` do mixin é a instalação do professor que
+    gravou a linha, não o dispositivo do estudante, mas numa tabela por
+    respondente esse nome de coluna lê como identidade mesmo sem ser — e nesta
+    tabela, a mais sensível da fatia, ambiguidade de nome já é o risco. Os
+    demais campos de auditoria e exclusão lógica do mixin são replicados abaixo,
+    exceto ele. Mesmo princípio do §48 aplicado à fala: a ausência é o
+    mecanismo, não um esquecimento."""
+    __tablename__ = "resposta_qti"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow,
+                                                 nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, onupdate=literal_column("version + 1"),
+                                         nullable=False)
+    sync_status: Mapped[str] = mapped_column(_enum(SYNC_STATUS, "sync_status"), default="LOCAL_ONLY",
+                                             nullable=False)
+    coleta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("coleta_qti.id"), index=True, nullable=False)
+    response_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    respostas: Mapped[dict] = mapped_column(JSON, nullable=False)  # {"1": 4, "2": 3, ... "24": 5}
+
+
+class ResultadoQTI(EntityMixin, Base):
+    __tablename__ = "resultado_qti"
+    coleta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("coleta_qti.id"), index=True, nullable=False)
+    octantes: Mapped[dict] = mapped_column(JSON, nullable=False)
+    agency: Mapped[float] = mapped_column(Float, nullable=False)
+    communion: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 class ModeloIA(EntityMixin, Base):
