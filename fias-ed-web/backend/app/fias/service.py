@@ -24,7 +24,7 @@ from fias_ed_engine.rules import load_rules
 from app import APP_VERSION
 from app.audio.prepare import audio_original
 from app.core.config import get_settings
-from app.ml.clf_bertimbau import montar_pares
+from app.ml.clf_bertimbau import Turno, montar_pares
 from app.ml.loader import obter_classificador
 from app.ml.registry import carregar_registro, entrada
 from app.models import (Aula, ClassificacaoFIAS, Falante, IndicadorFIAS, ModeloIA, Processamento,
@@ -164,10 +164,16 @@ def classificar_aula(db: Session, aula: Aula) -> None:
     regras = load_rules("fias_rules")
     transcricao = transcricao_da_aula(db, aula.id)
     pares_seg_papel = _segmentos_com_papel(db, transcricao.id)
-    segmentos = [seg for seg, _ in pares_seg_papel]
     # texto_efetivo, NUNCA texto_original_asr: usar o bruto do ASR desfaria em
     # silêncio a revisão que o professor acabou de fazer (Task 10).
-    lotes = obter_classificador().logits(montar_pares([texto_efetivo(s) for s in segmentos]))
+    #
+    # O papel vai junto com o texto porque `montar_pares` precisa dele: o
+    # contexto (text_a) só existe quando o falante mudou, que é a convenção do
+    # conjunto de treino. `_segmentos_com_papel` já devolve os dois lado a lado
+    # numa consulta só — é de propósito que nada aqui reconstrua a lista de
+    # papéis por fora.
+    turnos = [Turno(texto=texto_efetivo(seg), papel=papel) for seg, papel in pares_seg_papel]
+    lotes = obter_classificador().logits(montar_pares(turnos))
 
     apagar_resultado_anterior(db, transcricao.id)
     codificados: list[CodedSegment] = []

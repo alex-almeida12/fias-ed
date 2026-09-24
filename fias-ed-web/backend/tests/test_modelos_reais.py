@@ -66,9 +66,10 @@ def test_bertimbau_em_lote_nao_muda_nenhuma_categoria():
     não de 1e-6.
     """
     from app.ml import clf_bertimbau
-    from app.ml.clf_bertimbau import BertimbauClassificador, categoria_de, montar_pares
+    from app.ml.clf_bertimbau import BertimbauClassificador, Turno, categoria_de, montar_pares
 
-    pares = montar_pares([f"essa e a fala numero {i} da aula de teste" for i in range(37)])
+    pares = montar_pares([Turno(f"essa e a fala numero {i} da aula de teste",
+                                "PROFESSOR" if i % 2 else "ALUNO") for i in range(37)])
     clf = BertimbauClassificador()
     original = clf_bertimbau.TAMANHO_DO_LOTE
     try:
@@ -91,8 +92,9 @@ def test_bertimbau_em_lote_e_reproduzivel():
     """§44 propriamente dito: a mesma aula reprocessada dá o mesmo resultado. O
     tamanho do lote é fixo, então as duas execuções fazem as mesmas contas na
     mesma ordem — aqui a igualdade é bit a bit, sem tolerância nenhuma."""
-    from app.ml.clf_bertimbau import BertimbauClassificador, montar_pares
+    from app.ml.clf_bertimbau import BertimbauClassificador, Turno, montar_pares
 
-    pares = montar_pares([f"essa e a fala numero {i} da aula de teste" for i in range(37)])
+    pares = montar_pares([Turno(f"essa e a fala numero {i} da aula de teste",
+                                "PROFESSOR" if i % 2 else "ALUNO") for i in range(37)])
     clf = BertimbauClassificador()
     assert clf.logits(pares) == clf.logits(pares)

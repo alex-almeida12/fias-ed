@@ -201,6 +201,39 @@ def test_classificacao_grava_uma_linha_por_segmento(db, aula_revisada, classific
     assert len(classificacoes_de(db, aula_revisada)) == n_segmentos
 
 
+def test_o_contexto_enviado_ao_modelo_segue_o_papel_do_falante(db, aula_revisada, classificador_falso):
+    """A ponta do conserto que os testes de `montar_pares` não alcançam: o papel
+    tem de sair do banco e chegar à montagem do par.
+
+    A fixture é PROFESSOR → ALUNO → PROFESSOR, três trocas de falante seguidas,
+    então os três pares carregam contexto — menos o primeiro, que não tem turno
+    anterior. Fixa QUAL texto foi para o `text_a` de cada um: contar vazios
+    passaria com o par montado ao contrário."""
+    fias_service.classificar_aula(db, aula_revisada)
+    assert classificador_falso.pares_recebidos == [
+        ("", "a professora explica a questão"),
+        ("a professora explica a questão", "o aluno responde a pergunta"),
+        ("o aluno responde a pergunta", "a professora faz outra pergunta"),
+    ]
+
+
+def test_falas_seguidas_do_mesmo_papel_vao_sem_contexto(db, classificador_falso):
+    """O outro lado da mesma regra, ponta a ponta: dois segmentos do professor
+    em sequência (o caso comum de uma aula expositiva, e o que a produção
+    classificava errado) não podem levar o segmento anterior como contexto."""
+    aula = _construir_aula(db, "elisa-fias", status="READY_FOR_FIAS", segmentos_spec=[
+        ("PROFESSOR", "a professora começa a explicação", True),
+        ("PROFESSOR", "a professora continua explicando", True),
+        ("ALUNO", "o aluno faz uma pergunta", True),
+    ])
+    fias_service.classificar_aula(db, aula)
+    assert classificador_falso.pares_recebidos == [
+        ("", "a professora começa a explicação"),
+        ("", "a professora continua explicando"),
+        ("a professora continua explicando", "o aluno faz uma pergunta"),
+    ]
+
+
 def test_indices_sao_gravados_com_evidencia_e_rules_version(db, aula_revisada, classificador_falso):
     _rodar(db, aula_revisada)
     indicadores = db.query(IndicadorFIAS).filter_by(aula_id=aula_revisada.id).all()

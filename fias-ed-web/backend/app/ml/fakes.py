@@ -30,8 +30,14 @@ class ClassificadorFalso:
         # limiar de incerteza do shared (fias_rules.classifier.uncertain_below),
         # sem inventar um segundo cálculo de confiança aqui.
         self._indice = None if categoria_fixa is None else categoria_fixa - 1  # logit_index_offset = 1
+        # Guarda o que recebeu para que um teste possa checar a ENTRADA do
+        # modelo, e não só a saída: o par (text_a, text_b) é decidido no Web a
+        # partir do papel do falante, e um par montado errado não quebra nada
+        # visivelmente — só muda a categoria de dois terços da aula.
+        self.pares_recebidos: list[tuple[str, str]] = []
 
     def logits(self, pares: list[tuple[str, str]]) -> list[list[float]]:
+        self.pares_recebidos.extend(pares)
         vetor = [0.0] * 10
         if self._indice is not None:
             vetor[self._indice] = 10.0

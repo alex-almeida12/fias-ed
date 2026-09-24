@@ -17,7 +17,7 @@
       "required": ["logit_index_offset", "input_format", "max_length", "token_type_ids", "padding", "uncertain_below", "role_categories"],
       "properties": {
         "logit_index_offset": {"const": 1},
-        "input_format": {"const": "pair:previous_turn,current_turn"},
+        "input_format": {"const": "pair:previous_turn_if_speaker_changed,current_turn"},
         "max_length": {"const": 256},
         "token_type_ids": {"const": "zeros"},
         "padding": {"const": "max_length"},

@@ -11,19 +11,36 @@ escolha de implementação: ANALISE_MODELOS_EXISTENTES §2.3-§2.5. Mudar
 esse formato em relação ao treino degrada a qualidade em silêncio, do
 mesmo jeito que um mapa de categorias trocado.
 
+E `text_a` não é "o segmento anterior": é o turno anterior DO OUTRO
+FALANTE, vazio quando o mesmo falante continua. Quem construiu o
+conjunto de treino diz isso em letras: o notebook do TalkMoves
+(`code/load_and_clean_data.ipynb`, células "Prepare Tuples from data")
+só preenche `text_a` no ramo em que houve troca de falante desde o
+último turno — professor depois de professor recebe `empty_student` — e
+o derivador para o FIAS
+(`scripts/experimento_fias_ed_bert_talkmoves.py`, `_create_student_rows`)
+inverte as colunas nas linhas do aluno "para manter a convenção: text_b
+é sempre o turno sendo classificado", com `text_a` = fala do professor.
+Medido no train_fias_ptbr.tsv (186 955 linhas): `text_a` vazio em 89,8%
+das linhas de categoria 6, 83,5% da 5, 77,8% da 4 — e em só 33,2% da
+categoria 3 e 0,2% das linhas de aluno. A categoria 3 ("aceita ou
+utiliza ideias dos alunos") é justamente a que precisa do contexto para
+existir: apagar `text_a` sempre a destruiria.
+
 max_length e padding são lidos de fias_rules.classifier, nunca literais
 soltos aqui: o §2.6 mede que padding não é neutro sob quantização
 (diferença de até 0,156 nos logits) — uma segunda fonte de verdade que
 divergisse da usada no treino teria o mesmo efeito silencioso.
 """
 from pathlib import Path
+from typing import NamedTuple
 
 from fias_ed_engine.rules import load_rules
 
 from app.core.config import get_settings
 from app.ml.registry import entrada_adotavel, verificar_artefatos
 
-FORMATO_ENTRADA_ESPERADO = "pair:previous_turn,current_turn"
+FORMATO_ENTRADA_ESPERADO = "pair:previous_turn_if_speaker_changed,current_turn"
 
 # Quantos pares vão ao modelo por passagem. Decisão de engenharia local, não
 # científica: fias_rules.classifier declara o que muda resultado (input_format,
@@ -52,9 +69,42 @@ def categoria_de(logits: list[float], offset: int) -> int:
     return max(range(len(logits)), key=logits.__getitem__) + offset
 
 
-def montar_pares(textos: list[str]) -> list[tuple[str, str]]:
-    """Par de turnos: o anterior como contexto, o atual como alvo."""
-    return [("" if i == 0 else textos[i - 1], t) for i, t in enumerate(textos)]
+class Turno(NamedTuple):
+    """Texto e papel do MESMO segmento, num objeto só.
+
+    Não são duas listas paralelas de propósito: é a lição de
+    `_segmentos_com_papel` (app/fias/service.py) aplicada a outra fronteira —
+    quando texto e papel viajam separados, nada impede que um deles fique com
+    um elemento a mais e `zip` trunque em silêncio, classificando a aula
+    inteira com os papéis deslocados de uma posição.
+    """
+    texto: str
+    papel: str
+
+
+def montar_pares(turnos: list[Turno]) -> list[tuple[str, str]]:
+    """Par de turnos: o anterior como contexto SE o falante mudou, o atual como
+    alvo.
+
+    Mesmo falante em sequência → `text_a` vazio, porque é assim que o treino
+    foi construído (veja o cabeçalho do módulo). Falante diferente → `text_a`
+    recebe o texto do turno anterior inteiro, sem prefixo nem marcação: é esse
+    contexto que separa a categoria 3 ("aceita ou utiliza ideias dos alunos")
+    das outras categorias de professor, e é por isso que o conserto NÃO é
+    "esvaziar text_a sempre".
+
+    O primeiro turno da aula fica sem contexto pelo mesmo motivo que os
+    demais, e não por ser o primeiro: não existe turno anterior, muito menos de
+    outro falante. O notebook do TalkMoves faz igual (`flag == 0` →
+    `empty_student`/`empty_previous`).
+    """
+    pares = []
+    anterior: Turno | None = None
+    for turno in turnos:
+        contexto = anterior.texto if anterior is not None and anterior.papel != turno.papel else ""
+        pares.append((contexto, turno.texto))
+        anterior = turno
+    return pares
 
 
 def _parametros_tokenizacao() -> dict:
@@ -63,6 +113,11 @@ def _parametros_tokenizacao() -> dict:
     turnos que montar_pares() implementa (ANALISE_MODELOS_EXISTENTES §2.4):
     classificar a aula inteira num formato de entrada que o código não
     implementa de fato é pior do que uma exceção na hora.
+
+    A recusa vale nos dois sentidos, e é o que torna o conserto irreversível
+    por descuido: o valor antigo ("pair:previous_turn,current_turn", o turno
+    anterior sempre) passou a ser um formato que este módulo NÃO implementa
+    mais, e agora levanta ValueError como qualquer outro desconhecido.
     """
     classificador = load_rules("fias_rules")["classifier"]
     if classificador["input_format"] != FORMATO_ENTRADA_ESPERADO:

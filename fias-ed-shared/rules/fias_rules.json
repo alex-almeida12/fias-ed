@@ -38,13 +38,14 @@
   "matrix": {"pad_category": 10, "source_reference": "CAP4 l.52 e l.279 (\"Convenciona-se acrescentar 10 no início e no fim da sequência\")", "validation_status": "validated"},
   "classifier": {
     "logit_index_offset": 1,
-    "input_format": "pair:previous_turn,current_turn",
+    "input_format": "pair:previous_turn_if_speaker_changed,current_turn",
     "max_length": 256,
     "token_type_ids": "zeros",
     "padding": "max_length",
     "uncertain_below": 0.5,
     "role_categories": {"PROFESSOR": [1, 2, 3, 4, 5, 6, 7], "ALUNO": [8, 9]},
-    "source_reference": "experimentos/scripts/experimento_fias_ed_bert_ptbr.py (build_label_info: idx=cat-1; tokenizer(text_a,text_b), max_seq 256); ANALISE_MODELOS_EXISTENTES.md §token_type_ids; restrição por papel = spec §4.2",
+    "notes": "`input_format` mudou em 2026-09-23 e o valor antigo (\"pair:previous_turn,current_turn\") descrevia uma coisa que o treino NUNCA fez: text_a não é \"o turno anterior\", é o turno anterior DO OUTRO FALANTE, vazio quando o mesmo falante continua. O notebook que monta os pares do TalkMoves (code/load_and_clean_data.ipynb, células \"Prepare Tuples from data\") só preenche text_a no ramo em que houve troca de falante desde o último turno (professor depois de professor recebe `empty_student`), e o derivador para o FIAS (scripts/experimento_fias_ed_bert_talkmoves.py, _create_student_rows) inverte as colunas nas linhas do aluno \"para manter a convenção: text_b é sempre o turno sendo classificado\". Medido em train_fias_ptbr.tsv (186 955 linhas), text_a vazio: 89,8% na categoria 6, 83,5% na 5, 77,8% na 4, 33,2% na 3, 0,2% nas categorias de aluno. Preencher sempre é o defeito; esvaziar sempre é o outro defeito, e destruiria a categoria 3 (\"aceita ou utiliza ideias dos alunos\"), que é o contexto virando categoria e sustenta metade do ID_RATIO.",
+    "source_reference": "experimentos/scripts/experimento_fias_ed_bert_ptbr.py (build_label_info: idx=cat-1; tokenizer(text_a,text_b), max_seq 256); TalkMoves-main/code/load_and_clean_data.ipynb e experimentos/scripts/experimento_fias_ed_bert_talkmoves.py::_create_student_rows (convenção do text_a: turno anterior do outro falante, vazio quando o falante não muda); ANALISE_MODELOS_EXISTENTES.md §token_type_ids; restrição por papel = spec §4.2",
     "validation_status": "engineering_decision"
   },
   "categories": [

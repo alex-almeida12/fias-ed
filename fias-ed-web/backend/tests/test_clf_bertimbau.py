@@ -6,7 +6,8 @@ import pytest
 from fias_ed_engine.rules import load_rules
 
 from app.ml import clf_bertimbau
-from app.ml.clf_bertimbau import _parametros_tokenizacao, _tokenizar, categoria_de, montar_pares
+from app.ml.clf_bertimbau import (FORMATO_ENTRADA_ESPERADO, Turno, _parametros_tokenizacao,
+                                  _tokenizar, categoria_de, montar_pares)
 
 
 def test_categoria_usa_o_offset_do_fias_rules():
@@ -27,9 +28,70 @@ def test_nenhum_codigo_le_id2label_do_checkpoint():
     assert "label2id" not in fonte
 
 
-def test_pares_usam_o_turno_anterior_como_contexto():
-    # ANALISE_MODELOS_EXISTENTES §2.4: entrada = par (text_a, text_b)
-    assert montar_pares(["um", "dois", "três"]) == [("", "um"), ("um", "dois"), ("dois", "três")]
+def test_contexto_vem_do_turno_anterior_quando_o_falante_muda():
+    """A convenção do conjunto de treino: `text_a` é o turno anterior DO OUTRO
+    FALANTE. Quando o falante muda, o contexto é preenchido com o texto do
+    turno anterior inteiro — é o que dá ao modelo a informação que separa a
+    categoria 3 das outras categorias de professor."""
+    turnos = [Turno("pergunta do professor", "PROFESSOR"),
+              Turno("resposta do aluno", "ALUNO"),
+              Turno("o professor repete a resposta", "PROFESSOR")]
+    assert montar_pares(turnos) == [
+        ("", "pergunta do professor"),
+        ("pergunta do professor", "resposta do aluno"),
+        ("resposta do aluno", "o professor repete a resposta"),
+    ]
+
+
+def test_mesmo_falante_em_sequencia_nao_recebe_contexto():
+    """Professor depois de professor → `text_a` vazio. É o ramo do notebook do
+    TalkMoves em que o par sai com `empty_student`, e era exatamente o que a
+    produção fazia errado: 213 de 213 segmentos recebiam o segmento anterior
+    como contexto porque ninguém olhava quem falava."""
+    turnos = [Turno("primeira frase", "PROFESSOR"),
+              Turno("segunda frase", "PROFESSOR"),
+              Turno("terceira frase", "PROFESSOR")]
+    assert montar_pares(turnos) == [("", "primeira frase"), ("", "segunda frase"), ("", "terceira frase")]
+
+
+def test_o_contexto_da_categoria_3_nao_e_apagado():
+    """**Este é o teste que trava o conserto errado.** "Esvaziar `text_a`
+    sempre" passaria em `test_mesmo_falante_em_sequencia_nao_recebe_contexto` e
+    destruiria a categoria 3 ("aceita ou utiliza ideias dos alunos"), que só
+    existe porque o professor está reagindo à fala de um aluno — metade do
+    numerador do ID_RATIO, que é como o FIAS mede influência indireta.
+
+    O exemplo é o padrão canônico do conjunto de treino (rótulo 3: `text_a`
+    "Sete quatorze", `text_b` "Sete e quatorze."): o contexto tem de ser o
+    texto do aluno, palavra por palavra, e não uma string vazia nem uma marca
+    de falante."""
+    turnos = [Turno("o aluno disse: sete quatorze", "ALUNO"),
+              Turno("sete e quatorze", "PROFESSOR")]
+    contexto, alvo = montar_pares(turnos)[1]
+    assert contexto == "o aluno disse: sete quatorze"
+    assert alvo == "sete e quatorze"
+
+
+def test_alternancia_longa_preenche_e_esvazia_no_lugar_certo():
+    """Fecha os dois erros de uma vez numa sequência que mistura os casos:
+    contar quantos `text_a` estão vazios não prova nada, então o teste fixa
+    QUAL contexto cada turno recebeu."""
+    turnos = [Turno("p1", "PROFESSOR"), Turno("p2", "PROFESSOR"), Turno("a1", "ALUNO"),
+              Turno("a2", "ALUNO"), Turno("p3", "PROFESSOR"), Turno("a3", "ALUNO")]
+    assert montar_pares(turnos) == [
+        ("", "p1"),      # primeiro turno da aula: não existe anterior
+        ("", "p2"),      # professor depois de professor
+        ("p2", "a1"),    # trocou: contexto é a ÚLTIMA fala do professor, não a primeira
+        ("", "a2"),      # aluno depois de aluno
+        ("a2", "p3"),    # trocou
+        ("p3", "a3"),    # trocou
+    ]
+
+
+def test_primeiro_turno_da_aula_nao_tem_contexto():
+    """Continua vazio, mas agora pela mesma regra dos demais (não existe turno
+    anterior de outro falante), e não por um caso especial em i == 0."""
+    assert montar_pares([Turno("única fala", "ALUNO")]) == [("", "única fala")]
 
 
 def test_pares_de_lista_vazia():
@@ -114,6 +176,14 @@ def test_parametros_tokenizacao_le_max_length_e_padding_das_regras_reais():
     assert params == {"max_length": 256, "padding": "max_length"}
 
 
+def test_o_input_format_das_regras_reais_e_o_que_o_codigo_implementa():
+    """Sem mock: o valor que está em fias_rules.json tem de ser exatamente o
+    que `montar_pares` faz. Se um dos dois andar sozinho, a aula inteira sai
+    num formato de entrada que as regras não declaram."""
+    assert load_rules("fias_rules")["classifier"]["input_format"] == FORMATO_ENTRADA_ESPERADO
+    assert FORMATO_ENTRADA_ESPERADO == "pair:previous_turn_if_speaker_changed,current_turn"
+
+
 def test_parametros_tokenizacao_muda_com_as_regras(monkeypatch):
     """Prova que a leitura não é decorativa: mudar o valor em fias_rules muda
     o que o classificador usa, sem precisar tocar em clf_bertimbau.py."""
@@ -122,7 +192,7 @@ def test_parametros_tokenizacao_muda_com_as_regras(monkeypatch):
         return {"classifier": {
             "max_length": 128,
             "padding": "longest",
-            "input_format": "pair:previous_turn,current_turn",
+            "input_format": FORMATO_ENTRADA_ESPERADO,
         }}
 
     monkeypatch.setattr(clf_bertimbau, "load_rules", regras_falsas)
@@ -143,6 +213,24 @@ def test_parametros_tokenizacao_recusa_formato_de_entrada_inesperado(monkeypatch
 
     monkeypatch.setattr(clf_bertimbau, "load_rules", regras_falsas)
     with pytest.raises(ValueError):
+        _parametros_tokenizacao()
+
+
+def test_recusa_o_formato_antigo_de_turno_anterior_sempre(monkeypatch):
+    """A recusa vale nos dois sentidos. "pair:previous_turn,current_turn" foi o
+    formato declarado até 2026-09-23 e descrevia o turno anterior SEMPRE, sem
+    olhar quem falava — o defeito. `montar_pares` não implementa mais isso,
+    então o valor antigo tem de ser recusado como qualquer outro formato
+    desconhecido, e não silenciosamente aceito por parecer familiar."""
+    def regras_falsas(nome):
+        return {"classifier": {
+            "max_length": 256,
+            "padding": "max_length",
+            "input_format": "pair:previous_turn,current_turn",
+        }}
+
+    monkeypatch.setattr(clf_bertimbau, "load_rules", regras_falsas)
+    with pytest.raises(ValueError, match="pair:previous_turn,current_turn"):
         _parametros_tokenizacao()
 
 
@@ -200,7 +288,10 @@ def _classificador_falso() -> tuple[clf_bertimbau.BertimbauClassificador, _Model
 
 
 def _pares_de_teste(n: int) -> list[tuple[str, str]]:
-    return montar_pares([f"fala numero {i} da aula" for i in range(n)])
+    """Alterna os papéis a cada turno: assim metade dos pares leva contexto e a
+    outra metade não, que é o material realista para os testes de lote."""
+    return montar_pares([Turno(f"fala numero {i} da aula", "PROFESSOR" if i % 2 else "ALUNO")
+                         for i in range(n)])
 
 
 def test_logits_em_lote_sao_identicos_a_passagem_unica(monkeypatch):
