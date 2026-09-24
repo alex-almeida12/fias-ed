@@ -95,6 +95,70 @@ As medições de custo computacional (seção 5) foram feitas com **fala sinteti
 
 Essa distinção está registrada tanto no código de medição quanto na documentação técnica.
 
+### 4.2 A confiança declarada pelo classificador, e por que a fração "incerta" não é uma medida
+
+Para cada trecho de fala o sistema publica um número de confiança e marca como "incerta" toda classificação abaixo de 0,5. Uma leitura preliminar desse material em uma aula real havia registrado **58,2 % das falas marcadas como incertas, com confiança média de 0,3985**. A reclassificação descrita a seguir reproduz esses dois números exatamente — e mostra que eles não medem o que aparentam medir.
+
+**Procedência do limiar.** O valor de 0,5 **não tem origem declarada**. O registro científico do projeto o classifica como decisão de engenharia, e a referência de fonte associada ao classificador remete ao roteiro do experimento original apenas para o índice de rótulo, o tokenizador e o comprimento máximo de sequência — o limiar não é mencionado em ponto algum. É uma linha convencional, e nenhuma afirmação deve repousar sobre ela.
+
+**Medição.** Os 213 trechos de fala de uma gravação autêntica de 24 minutos foram reclassificados pelo modelo de produção, todos atribuídos ao professor — que foi o que a separação de vozes produziu na execução real daquela aula. A distribuição da confiança publicada:
+
+| Estatística | Valor |
+|---|---|
+| Mínimo | 0,0001 |
+| Primeiro quartil | 0,0018 |
+| Mediana | 0,1073 |
+| Terceiro quartil | 0,8930 |
+| Máximo | 0,9984 |
+| Média | 0,3985 |
+| Desvio-padrão | 0,4253 |
+
+*Interpretação.* A distribuição não tem centro: 47,9 % das falas ficam abaixo de 0,05 e 17,8 % ficam acima de 0,95, enquanto apenas 20 das 213 (9,4 %) caem entre 0,30 e 0,70. **A média de 0,3985 não descreve fala nenhuma** — é o resultado de somar duas populações separadas, e citá-la como "a confiança do classificador nesta aula" descreve um valor que o sistema praticamente nunca produz.
+
+**Medição — sensibilidade ao limiar.** A fração marcada como incerta, variando a linha de corte:
+
+| Limiar | Falas abaixo | Fração |
+|---|---|---|
+| 0,30 | 113 de 213 | 53,1 % |
+| 0,40 | 116 de 213 | 54,5 % |
+| 0,50 | 124 de 213 | **58,2 %** |
+| 0,60 | 130 de 213 | 61,0 % |
+| 0,70 | 133 de 213 | 62,4 % |
+
+*Interpretação.* Ao contrário do que a arbitrariedade do limiar faria supor, **a fração quase não depende dele**: dobrar o limiar, de 0,30 para 0,60, move o resultado em oito pontos percentuais. A razão é a forma da distribuição — não há massa na faixa intermediária para a linha atravessar. A fragilidade dessa estatística, portanto, não está na escolha do limiar. Está no que o número conta.
+
+**Medição — antes e depois da restrição por papel.** O sistema aplica, após a classificação, uma restrição que impede que uma fala atribuída ao professor receba categoria de aluno. Comparando a confiança na escolha livre do modelo com a confiança publicada após essa restrição:
+
+| Grandeza | Média | Mediana | Mínimo |
+|---|---|---|---|
+| Confiança na escolha livre do modelo | 0,8917 | 0,9668 | 0,3920 |
+| Confiança publicada, após a restrição | 0,3985 | 0,1073 | 0,0001 |
+
+Em **118 dos 213 trechos (55,4 %)** a categoria que o modelo escolheu por conta própria não era categoria de professor: 95 vezes "resposta do aluno", 18 vezes "silêncio ou confusão" e 5 vezes "iniciativa do aluno". Nesses casos a restrição substitui a escolha pela categoria de professor mais provável, e a confiança publicada passa a ser a probabilidade que o modelo havia deixado como resíduo — de mediana 0,0019. Nos outros 95 trechos, em que o modelo já havia escolhido uma categoria de professor, a confiança tem média 0,8507 e apenas 6 (6,3 %) ficam abaixo de 0,5. Nos 118 restantes, ficam todos os 118.
+
+*Interpretação.* **A incerteza não é do modelo: é produzida pela restrição por papel.** O classificador, nesta aula, é confiante — sua confiança mediana na própria escolha é 0,9668, e em nenhum dos 213 trechos cai abaixo de 0,39. A fração "incerta" é, quase inteiramente, a taxa de divergência entre o classificador e a atribuição de falante, grandeza que o sistema já registra em separado e que nesta execução vale exatamente 0,5540. Dito de outro modo: dos 58,2 %, cerca de 55,4 pontos são divergência e menos de 3 pontos são hesitação do modelo.
+
+Convém registrar que essa reatribuição não redistribui a probabilidade entre as sete categorias admitidas ao professor — publica a probabilidade original da categoria escolhida. Como exercício contrafactual sobre as mesmas saídas, se houvesse redistribuição a confiança teria mediana 0,7742 e 16,4 % das falas ficariam abaixo de 0,5, em vez de 58,2 %. O número muda por uma convenção de cálculo, não por uma propriedade da aula — mais uma razão para não citá-lo como medida.
+
+**Medição — o piso do acaso.** A confiança publicada é a probabilidade que o modelo atribui a uma categoria entre as **dez** que ele distingue, sem redistribuição. O piso do acaso aplicável a esse número é, portanto, 1/10 = **0,100** — e não 1/7 ≈ 0,143, que valeria apenas se houvesse redistribuição entre as sete categorias de professor. A média de 0,3985 é 4,0 vezes esse piso; a mediana, 0,1073, é 1,07 vez. **106 das 213 falas (49,8 %) ficam abaixo do piso do acaso.**
+
+*Interpretação.* Confiança abaixo do acaso não é confiança baixa — é sinal de que, para aquelas falas, o número não está em escala de confiança. Nos 95 trechos em que está, a média de 0,8507 é 8,5 vezes o piso.
+
+**Medição — por categoria.** Das sete categorias de professor, apenas quatro foram atribuídas nesta aula; "aceita sentimentos", "elogia ou encoraja" e "critica ou justifica autoridade" não aparecem uma única vez. Entre as quatro atribuídas, a confiança publicada difere bastante (média 0,3214 em "expõe" contra 0,6788 em "dá instruções"), mas a diferença desaparece quando se olham apenas os 95 trechos não reatribuídos:
+
+| Categoria atribuída | Confiança média (todas as falas) | Confiança média (só as não reatribuídas) |
+|---|---|---|
+| Aceita ou usa ideias | 0,2836 (n = 22) | 0,7168 (n = 8) |
+| Faz perguntas | 0,6372 (n = 49) | 0,8878 (n = 34) |
+| Expõe | 0,3214 (n = 137) | 0,8473 (n = 49) |
+| Dá instruções | 0,6788 (n = 5) | 0,8440 (n = 4) |
+
+*Interpretação.* **Não há categoria sistematicamente incerta.** A aparência de que "expõe" e "aceita ou usa ideias" seriam categorias frágeis é efeito de destino: 88 dos 118 trechos reatribuídos caem em "expõe". Onde o modelo decide sozinho, as quatro categorias ficam entre 0,72 e 0,89, sem padrão que distinga uma das outras.
+
+**O que esta medição autoriza dizer.** A distribuição acima é medida e pode ser citada, com a ressalva de que provém de uma única aula. A frase "58,2 % das categorias foram marcadas como incertas" **não deve ser citada como medida de incerteza do classificador**: ela é quase inteiramente a taxa de divergência entre classificador e atribuição de falante, expressa numa escala em que metade dos valores fica abaixo do acaso. A grandeza correspondente, quando for necessário citá-la, é a própria taxa de divergência — 55,4 % nesta aula —, que é o que de fato foi observado.
+
+**O que esta medição não resolve.** Nenhuma das cinco lacunas da tabela acima. Confiança não é acerto: um modelo confiante e errado produz exatamente os números da coluna da escolha livre. Esta gravação não tem transcrição de referência nem anotação FIAS nativa, de modo que não se sabe qual das duas fontes da divergência de 55,4 % predomina — se a separação de vozes atribuiu ao professor falas que eram de aluno (item 2 da tabela), se o classificador erra fora do domínio em que foi treinado (item 3), ou ambas. O que a medição acrescenta é que essa divergência **existe e é grande em aula real**, e que o número que vinha sendo lido como incerteza do modelo é, na verdade, o rastro dela.
+
 ---
 
 ## 5. Custo computacional medido
