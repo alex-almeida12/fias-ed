@@ -43,10 +43,18 @@ def gravar_segmentos(db: Session, transcricao: Transcricao, segmentos: list[Segm
                      falante: Falante) -> None:
     """text_pseudonymized é NOT NULL e é preenchido já nesta primeira gravação —
     escrever o texto cru "por enquanto" seria um vazamento silencioso se algo
-    acima escorregasse (§48)."""
+    acima escorregasse (§48).
+
+    `asr_confidence` existia no schema desde a W2 e nunca era escrito. Ele
+    recebe a confiança do PRÓPRIO segmento (SegmentoASR.confianca), não a média
+    da aula nem a do vizinho: é o valor da janela de decodificação que produziu
+    aquele trecho, e é por ele que se saberá depois, sem reprocessar o áudio,
+    quão bem o Whisper ouviu ali. Continua anulável: modelo falso e aula
+    transcrita por uma versão anterior não têm o que gravar."""
     for seg in segmentos:
         db.add(Segmento(transcricao_id=transcricao.id, falante_id=falante.id,
                         start_ms=seg.inicio_ms, end_ms=seg.fim_ms, texto_original_asr=seg.texto,
+                        asr_confidence=seg.confianca,
                         text_pseudonymized=pseudonimizar(seg.texto)))
 
 
@@ -71,7 +79,8 @@ def segmentos_ordenados(db: Session, transcricao: Transcricao) -> list[Segmento]
 def para_protocolo(linha: Segmento) -> SegmentoASR:
     """Traduz uma linha gravada (start_ms/end_ms) para o protocolo do ASR
     (inicio_ms/fim_ms) — a mesma tradução que segmentos_asr fazia inline."""
-    return SegmentoASR(inicio_ms=linha.start_ms, fim_ms=linha.end_ms, texto=linha.texto_original_asr)
+    return SegmentoASR(inicio_ms=linha.start_ms, fim_ms=linha.end_ms, texto=linha.texto_original_asr,
+                       confianca=linha.asr_confidence)
 
 
 def segmentos_asr(db: Session, transcricao: Transcricao) -> list[SegmentoASR]:

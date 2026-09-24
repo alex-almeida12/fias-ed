@@ -22,7 +22,7 @@ from app.core.config import get_settings
 from app.ml.fakes import ClassificadorFalso
 from app.ml.registry import carregar_registro, entrada
 from app.models import (Audio, ClassificacaoFIAS, Falante, IndicadorFIAS, Job, ModeloIA, Processamento,
-                        Segmento, Transcricao)
+                        Segmento, Transcricao, TrechoDeFala)
 from tests.helpers import login, make_aula, make_user
 
 
@@ -355,3 +355,57 @@ def test_reprocessar_nao_duplica_o_processamento(db, aula_classificada, classifi
     _rodar(db, aula_classificada)
     assert db.query(Processamento).filter_by(aula_id=aula_classificada.id).count() == 1
     assert db.query(ModeloIA).filter_by(task="fias_utterance_classification").count() == 1
+
+
+# ---- Categoria 10: o trecho que o ASR não transcreveu não é silêncio ----------
+#
+# app/ml/asr_whisper.py descarta o segmento sem texto (`if s.text.strip()`). O
+# descarte é silencioso, e o que ele deixa para trás é uma lacuna entre
+# segmentos do ASR — exatamente a forma de um silêncio, se alguém medisse
+# silêncio por aí. Medir por aí é o pior erro possível nesta categoria: o
+# trecho em que o diarizador ouviu voz e o Whisper não produziu texto é
+# candidato a CONFUSÃO, que é o oposto acústico de silêncio.
+
+
+def _aula_com_buraco_de_transcricao(db):
+    """Nove segundos de aula em que o diarizador ouviu voz o tempo todo, mas o
+    ASR só produziu texto nos três primeiros e nos três últimos. O buraco tem
+    exatamente 3 000 ms: é o limiar da regra 4, de propósito — meio milissegundo
+    a menos e o teste passaria mesmo com a medição errada."""
+    prof = make_user(db, "flavia-fias")
+    aula = make_aula(db, prof, status="READY_FOR_FIAS")
+    audio = Audio(aula_id=aula.id, original_filename="aula.wav", internal_filename=f"{uuid.uuid4()}.wav",
+                  path="original/aula.wav", mime_type="audio/wav", size_bytes=1, duration_ms=9_000,
+                  sha256="0" * 64, channels=1, sample_rate=16000, is_original=True,
+                  derived_from_audio_id=None)
+    db.add(audio)
+    db.flush()
+    transcricao = Transcricao(aula_id=aula.id, audio_id=audio.id, asr_model_id="fake-asr")
+    db.add(transcricao)
+    db.flush()
+    falante = Falante(transcricao_id=transcricao.id, diarization_label="SPEAKER_00", role="PROFESSOR")
+    db.add(falante)
+    db.flush()
+    for inicio, fim in ((0, 3_000), (6_000, 9_000)):
+        db.add(Segmento(transcricao_id=transcricao.id, falante_id=falante.id, start_ms=inicio,
+                        end_ms=fim, texto_original_asr="a professora explica a questão",
+                        texto_revisado=None, revisado=False))
+    # A evidência de fala do separador de vozes cobre a aula inteira, inclusive
+    # o buraco: houve voz ali, o ASR é que não produziu texto.
+    db.add(TrechoDeFala(transcricao_id=transcricao.id, inicio_ms=0, fim_ms=9_000, n_vozes=1))
+    db.commit()
+    return aula
+
+
+def test_segmento_sem_texto_nunca_vira_silencio(db, classificador_falso):
+    """Ponta a ponta, do que o ASR devolveu ao indicador gravado: o buraco de
+    3 s é absorvido pela categoria em curso, não marcado como categoria 10. Se
+    a classificação deixar de passar a fala do diarizador ao motor, o motor cai
+    nas lacunas entre segmentos e este buraco vira silêncio — que é o que este
+    teste existe para impedir."""
+    aula = _aula_com_buraco_de_transcricao(db)
+    _rodar(db, aula)
+    sc = db.query(IndicadorFIAS).filter_by(aula_id=aula.id, index_id="SC").one()
+    assert sc.n_intervals == 3, "nove segundos de aula, três marcas de 3 s"
+    assert sc.numerator_count == 0, "o buraco de transcrição foi contado como silêncio"
+    assert sc.value == 0.0

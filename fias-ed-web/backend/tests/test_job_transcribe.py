@@ -224,3 +224,37 @@ def test_audio_sem_fala_nao_deixa_a_copia_de_trabalho(db, aula_preparada, asr_fa
     db.refresh(aula_preparada)
     assert aula_preparada.error_code == "AUDIO_SEM_FALA"
     assert not work_path(aula_preparada.id).exists()
+
+
+# ---- A confiança de decodificação do ASR ------------------------------------
+#
+# `Segmento.asr_confidence` existe no schema desde a W2 e nunca era escrito: o
+# pipeline descartava os sinais de qualidade do faster-whisper na mesma
+# expressão que somava o deslocamento. Campo morto num schema é pior que campo
+# ausente — quem lê o schema acha que o número está lá.
+
+
+def test_confianca_do_asr_chega_ao_banco_no_segmento_certo(db, aula_preparada, monkeypatch):
+    """Não basta "o campo foi gravado": um teste assim fica verde se todo
+    segmento receber a confiança do primeiro, ou a média da aula. O que trava
+    aqui é QUAL valor: o segmento de decodificação ruim (0,31) tem de chegar ao
+    banco com 0,31, e o bom com 0,93, cada um no seu trecho."""
+    asr = ASRFalso([SegmentoASR(0, 1_000, "oi", 0.93), SegmentoASR(1_000, 2_000, "turma", 0.31)])
+    monkeypatch.setattr(handlers, "obter_asr", lambda: asr)
+    _rodar(db, aula_preparada)
+    transcricao = transcricao_da_aula(db, aula_preparada.id)
+    linhas = (db.query(Segmento).filter_by(transcricao_id=transcricao.id)
+              .order_by(Segmento.start_ms).all())
+    assert [(s.start_ms, s.texto_original_asr, s.asr_confidence) for s in linhas] == [
+        (0, "oi", 0.93), (1_000, "turma", 0.31),
+        (600_000, "oi", 0.93), (601_000, "turma", 0.31)]
+
+
+def test_asr_sem_confianca_grava_nulo_e_nao_zero(db, aula_preparada, asr_falso_por_chunk):
+    """Zero é uma confiança — a pior possível. "O ASR não informou" é outra
+    coisa, e é NULL. Trocar um pelo outro faria uma aula transcrita por uma
+    versão anterior parecer a pior aula do conjunto."""
+    _rodar(db, aula_preparada)
+    transcricao = transcricao_da_aula(db, aula_preparada.id)
+    linhas = db.query(Segmento).filter_by(transcricao_id=transcricao.id).all()
+    assert linhas and all(s.asr_confidence is None for s in linhas)

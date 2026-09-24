@@ -39,9 +39,17 @@ A categoria 10 é "silêncio OU confusão", e aqui ela recebe SÓ silêncio
 "communication cannot be understood by the observer": exige sobreposição de
 falantes E inintelegibilidade. Sobreposição sozinha é participação normal de
 sala de aula — gente fala por cima e se entende —, e marcá-la como confusão
-inverteria o significado de um sinal que costuma ser de engajamento. O sinal de
-inintelegibilidade (a confiança de decodificação do ASR) não chega até aqui
-hoje. Enquanto não chegar, este motor não inventa confusão.
+inverteria o significado de um sinal que costuma ser de engajamento. O candidato
+a sinal de inintelegibilidade — a confiança de decodificação do ASR — foi medido
+na aula real em 2026-09-23 e não serve: os três sinais do faster-whisper são
+constantes dentro da janela de decodificação de 30 s (213 segmentos vieram de 51
+janelas, mediana de 28 s de aula cada), enquanto a sobreposição de falantes dura
+658 ms na mediana e 1 957 ms no pior caso; e no nível da janela a decodificação
+dos trechos com sobreposição não se distingue da do resto da aula (p = 0,62;
+0,74; 0,23). Um limiar ali marcaria meio minuto de aula por 0,7 s de
+sobreposição. Enquanto não houver sinal com resolução de segmento, este motor
+não inventa confusão — e o número dessa medição mora em
+`fias_rules.confusion.measurement`, para a próxima tentativa não começar do zero.
 
 O que ele GARANTE é que os dois não sejam trocados um pelo outro, que é o pior
 erro possível entre dois fenômenos acústicos opostos: fala que o diarizador

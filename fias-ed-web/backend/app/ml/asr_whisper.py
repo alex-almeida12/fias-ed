@@ -9,6 +9,7 @@ O peso vem de um diretório com nome fixo dentro de models_dir.
 `local_files_only=True` fecha a porta da rede no próprio carregamento: o
 HF_HUB_OFFLINE=1 do compose é a segunda tranca, não a única.
 """
+import math
 from pathlib import Path
 
 from app.core.config import get_settings
@@ -48,7 +49,24 @@ class WhisperASR:
                                                vad_filter=True)
         # Os tempos do chunk são relativos ao próprio chunk; quem chama espera
         # tempo global da aula, daí o deslocamento somado aqui e não depois.
+        #
+        # `avg_logprob` é a média do log da probabilidade por token; exp() a
+        # devolve como média geométrica da probabilidade, entre 0 e 1, que é o
+        # domínio de Segmento.asr_confidence. Era o único dos três sinais de
+        # qualidade do faster-whisper que cabia num campo por segmento sem
+        # inventar escala: `no_speech_prob` é probabilidade de NÃO haver fala
+        # (o oposto de confiança) e `compression_ratio` não tem teto.
+        #
+        # O segmento sem texto continua sendo descartado. Medição de 2026-09-23
+        # na aula real (24 min 05 s, Whisper small int8 de produção): 213
+        # segmentos, ZERO de texto vazio — o caso não ocorreu. E ele não tem
+        # para onde ir: o classificador receberia uma string vazia e devolveria
+        # uma categoria de nada. O trecho que sobra não vira silêncio, porque
+        # silêncio é ausência de fala segundo o diarizador, nunca lacuna entre
+        # segmentos do ASR; ele é absorvido pela categoria em curso
+        # (fias_ed_engine.intervals, e o teste de ponta a ponta em
+        # tests/test_job_fias.py::test_segmento_sem_texto_nunca_vira_silencio).
         return [SegmentoASR(int(s.start * 1000) + deslocamento_ms,
                             int(s.end * 1000) + deslocamento_ms,
-                            s.text.strip())
+                            s.text.strip(), math.exp(s.avg_logprob))
                 for s in segmentos if s.text.strip()]

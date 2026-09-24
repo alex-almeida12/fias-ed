@@ -173,6 +173,32 @@ def test_regra_de_confusao_declarada_como_nao_implementada():
     assert R["confusion"]["validation_status"] == "PENDING_SCIENTIFIC_VALIDATION"
 
 
+def test_confusao_nao_pode_ser_ligada_sem_limiar_medido():
+    """O interruptor sozinho é o defeito. Enquanto `implemented` for false não
+    pode existir limiar nenhum parado no bloco — um número que ninguém mediu,
+    esperando alguém virar a chave, é como esta categoria se inverte em
+    silêncio. E, se um dia virar true, o limiar e a procedência dele passam a
+    ser obrigatórios."""
+    c = R["confusion"]
+    if c["implemented"]:
+        assert c.get("signal") and c.get("threshold") is not None and c.get("threshold_source")
+    else:
+        assert "threshold" not in c
+
+
+def test_a_ausencia_de_confusao_e_declarada_com_a_medicao_que_a_sustenta():
+    """"Não implementado" sem medição é opinião; com medição é resultado. O
+    bloco carrega o que foi medido na aula real em 2026-09-23: quanta
+    sobreposição de falantes houve, qual a resolução temporal do sinal
+    candidato, e que o cruzamento entre os dois deu negativo."""
+    m = R["confusion"]["measurement"]
+    assert m["overlap_ms"] == 9348 and m["overlap_events"] == 13
+    assert m["overlap_longest_ms"] < 3000, "sobreposição menor que o próprio intervalo de codificação"
+    assert m["n_empty_text_segments"] == 0
+    assert "30 s" in m["signal_time_resolution"]
+    assert m["result"].startswith("negativo")
+
+
 def test_motor_de_indices_nao_distingue_a_origem_da_categoria_10():
     """Para o FIAS a categoria 10 é uma só: a sequência não carrega de onde ela
     veio, e nenhum índice pode ser computado sobre a diferença."""
