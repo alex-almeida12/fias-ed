@@ -1,3 +1,5 @@
+import pytest
+
 from fias_ed_engine.indices import compute_indices
 from fias_ed_engine.mtss import build_facts, evaluate, qualify, recommendations, select_evidence_segments
 from fias_ed_engine.rules import load_rules
@@ -194,3 +196,65 @@ def test_qualify_does_not_mutate_fired():
     assert FIRED_EXPOSITIVE == before
     assert len(qualified) == len(FIRED_EXPOSITIVE)
     assert [q["rule_id"] for q in qualified] == ids(FIRED_EXPOSITIVE)
+
+
+def test_qualify_falls_back_to_pair_question_when_map_entry_has_no_own():
+    """MTSS_DIRECT_OVER_INDIRECT não tem divergence_question própria no mapa:
+    em discordância, o texto devolvido tem que vir do par de triangulação."""
+    triang = with_pair("TRI_INFLUENCE", {"oc1": 5.0, "oc8": 1.5})
+    pair = next(p for p in triang if p["pair_id"] == "TRI_INFLUENCE")
+    q = by_rule(qualify(FIRED_EXPOSITIVE, triang, P))
+    r = q["MTSS_DIRECT_OVER_INDIRECT"]
+    assert r["qti_agreement"] == "disagree"
+    assert r["divergence_question"] == pair["reflection_question"]
+
+
+def test_qualify_prefers_own_divergence_question_over_pair():
+    """MTSS_NO_PRAISE tem divergence_question própria no mapa: em discordância,
+    o texto tem que vir da entrada do mapa, não do par — e essa entrada
+    reconhece que o FIAS capta só comportamento verbal."""
+    triang = with_pair("TRI_WARMTH", {"oc2": 4.0, "oc3": 4.0})
+    q = by_rule(qualify(FIRED_EXPOSITIVE, triang, P))
+    r = q["MTSS_NO_PRAISE"]
+    mapping = next(m for m in P["recommendation_qualification"]["map"] if m["rule_id"] == "MTSS_NO_PRAISE")
+    assert r["qti_agreement"] == "disagree"
+    assert r["divergence_question"] == mapping["divergence_question"]
+    assert "além da fala" in r["divergence_question"]
+
+
+def test_qualification_map_is_consistent_with_rules_and_pairs():
+    """Teste estático (não chama `qualify`): todo par citado no mapa existe,
+    toda rule_id existe e está habilitada em mtss_rules, e todo octante citado
+    existe nos qti_octants do par apontado — no mesmo espírito de
+    `test_every_recommendation_id_exists`."""
+    known_pair_ids = {p["pair_id"] for p in P["triangulation_pairs"]}
+    pairs_by_id = {p["pair_id"]: p for p in P["triangulation_pairs"]}
+    enabled_rule_ids = {r["rule_id"] for r in M["rules"] if r["enabled"]}
+    for m in P["recommendation_qualification"]["map"]:
+        assert m["pair_id"] in known_pair_ids, m["rule_id"]
+        assert m["rule_id"] in enabled_rule_ids, m["rule_id"]
+        assert set(m["octants"]) <= set(pairs_by_id[m["pair_id"]]["qti_octants"]), m["rule_id"]
+
+
+@pytest.mark.parametrize("mapping", P["recommendation_qualification"]["map"], ids=lambda m: m["rule_id"])
+def test_qualify_agreement_direction_for_every_map_entry(mapping):
+    """Percorre as seis entradas do mapa (lidas de P, não copiadas à mão) e
+    confirma que um QTI na faixa agrees_when produz "agree" e a faixa oposta
+    produz "disagree". A triangulação é montada a partir dos octants e do
+    pair_id da própria entrada, para continuar valendo se o mapa crescer."""
+    bands = P["recommendation_qualification"]["qti_bands"]
+    low_value = bands["low_below"] - 0.5
+    high_value = bands["high_above"] + 0.5
+    fired = [{"rule_id": mapping["rule_id"]}]
+
+    low_values = {oc: low_value for oc in mapping["octants"]}
+    high_values = {oc: high_value for oc in mapping["octants"]}
+
+    low_result = by_rule(qualify(fired, with_pair(mapping["pair_id"], low_values), P))[mapping["rule_id"]]
+    high_result = by_rule(qualify(fired, with_pair(mapping["pair_id"], high_values), P))[mapping["rule_id"]]
+
+    agree_result = high_result if mapping["agrees_when"] == "high" else low_result
+    disagree_result = low_result if mapping["agrees_when"] == "high" else high_result
+
+    assert agree_result["qti_agreement"] == "agree"
+    assert disagree_result["qti_agreement"] == "disagree"
