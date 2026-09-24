@@ -147,8 +147,13 @@ def test_arquivo_fora_de_utf8_devolve_422(db, client, ciclo):
 
 
 def test_a_resposta_traz_o_minimo_de_respostas_vindo_do_motor(client, ciclo):
-    """O limiar de exibição mora na configuração do motor, não na tela: o React monta
-    a frase com o número que recebe daqui."""
+    """Com a configuração de verdade, o número certo chega à tela — o React monta a
+    frase com o que recebe daqui.
+
+    Sozinho este teste NÃO prova que o valor veio do motor: um 10 escrito à mão na
+    rota passaria por ele, porque o motor também diz 10 hoje. Quem prova a origem é
+    o teste seguinte. Não apague um achando que o outro cobre: este cobre o valor
+    real de produção, aquele cobre a origem, e nenhum dos dois cobre os dois."""
     login(client, "professora-ciclo")
     r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
                     files={"arquivo": ("export.csv", _csv(12), "text/csv")},
