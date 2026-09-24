@@ -320,6 +320,56 @@ class Triangulacao(EntityMixin, Base):
         _enum(VALIDATION_STATUS, "triangulacao_validation_status"), nullable=False)
 
 
+MTSS_QTI_AGREEMENT = ("agree", "disagree", "inconclusive", "unpaired", "no_qti")
+
+
+class InterpretacaoMTSS(EntityMixin, Base):
+    """Uma linha por regra do MTSS Tier 1 disparada pela aula, já qualificada
+    à luz do QTI. Nenhum campo aqui nasce de uma conta feita neste módulo:
+    `fias_ed_engine.mtss.evaluate` decide o que dispara, `interpretation` e
+    `framing` vêm dele, e `qualify` decide `qti_agreement` — inclusive
+    `unpaired` (regra sem par de triangulação) e `no_qti` (aula sem coleta
+    vigente), que não são erro: o MTSS nunca dependeu do QTI para disparar.
+    `validation_status` chega sempre PENDING_SCIENTIFIC_VALIDATION — mesma
+    honestidade científica declarada de `Triangulacao`."""
+    __tablename__ = "interpretacao_mtss"
+    aula_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aula.id"), index=True, nullable=False)
+    rule_id: Mapped[str] = mapped_column(String, nullable=False)
+    tier1_dimension: Mapped[str] = mapped_column(String, nullable=False)
+    framing: Mapped[str] = mapped_column(String, nullable=False)
+    interpretation: Mapped[str] = mapped_column(String, nullable=False)
+    evidence: Mapped[dict] = mapped_column(JSON, nullable=False)
+    evidence_segment_categories: Mapped[list] = mapped_column(JSON, nullable=False)
+    source_reference: Mapped[str] = mapped_column(String, nullable=False)
+    validation_status: Mapped[str] = mapped_column(
+        _enum(VALIDATION_STATUS, "interpretacao_mtss_validation_status"), nullable=False)
+    rules_version: Mapped[str] = mapped_column(String, nullable=False)
+    qti_agreement: Mapped[str] = mapped_column(
+        _enum(MTSS_QTI_AGREEMENT, "interpretacao_mtss_qti_agreement"), nullable=False)
+    qti_evidence: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    divergence_question: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class RecomendacaoMTSS(EntityMixin, Base):
+    """Uma linha por recomendação pedagógica disparada pela aula — enquadrada
+    como reflexão, nunca como correção do professor (spec do MTSS).
+    `qti_agreement` é cópia deliberada do campo da regra que originou a
+    recomendação (`rule_id`): a tela (Task 11) precisa dele para ordenar as
+    recomendações concordantes primeiro sem cruzar com `interpretacao_mtss`.
+    Nada aqui é reordenado nem pontuado — a ordem gravada é a que o motor
+    devolveu."""
+    __tablename__ = "recomendacao_mtss"
+    aula_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aula.id"), index=True, nullable=False)
+    recommendation_id: Mapped[str] = mapped_column(String, nullable=False)
+    rule_id: Mapped[str] = mapped_column(String, nullable=False)
+    text: Mapped[str] = mapped_column(String, nullable=False)
+    validation_status: Mapped[str] = mapped_column(
+        _enum(VALIDATION_STATUS, "recomendacao_mtss_validation_status"), nullable=False)
+    source_reference: Mapped[str] = mapped_column(String, nullable=False)
+    qti_agreement: Mapped[str] = mapped_column(
+        _enum(MTSS_QTI_AGREEMENT, "recomendacao_mtss_qti_agreement"), nullable=False)
+
+
 class ModeloIA(EntityMixin, Base):
     __tablename__ = "modelo_ia"
     model_id: Mapped[str] = mapped_column(String, nullable=False)
