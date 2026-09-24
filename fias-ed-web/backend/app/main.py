@@ -61,6 +61,9 @@ def create_app() -> FastAPI:
 
     from app.fias.routes import router as fias_router
     app.include_router(fias_router, prefix="/api")
+
+    from app.qti.routes import router as qti_router
+    app.include_router(qti_router, prefix="/api")
     return app
 
 

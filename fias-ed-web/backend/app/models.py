@@ -250,6 +250,13 @@ class ColetaQTI(EntityMixin, Base):
     response_count: Mapped[int] = mapped_column(Integer, nullable=False)
     displayable: Mapped[bool] = mapped_column(Boolean, nullable=False)
     qti_config_version: Mapped[str] = mapped_column(String, nullable=False)
+    # A linha de cabeçalho exata do arquivo importado (só para origem IMPORTACAO_EXTERNA;
+    # nulo para COLETA_NATIVA, que não nasce de um arquivo). O avalie-seu-professor não
+    # declara versão de formato no que exporta (checado em app/qti/service.py, que também
+    # documenta o que esta coluna NÃO detecta: reordenação de itens sob os mesmos nomes de
+    # coluna). Isto é o substituto honesto: duas coletas com cabeçalhos diferentes ficam
+    # distinguíveis depois, mesmo sem a importação recusar nenhuma delas.
+    cabecalho_recebido: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class RespostaQTI(Base):

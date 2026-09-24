@@ -44,5 +44,7 @@ def error_message(code: str | None) -> str | None:
                        "se continuar, avise o administrador."),
         "SEGMENTO_DESATUALIZADO": ("Este trecho foi alterado em outra aba. Recarregue a página "
                                    "para ver a versão atual."),
+        "QTI_SEM_RESPOSTAS": ("O arquivo não traz nenhuma resposta. Confira se a turma respondeu "
+                              "antes de exportar."),
     }
     return messages.get(code, "Algo deu errado. Tente novamente.")
