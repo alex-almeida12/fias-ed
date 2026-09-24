@@ -1981,6 +1981,37 @@ Adicionar:
 
 rules_version
 
+Decisão de 2026-09-24 — concordância FIAS × QTI (fundamentação completa na
+seção 4.4 de docs/ESTADO_DE_VALIDACAO.md):
+
+O MTSS é a ferramenta pedagógica do estudo e considera as duas medidas. As
+regras continuam sendo DISPARADAS PELO FIAS; o resultado do QTI entra depois,
+qualificando a recomendação como concordante, discordante ou inconclusiva.
+
+Sem faixas no lado FIAS. As regras já classificam por presença, ausência e
+ID_RATIO < 1, com referência à literatura. Terços na proporção foram
+rejeitados: elogio ocupa 1 a 5% de uma aula real e nunca cairia numa faixa
+"alta" de 66,7%.
+
+Faixas só no lado QTI, sobre o intervalo teórico da Likert 1 a 5:
+  baixa  < 2,33
+  média    2,33 a 3,67
+  alta   > 3,67
+É o único corte inventado do sistema. Gravar como engineering_decision.
+
+Faixa média, ou coleta não exibível, o sistema NÃO conclui nada.
+Em discordância, mostra as duas medidas e faz a pergunta. Nunca apresenta como
+contradição nem como erro do professor.
+
+NÃO MUDAR SEM NOVA DECISÃO DO ALEX:
+  - os cortes 2,33 e 3,67
+  - a natureza presença/ausência das regras (não transformar em proporção)
+  - a exclusão de oc1 Liderança da regra de TRI_INFLUENCE (efeito de teto)
+  - o QTI permanecer fora das CONDIÇÕES das regras
+
+Esta é a única autorização para escrever em fias-ed-shared. Fora dela, o motor
+continua somente leitura.
+
 # ============================================================
 # 81. RASTREABILIDADE
 # ============================================================

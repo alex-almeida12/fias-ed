@@ -120,7 +120,23 @@ Uma aula do meio do ciclo, ou de um ciclo que já tem coleta, atravessa de
 
 ## 4. Fronteira com o `fias-ed-shared`
 
-O motor **já tem tudo** e é somente leitura nesta fatia:
+> **Revisto em 2026-09-24.** Esta seção dizia que o motor é somente leitura na
+> fatia inteira. Deixou de valer num ponto: o MTSS é a ferramenta pedagógica do
+> estudo e passa a considerar também o resultado do QTI, o que exige mudança em
+> `mtss.py` e nas regras. A fronteira é cruzada **de propósito e com
+> autorização**, e apenas onde a decisão registrada na seção 4.4 de
+> [`docs/ESTADO_DE_VALIDACAO.md`](../../ESTADO_DE_VALIDACAO.md) determina. Todo
+> o resto do motor continua somente leitura.
+>
+> Em resumo: as regras do MTSS continuam sendo **disparadas pelo FIAS**; o QTI
+> entra depois, qualificando a recomendação como concordante, discordante ou
+> inconclusiva. O QTI **não** entra nas condições das regras. Sem faixas no lado
+> FIAS — as regras já classificam por presença, ausência e `ID_RATIO < 1`, com
+> referência à literatura. As faixas existem só do lado do QTI, sobre a Likert
+> 1–5: baixa < 2,33, média 2,33–3,67, alta > 3,67, declaradas como
+> `engineering_decision`.
+
+O motor **já tem quase tudo**:
 
 | Função | Módulo | O que decide |
 |---|---|---|
@@ -130,6 +146,7 @@ O motor **já tem tudo** e é somente leitura nesta fatia:
 | `build_facts`, `evaluate`, `recommendations` | `mtss.py` | Tier 1 |
 | `select_evidence_segments` | `mtss.py` | trechos de evidência |
 | `build_dataset` | `export.py` | as nove tabelas do dataset |
+| **a qualificação da recomendação pelo QTI** | **`mtss.py`** | **a construir (ver 4.4 do estado de validação)** |
 
 **Nenhuma regra científica é reimplementada no Web.** O Web coleta, persiste e
 exibe o que o motor devolveu.

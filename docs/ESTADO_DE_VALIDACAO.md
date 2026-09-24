@@ -180,6 +180,24 @@ Detectar confusão exigiria duas condições simultâneas: sobreposição de fal
 
 **O que mudaria isso.** Um sinal com resolução de segmento ou menor — alinhamento por palavra do próprio transcritor, com probabilidade por palavra, ou um detector de fala sobreposta treinado —, calibrado contra um trecho anotado por um humano como "não dá para saber quem está falando". Sem esse trecho de referência não há limiar calibrável, até porque a sobreposição desta aula, 13 ocorrências em 24 minutos, não chega a ser amostra. Nesta versão a confiança de decodificação passou a ser **gravada** por segmento, o que antes não acontecia; gravar não é detectar, e nenhuma regra de codificação lê esse campo. Sem ele, porém, nem esta medição se repetiria sem reprocessar o áudio.
 
+### 4.4 O único corte arbitrado do sistema: quando FIAS e QTI "concordam"
+
+O MTSS é a ferramenta pedagógica do estudo, e nesta versão passou a considerar as duas medidas: as recomendações continuam sendo **disparadas pelo FIAS**, e o resultado do QTI entra depois, qualificando cada recomendação como concordante, discordante ou inconclusiva. O QTI não entra nas condições das regras, e nenhuma regra nova foi criada — a correspondência entre recomendação e par de triangulação emerge do fato que os dois já compartilham (`ID_RATIO` com `TRI_INFLUENCE`; categoria 2 e 3 com `TRI_WARMTH`; categoria 7 com `TRI_TENSION`; categorias 8 e 9 com `TRI_STUDENT_VOICE`, cujo índice `PIR` é cat. 9/(cat. 8+cat. 9)).
+
+Isso obrigou a comparar grandezas de naturezas diferentes, e é aí que está o corte arbitrado.
+
+**O lado do FIAS não recebeu faixa nenhuma, e essa é a parte defensável.** As regras do MTSS não usam proporção: usam presença (`count_cat_7 > 0`), ausência (`count_cat_2 == 0` com `count_cat_8 > 0`) e um limiar de razão (`ID_RATIO < 1`), todas com referência à literatura — a tabela `art2-fias-tier1` do capítulo 4 e, para a razão, SIMB. Quando a regra dispara, o FIAS já disse o que tinha a dizer, e disse com fundamentação; classificá-lo de novo seria redundante.
+
+Faixas no FIAS foram consideradas e **rejeitadas com motivo mensurável**: dividir a proporção da categoria em terços do intervalo teórico exigiria, para a faixa "alta", que a categoria ocupasse mais de 66,7% da aula. Elogio numa aula real ocupa entre 1% e 5%. Nenhuma categoria de baixa frequência cairia ali, metade do critério nunca dispararia, e o sistema pareceria funcionar enquanto estivesse morto.
+
+**O lado do QTI recebeu faixas, e este é o único número inventado.** Sobre o intervalo teórico da escala Likert de 1 a 5: baixa abaixo de 2,33, média entre 2,33 e 3,67, alta acima de 3,67. É decisão de engenharia declarada, **não achado da literatura** — a literatura do QTI interpreta por tipologia de perfis e comparação relativa, sem faixas absolutas. O que sustenta a divisão em três é apenas o fato de a Likert ter intervalo teórico fechado e conhecido, ao contrário da proporção do FIAS, que não tem teto prático.
+
+Duas restrições de desenho acompanham o corte. O octante "Liderança" **não participa** da decisão em `TRI_INFLUENCE`, por efeito de teto — tem quase nenhuma variância entre professores, e incluí-lo empurraria quase toda aula para "concorda"; continua exibido como dado de contexto. E três regras habilitadas não têm par (`MTSS_QUESTIONS_PRESENT`, `MTSS_EXPOSITIVE_PREDOMINANCE`, `MTSS_INSTRUCTIONS_PREDOMINANCE`), porque nenhum par cobre a categoria 4 nem a categoria modal: saem só com evidência do FIAS, e a tela diz isso, em vez de forçar correspondência que a literatura não sustenta.
+
+**Limitação conhecida — a definição operacional do zero.** "Zero" significa zero ocorrências na transcrição, sem limiar de tolerância. A regra herda, portanto, a taxa de erro da transcrição e da classificação, que é justamente a cadeia não medida da seção 4. O erro é assimétrico: um elogio que o reconhecimento de fala não captou, ou que o classificador rotulou noutra categoria, produz um "zero" que não corresponde à sala — enquanto o excesso de elogio é bem mais difícil de fabricar por engano.
+
+**Consequência declarada.** Quando o QTI cai na faixa média, ou quando a coleta não é exibível, o sistema **não conclui nada** e a recomendação sai sem marca. Em discordância, mostra as duas medidas e faz uma pergunta, nunca uma afirmação — e a pergunta reconhece o limite do instrumento, porque o FIAS capta apenas comportamento verbal. Proximidade docente também se manifesta por olhar, postura e disponibilidade, e nada disso entra num áudio transcrito. Um resultado deste sistema autoriza dizer "as duas medidas divergiram"; não autoriza dizer qual delas está certa.
+
 ---
 
 ## 5. Custo computacional medido
