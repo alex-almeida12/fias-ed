@@ -241,7 +241,20 @@ def test_qualify_agreement_direction_for_every_map_entry(mapping):
     """Percorre as seis entradas do mapa (lidas de P, não copiadas à mão) e
     confirma que um QTI na faixa agrees_when produz "agree" e a faixa oposta
     produz "disagree". A triangulação é montada a partir dos octants e do
-    pair_id da própria entrada, para continuar valendo se o mapa crescer."""
+    pair_id da própria entrada, para continuar valendo se o mapa crescer.
+
+    O que ele prova: que a lógica de comparação de faixa dentro de `qualify`
+    (band == agrees_when → agree, senão disagree) está correta para cada uma
+    das seis entradas — protege contra regressão nessa lógica.
+
+    O que ele NÃO prova: que o valor de `agrees_when` de cada entrada é o
+    certo. A expectativa de qual faixa deve dar "agree" é derivada do próprio
+    `mapping["agrees_when"]` que está sendo exercitado — se esse valor
+    estiver errado no arquivo, o teste calcula a expectativa errada também, e
+    as duas erradas concordam. Um erro de digitação em `agrees_when` (ex.:
+    "low" trocado por "high") não é pego aqui; ver
+    `test_qualification_map_matches_researcher_decision_table` para a guarda
+    que cobre exatamente isso."""
     bands = P["recommendation_qualification"]["qti_bands"]
     low_value = bands["low_below"] - 0.5
     high_value = bands["high_above"] + 0.5
@@ -258,3 +271,35 @@ def test_qualify_agreement_direction_for_every_map_entry(mapping):
 
     assert agree_result["qti_agreement"] == "agree"
     assert disagree_result["qti_agreement"] == "disagree"
+
+
+def test_qualification_map_matches_researcher_decision_table():
+    """Guarda mecânica de uma decisão do pesquisador (docs/ESTADO_DE_VALIDACAO.md
+    seção 4.4, docs/PROMPT_MESTRE.md seção 80): as seis direções abaixo não
+    mudam sem decisão nova dele.
+
+    Isto é deliberadamente duplicação do arquivo de regras — a tabela está
+    escrita à mão aqui, não relida de `P`. Um teste que lê `pedagogical_rules.json`
+    para conferir `pedagogical_rules.json` não protege decisão nenhuma (é o
+    que `test_qualify_agreement_direction_for_every_map_entry`, acima, admite
+    não fazer). Este protege, porque a expectativa mora fora do dado: se o
+    arquivo mudar, este teste não muda junto — ele falha.
+
+    Note TRI_INFLUENCE → ["oc8"]: oc1 (Liderança) fica de fora de propósito,
+    por efeito de teto (mesma seção 4.4 de ESTADO_DE_VALIDACAO.md). Quem
+    "consertar" MTSS_DIRECT_OVER_INDIRECT achando que falta oc1 vai derrubar
+    este teste — de propósito, porque essa mudança precisa passar por uma
+    decisão nova do pesquisador, não por um ajuste silencioso de código."""
+    expected = {
+        "MTSS_NO_PRAISE": ("TRI_WARMTH", ["oc2", "oc3"], "low"),
+        "MTSS_NO_IDEA_UPTAKE": ("TRI_WARMTH", ["oc2", "oc3"], "low"),
+        "MTSS_REACTIVE_MANAGEMENT_PRESENT": ("TRI_TENSION", ["oc7", "oc6"], "high"),
+        "MTSS_NO_STUDENT_INITIATIVE": ("TRI_STUDENT_VOICE", ["oc4"], "low"),
+        "MTSS_STUDENT_INITIATIVE_PRESENT": ("TRI_STUDENT_VOICE", ["oc4"], "high"),
+        "MTSS_DIRECT_OVER_INDIRECT": ("TRI_INFLUENCE", ["oc8"], "high"),
+    }
+    actual = {
+        m["rule_id"]: (m["pair_id"], m["octants"], m["agrees_when"])
+        for m in P["recommendation_qualification"]["map"]
+    }
+    assert actual == expected
