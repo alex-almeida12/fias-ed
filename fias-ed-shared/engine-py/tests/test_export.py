@@ -108,7 +108,7 @@ def test_empty_table_has_header():
     files = to_csv_files(ds)
     assert csv.DictReader(io.StringIO(files["lessons.csv"])).fieldnames == [
         "lesson_id", "lesson_date", "disciplina", "turma_id", "duration_ms",
-        "transcript_source", "n_segments", "n_intervals", "rules_version"]
+        "transcript_source", "silence_source", "n_segments", "n_intervals", "rules_version"]
     assert csv.DictReader(io.StringIO(files["qti_responses.csv"])).fieldnames == \
         ["lesson_id", "response_index"] + [f"q{i}" for i in range(1, 25)]
     assert csv.DictReader(io.StringIO(files["qti_results.csv"])).fieldnames == \
@@ -157,7 +157,7 @@ def test_export_mede_silencio_pela_evidencia_de_fala_quando_a_aula_a_traz():
     assert ds["lessons"][0]["n_intervals"] == 10
     sc = {r["index_id"]: r for r in ds["indices"]}["SC"]
     assert sc["value"] == pytest.approx(0.6) and sc["numerator_count"] == 6 and sc["denominator_count"] == 10
-    assert ds["manifest"]["processing"][0]["speech_source"] == "diarization_speech_activity"
+    assert ds["manifest"]["processing"][0]["silence_source"] == "diarization_speech_activity"
 
 
 def test_export_sem_evidencia_de_fala_cai_nos_segmentos_e_nao_inventa_silencio():
@@ -169,7 +169,7 @@ def test_export_sem_evidencia_de_fala_cai_nos_segmentos_e_nao_inventa_silencio()
     assert [r["category"] for r in ds["intervals"]] == [5] * 10
     sc = {r["index_id"]: r for r in ds["indices"]}["SC"]
     assert sc["value"] == pytest.approx(0.0) and sc["numerator_count"] == 0
-    assert ds["manifest"]["processing"][0]["speech_source"] == "asr_segments"
+    assert ds["manifest"]["processing"][0]["silence_source"] == "asr_segments"
 
 
 def test_manifesto_separa_as_duas_fontes_no_mesmo_dataset():
@@ -179,9 +179,46 @@ def test_manifesto_separa_as_duas_fontes_no_mesmo_dataset():
     sem = aula_com_pausa(lid="01926b3e-7a1c-7c3e-9f00-00000000000b")
     ds = build_dataset([com, sem], include_text=False, exported_at="2026-09-21T12:00:00Z")
     validate(ds)
-    assert {p["lesson_id"]: p["speech_source"] for p in ds["manifest"]["processing"]} == {
+    assert {p["lesson_id"]: p["silence_source"] for p in ds["manifest"]["processing"]} == {
         "01926b3e-7a1c-7c3e-9f00-00000000000a": "diarization_speech_activity",
         "01926b3e-7a1c-7c3e-9f00-00000000000b": "asr_segments"}
+
+
+def test_lessons_csv_traz_a_fonte_do_silencio_de_cada_aula():
+    """Quem abre só as planilhas não tem o manifesto por perto: a declaração tem
+    de estar na linha da aula, lida do CSV de verdade. Duas aulas idênticas menos
+    pela evidência de fala têm de sair com valores DIFERENTES e corretos — ler o
+    dicionário antes de virar CSV não provaria que a coluna chega ao arquivo."""
+    com = aula_com_pausa([SpeechSpan(0, 6000), SpeechSpan(24_000, 30_000)])
+    sem = aula_com_pausa(lid="01926b3e-7a1c-7c3e-9f00-00000000000b")
+    ds = build_dataset([com, sem], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    validate(ds)
+    linhas = list(csv.DictReader(io.StringIO(to_csv_files(ds)["lessons.csv"])))
+    assert {r["lesson_id"]: r["silence_source"] for r in linhas} == {
+        "01926b3e-7a1c-7c3e-9f00-00000000000a": "diarization_speech_activity",
+        "01926b3e-7a1c-7c3e-9f00-00000000000b": "asr_segments"}
+    # E a coluna vizinha continua sendo outra coisa: origem do texto, não do silêncio.
+    assert {r["transcript_source"] for r in linhas} == {"TRANSCRICAO_REVISADA"}
+
+
+def test_coluna_e_manifesto_saem_do_mesmo_valor():
+    """Manter a declaração nos dois lugares só é legítimo enquanto os dois vierem
+    do mesmo cálculo. Este teste é o que impede a divergência de voltar."""
+    com = aula_com_pausa([SpeechSpan(0, 6000), SpeechSpan(24_000, 30_000)])
+    sem = aula_com_pausa(lid="01926b3e-7a1c-7c3e-9f00-00000000000b")
+    ds = build_dataset([com, sem], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    linhas = list(csv.DictReader(io.StringIO(to_csv_files(ds)["lessons.csv"])))
+    assert {r["lesson_id"]: r["silence_source"] for r in linhas} ==         {p["lesson_id"]: p["silence_source"] for p in ds["manifest"]["processing"]}
+
+
+def test_dataset_sem_a_fonte_do_silencio_e_recusado_pelo_schema():
+    """Obrigatória, não opcional: um dataset sem a coluna é justamente o dataset
+    do qual o analista tiraria média sem perceber."""
+    ds = build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    del ds["lessons"][0]["silence_source"]
+    with pytest.raises(jsonschema.ValidationError) as erro:
+        validate(ds)
+    assert "silence_source" in str(erro.value)
 
 
 def test_start_ms_do_intervalo_e_o_tempo_da_marca_e_nao_indice_vezes_3_s():
@@ -234,5 +271,5 @@ def test_export_version_acompanha_a_mudanca_de_significado_das_tabelas():
     """`intervals` e `indices` mudaram de grandeza com rules_version 2.0.0;
     um dataset 1.0.0 e um desta versão não se empilham."""
     ds = build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
-    assert ds["manifest"]["export_version"] == "2.0.0"
+    assert ds["manifest"]["export_version"] == "2.1.0"
     assert ds["manifest"]["rules_version"] == RULES_VERSION

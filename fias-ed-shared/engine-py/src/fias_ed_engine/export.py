@@ -5,7 +5,11 @@ e, opcionalmente, `speech`: a linha do tempo de fala do diarizador
 (`list[SpeechSpan]`), a mesma evidência que a tela do professor usa para medir
 silêncio. Sem ela o motor cai nos próprios segmentos do ASR e mede outra coisa —
 o dataset diria SC ≈ 0,0038 para a aula em que a tela mostra 0,0725 —, então
-`manifest.processing` declara, por aula, qual das duas fontes foi usada.
+cada aula declara, em `silence_source`, qual das duas fontes foi usada. A
+declaração sai na coluna `silence_source` da tabela `lessons` (é ali que o
+analista olha: quem abre só `lessons.csv` não tem o manifesto por perto) e
+também em `manifest.processing`, junto dos modelos; as duas saem do mesmo valor,
+calculado uma vez por aula.
 
 `processing.rules_version` é obrigatório: é por ele que a exportação recusa
 juntar aulas de versões de regra diferentes (ver `_versao_unica`)."""
@@ -32,7 +36,12 @@ from .triangulation import triangulate
 # desta versão soma grandezas diferentes — o mesmo defeito que `_versao_unica`
 # recusa dentro de um dataset, um nível acima. O número da versão é o único
 # aviso que chega a quem abrir os arquivos meses depois.
-EXPORT_VERSION = "2.0.0"
+#
+# 2.1.0 (e não 2.0.1 nem 2.0.0): `lessons` ganhou a coluna `silence_source`, que
+# o schema exige. Nenhum valor das colunas antigas mudou, por isso não é 3.0.0 —
+# mas um dataset 2.0.0 não tem a coluna e falha a validação de hoje, e é pelo
+# número da versão que se distingue "exportado antes" de "exportado errado".
+EXPORT_VERSION = "2.1.0"
 TABLES = ("lessons", "segments", "intervals", "matrix", "indices", "qti_responses",
           "qti_results", "mtss", "recommendations", "triangulation")
 _LESSON_FIELDS = ("lesson_id", "lesson_date", "disciplina", "turma_id", "duration_ms", "transcript_source")
@@ -40,19 +49,26 @@ _SEGMENT_FIELDS = ("segment_id", "start_ms", "end_ms", "role", "pred_raw", "pred
 _PROCESSING_FIELDS = ("app_version", "fias_model", "fias_model_hash", "asr_model", "asr_model_hash",
                       "diarization_model", "rules_version")
 
-# Como o silêncio (categoria 10) foi medido em cada aula. Fica no manifesto, por
-# aula, porque um dataset em que metade das aulas mede silêncio pela detecção de
-# fala e metade pela extensão dos segmentos do ASR, sem dizer qual é qual, não
-# permite ao analista separar as duas — e as duas medidas diferem por uma ordem
-# de grandeza (na aula medida em 2026-09-23: 78 249 ms contra 4 000 ms).
-_SPEECH_DECLARED = "diarization_speech_activity"
-_SPEECH_ABSENT = "asr_segments"
+# Como o silêncio (categoria 10) foi medido em cada aula. Um dataset em que
+# metade das aulas mede silêncio pela detecção de fala e metade pela extensão
+# dos segmentos do ASR, sem dizer qual é qual, não permite ao analista separar
+# as duas — e as duas medidas diferem por uma ordem de grandeza (na aula medida
+# em 2026-09-23: 78 249 ms contra 4 000 ms).
+#
+# O nome é `silence_source`, e não `speech_source`, por causa do vizinho:
+# `transcript_source` já diz de onde veio o TEXTO (ASR ou revisão do professor).
+# Duas colunas chamadas "…_source" com "transcript" e "speech" ao lado leem-se
+# como sinônimos; nomeando pela grandeza que a escolha afeta — o silêncio —, a
+# linha "transcript_source=TRANSCRICAO_REVISADA, silence_source=asr_segments"
+# se explica sozinha, que é o teste de um cabeçalho de planilha.
+_SILENCE_FROM_DIARIZATION = "diarization_speech_activity"
+_SILENCE_FROM_SEGMENTS = "asr_segments"
 
 # Colunas fixas por tabela do CSV, na ordem em que o cabeçalho é escrito —
 # sempre as mesmas colunas, com ou sem linhas, para que Web e Android
 # exportem arquivos byte-idênticos dado o mesmo dataset (ver DATABASE_MODEL.md).
 TABLE_FIELDS: dict[str, tuple[str, ...]] = {
-    "lessons": ("lesson_id", *_LESSON_FIELDS[1:], "n_segments", "n_intervals", "rules_version"),
+    "lessons": ("lesson_id", *_LESSON_FIELDS[1:], "silence_source", "n_segments", "n_intervals", "rules_version"),
     "segments": ("lesson_id", *_SEGMENT_FIELDS, "text_pseudonymized"),
     "intervals": ("lesson_id", "interval_index", "start_ms", "category"),
     "matrix": ("lesson_id", "from_category", "to_category", "count"),
@@ -125,8 +141,13 @@ def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> 
         # a mesma que a tela do professor usa. Ausente (ou None) significa "não
         # se sabe", e o motor cai nos próprios segmentos: é a medida pior, mas
         # nunca inventa silêncio. Aula processada antes da versão que passou a
-        # gravar a evidência cai nesse caso, e o manifesto diz que caiu.
+        # gravar a evidência cai nesse caso, e a linha dela em `lessons` diz que caiu.
         fala = item.get("speech")
+        # Calculado UMA vez por aula e escrito nos dois lugares a partir desta
+        # variável. Dois cálculos separados do mesmo fato foi o defeito que esta
+        # fatia já consertou duas vezes (a revisão fixada dos modelos, o pino em
+        # dois lugares): aqui a coluna e o manifesto não têm como discordar.
+        fonte_silencio = _SILENCE_FROM_SEGMENTS if fala is None else _SILENCE_FROM_DIARIZATION
         coding = code_lesson(coded, meta["duration_ms"], F, fala)
         intervals = coding.intervals
         indices = compute_indices(intervals, F, n_segments=len(segs), confidences=[s["confidence"] for s in segs])
@@ -134,8 +155,9 @@ def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> 
         qti = aggregate(answers, Q)
         fired = evaluate(build_facts(intervals, indices), M)
 
-        ds["lessons"].append({**{f: meta[f] for f in _LESSON_FIELDS}, "n_segments": len(segs),
-                              "n_intervals": len(intervals), "rules_version": F["rules_version"]})
+        ds["lessons"].append({**{f: meta[f] for f in _LESSON_FIELDS}, "silence_source": fonte_silencio,
+                              "n_segments": len(segs), "n_intervals": len(intervals),
+                              "rules_version": F["rules_version"]})
         for s in segs:
             row = {"lesson_id": lid, **{f: s[f] for f in _SEGMENT_FIELDS}}
             if include_text:
@@ -167,7 +189,7 @@ def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> 
                                  "qti_available": t["qti_available"], "qti_values": [q["value"] for q in t["qti"]]}
                                 for t in triangulate(intervals, indices, qti, P, Q)]
         processing.append({"lesson_id": lid, **{f: item["processing"].get(f) for f in _PROCESSING_FIELDS},
-                           "speech_source": _SPEECH_ABSENT if fala is None else _SPEECH_DECLARED})
+                           "silence_source": fonte_silencio})
     ds["manifest"] = {"export_version": EXPORT_VERSION, "rules_version": F["rules_version"], "exported_at": exported_at,
                       "include_text": include_text, "lesson_count": len(lessons), "processing": processing}
     return ds
