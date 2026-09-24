@@ -49,21 +49,40 @@ def test_interpretar_grava_uma_linha_por_regra_disparada_sem_duplicar(db, aula_c
     assert {g.rule_id for g in gravadas} == {q["rule_id"] for q in qualificadas}
     assert len({g.rule_id for g in gravadas}) == len(gravadas)  # sem duplicada
 
+    # `source_reference`, `evidence`, `evidence_segment_categories` e
+    # `rules_version` vêm do motor e podem mudar legitimamente quando as
+    # regras mudarem -- por isso a comparação é sempre contra o que
+    # `interpretar` devolveu (`regra`), nunca contra um literal copiado à
+    # mão. O que precisa ficar provado é que a gravação não troca nem
+    # embaralha essas colunas entre linhas.
+    por_regra = {q["rule_id"]: q for q in qualificadas}
+    for g in gravadas:
+        regra = por_regra[g.rule_id]
+        assert g.source_reference == regra["source_reference"]
+        assert g.evidence == regra["evidence"]
+        assert g.evidence_segment_categories == regra["evidence_segment_categories"]
+        assert g.rules_version == regra["rules_version"]
+
 
 def test_reexecutar_substitui_em_vez_de_acumular(db, aula_classificada):
     interpretar(db, aula_classificada)
-    primeira = db.scalars(select(InterpretacaoMTSS)
-                          .where(InterpretacaoMTSS.aula_id == aula_classificada.id)).all()
-    assert primeira  # sem regra disparada o teste não protegeria nada
+    interpretacoes_antes = db.scalars(select(InterpretacaoMTSS)
+                                      .where(InterpretacaoMTSS.aula_id == aula_classificada.id)).all()
+    recomendacoes_antes = db.scalars(select(RecomendacaoMTSS)
+                                     .where(RecomendacaoMTSS.aula_id == aula_classificada.id)).all()
+    assert interpretacoes_antes  # sem regra disparada o teste não protegeria nada
+    assert recomendacoes_antes
 
     interpretar(db, aula_classificada)  # o professor reprocessa a mesma aula
-    segunda = db.scalars(select(InterpretacaoMTSS)
-                         .where(InterpretacaoMTSS.aula_id == aula_classificada.id)).all()
-    assert len(segunda) == len(primeira)
-
-    rec_primeira = db.scalars(select(RecomendacaoMTSS)
-                              .where(RecomendacaoMTSS.aula_id == aula_classificada.id)).all()
-    assert rec_primeira  # idem para as recomendações
+    interpretacoes_depois = db.scalars(select(InterpretacaoMTSS)
+                                       .where(InterpretacaoMTSS.aula_id == aula_classificada.id)).all()
+    recomendacoes_depois = db.scalars(select(RecomendacaoMTSS)
+                                      .where(RecomendacaoMTSS.aula_id == aula_classificada.id)).all()
+    assert len(interpretacoes_depois) == len(interpretacoes_antes)
+    # A mesma prova que já valia para `interpretacao_mtss` faltava do lado de
+    # `recomendacao_mtss`: comparar a contagem antes/depois, não só checar
+    # que a tabela não está vazia depois de reexecutar.
+    assert len(recomendacoes_depois) == len(recomendacoes_antes)
 
 
 def test_sem_coleta_vigente_regras_mapeadas_saem_no_qti_e_recomendacoes_gravadas(db, aula_classificada):
@@ -131,6 +150,7 @@ def test_com_coleta_vigente_regra_correspondente_concorda(db, ciclo, coleta_em, 
                                InterpretacaoMTSS.rule_id == "MTSS_DIRECT_OVER_INDIRECT"))
     assert gravada.qti_agreement == "agree"
     assert gravada.qti_evidence is not None
+    assert gravada.qti_evidence["pair_id"] == "TRI_INFLUENCE"
 
     rec_gravada = db.scalar(select(RecomendacaoMTSS)
                             .where(RecomendacaoMTSS.aula_id == aula_classificada.id,
