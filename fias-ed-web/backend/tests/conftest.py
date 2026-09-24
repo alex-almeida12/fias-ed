@@ -17,7 +17,7 @@ from app.ml.protocols import SegmentoASR
 from app.models import Audio, Aula, Base, Ciclo, Disciplina, Escola, Turma
 from app.transcricao.service import criar_transcricao, falante_provisorio, gravar_segmentos
 from tests.audio_fixtures import VOZ_A, VOZ_B, make_fala
-from tests.helpers import login, make_aula, make_user
+from tests.helpers import make_aula, make_user
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
@@ -79,12 +79,8 @@ def db():
 
 
 @pytest.fixture
-def professor(db, client):
-    # Os testes de ciclo batem em rotas autenticadas (POST /api/ciclos, .../encerrar) sem
-    # chamar login() explicitamente — então o fixture de professor já deixa o client logado.
-    user = make_user(db, "professora-ciclo")
-    login(client, "professora-ciclo")
-    return user
+def professor(db):
+    return make_user(db, "professora-ciclo")
 
 
 @pytest.fixture
