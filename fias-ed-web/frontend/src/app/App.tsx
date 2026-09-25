@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { Acompanhamentos } from "../pages/Acompanhamentos";
 import { Home } from "../pages/Home";
 import { TrocarSenha } from "../pages/TrocarSenha";
 import { AulaPage } from "../pages/AulaPage";
@@ -28,6 +29,7 @@ export function App() {
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route path="/aulas" element={<Dashboard />} />
             <Route path="/aulas/nova" element={<NovaAula />} />
+            <Route path="/ciclos" element={<Acompanhamentos />} />
             <Route path="/ciclos/novo" element={<NovoCiclo />} />
             <Route path="/ciclos/:id/qti" element={<ImportarQTI />} />
             <Route path="/ciclos/:id/relatorio" element={<RelatorioCiclo />} />

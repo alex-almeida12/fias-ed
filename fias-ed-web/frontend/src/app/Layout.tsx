@@ -44,6 +44,7 @@ export function Layout() {
         <NavLink to="/aulas" className="topbar__brand">FIAS-ED</NavLink>
         <nav className="topbar__nav" aria-label="Navegação principal">
           <NavLink to="/aulas" end>Minhas aulas</NavLink>
+          <NavLink to="/ciclos">Meus acompanhamentos</NavLink>
           {me.role === "ADMIN_LOCAL" && (
             <>
               <NavLink to="/admin/aulas">Aulas dos professores</NavLink>

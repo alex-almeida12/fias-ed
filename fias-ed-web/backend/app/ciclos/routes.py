@@ -2,6 +2,7 @@ import datetime as dt
 import uuid
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit import audit
@@ -11,6 +12,7 @@ from app.ciclos.service import ciclo_do_professor
 from app.core.db import get_db
 from app.core.errors import AppError
 from app.models import Ciclo, Disciplina, Turma
+from app.relatorios.routes import _ciclo_payload
 
 router = APIRouter()
 
@@ -18,6 +20,18 @@ router = APIRouter()
 def _owned(db: Session, model, obj_id: uuid.UUID, professor_id: uuid.UUID):
     obj = db.get(model, obj_id)
     return obj if obj is not None and obj.deleted_at is None and obj.professor_id == professor_id else None
+
+
+@router.get("/ciclos")
+def list_ciclos(actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(Ciclo, Turma, Disciplina)
+        .join(Turma, Turma.id == Ciclo.turma_id).join(Disciplina, Disciplina.id == Ciclo.disciplina_id)
+        .where(Ciclo.professor_id == actor.effective_professor_id, Ciclo.deleted_at.is_(None))
+        .order_by(Ciclo.iniciado_em.desc())).all()
+    audit(db, actor, "ciclo", None, "read")
+    db.commit()
+    return [_ciclo_payload(c, t, d) for c, t, d in rows]
 
 
 @router.post("/ciclos", status_code=201)

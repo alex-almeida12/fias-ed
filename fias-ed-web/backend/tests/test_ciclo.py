@@ -59,6 +59,50 @@ def test_aula_fora_de_ciclo_devolve_fora(db, aula_avulsa, posicao):
     assert posicao(aula_avulsa) == "fora"
 
 
+def test_listar_ciclos_devolve_vazio_sem_ciclos(client, db):
+    make_user(db, "professora-sem-ciclos")
+    login(client, "professora-sem-ciclos")
+    r = client.get("/api/ciclos")
+    assert r.status_code == 200 and r.json() == []
+
+
+def test_listar_ciclos_devolve_so_os_do_professor(client_factory, db, ciclo):
+    """Task 14b: um professor não pode ver o ciclo de outro na listagem."""
+    dono = client_factory()
+    login(dono, "professora-ciclo")
+    make_user(db, "outro-professor-lista")
+    outro = client_factory()
+    login(outro, "outro-professor-lista")
+    assert [c["id"] for c in dono.get("/api/ciclos").json()] == [str(ciclo.id)]
+    assert outro.get("/api/ciclos").json() == []
+
+
+def test_listar_ciclos_ordena_do_mais_recente_para_o_mais_antigo(client, turma, disciplina):
+    login(client, "professora-ciclo")
+    antigo = client.post("/api/ciclos", json={"turma_id": str(turma.id), "disciplina_id": str(disciplina.id),
+                                              "n_aulas_previstas": 4, "iniciado_em": "2026-01-01"}).json()
+    recente = client.post("/api/ciclos", json={"turma_id": str(turma.id), "disciplina_id": str(disciplina.id),
+                                               "n_aulas_previstas": 6, "iniciado_em": "2026-06-01"}).json()
+    r = client.get("/api/ciclos")
+    assert [c["id"] for c in r.json()] == [recente["id"], antigo["id"]]
+
+
+def test_listar_ciclos_omite_ciclo_apagado(client, db, ciclo):
+    login(client, "professora-ciclo")
+    ciclo.deleted_at = dt.datetime.now(dt.timezone.utc)
+    db.commit()
+    assert client.get("/api/ciclos").json() == []
+
+
+def test_listar_ciclos_traz_turma_e_disciplina(client, turma, disciplina, ciclo):
+    login(client, "professora-ciclo")
+    r = client.get("/api/ciclos")
+    item = r.json()[0]
+    assert item["turma"] == {"id": str(turma.id), "name": turma.name}
+    assert item["disciplina"] == {"id": str(disciplina.id), "name": disciplina.name}
+    assert item["n_aulas_previstas"] == ciclo.n_aulas_previstas
+
+
 def test_encerrar_ciclo_de_outro_professor_da_404(client_factory, db, ciclo):
     """Lacuna pré-existente, achada de passagem na revisão da Task 12: as
     três rotas que dependem de posse de ciclo (encerrar, relatório do ciclo,
