@@ -125,7 +125,7 @@ _DESCRICAO_INDICE = {
 _DESCRICAO_PADRAO = "Um indicador calculado a partir da distribuição de fala ao longo da aula."
 
 
-def _indices(db: Session, aula_id: uuid.UUID, rules: dict) -> list[dict]:
+def indices_payload(db: Session, aula_id: uuid.UUID, rules: dict) -> list[dict]:
     nomes = {idx["id"]: idx["name"] for idx in rules["indices"]}
     ordem = {idx["id"]: posicao for posicao, idx in enumerate(rules["indices"])}
     # deleted_at: IndicadorFIAS ganhou exclusão lógica numa task anterior
@@ -165,7 +165,7 @@ def padroes_de_interacao(aula_id: uuid.UUID, actor: Actor = Depends(current_acto
         "faixa": _faixa(codificacao.marks, regras),
         "observacoes": _observacoes(linhas),
         "matriz": transition_matrix(codificacao.intervals, regras),
-        "indices": _indices(db, aula.id, regras),
+        "indices": indices_payload(db, aula.id, regras),
         # Rastreabilidade, não índice: quanto tempo da aula a categoria 10
         # recebeu por silêncio. Não há número de confusão porque confusão não é
         # medida nesta versão (fias_rules.confusion.implemented = false), e um

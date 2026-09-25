@@ -45,7 +45,7 @@ from app.auth.deps import Actor, current_actor
 from app.aulas.service import aula_payload, get_owned_aula
 from app.core.db import get_db
 from app.core.errors import AppError
-from app.fias.routes import _indices
+from app.fias.routes import indices_payload
 from app.models import ClassificacaoFIAS, InterpretacaoMTSS, RecomendacaoMTSS, Segmento, Triangulacao
 from app.transcricao.service import texto_efetivo, transcricao_da_aula
 
@@ -158,7 +158,7 @@ def relatorio_da_aula(aula_id: uuid.UUID, actor: Actor = Depends(current_actor),
     db.commit()
     return {
         "aula": aula_payload(db, aula),
-        "indices": _indices(db, aula.id, regras),
+        "indices": indices_payload(db, aula.id, regras),
         "triangulacao": [_triangulacao_payload(t) for t in triangulacao],
         "interpretacoes": [_interpretacao_payload(i, segmentos) for i in interpretacoes],
         "recomendacoes": [_recomendacao_payload(r) for r in recomendacoes],
