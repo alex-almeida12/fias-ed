@@ -17,6 +17,7 @@ from app.ml.loader import obter_asr, obter_diarizador
 from app.ml.protocols import SegmentoASR
 from app.models import Audio, Aula, Job
 from app.pipeline.align import alinhar, criar_falantes_provisorios, gravar_fala_detectada
+from app.pipeline.estados import avancar
 from app.transcricao.service import (criar_transcricao, falante_provisorio, gravar_segmentos,
                                      para_protocolo, segmentos_ordenados, transcricao_da_aula)
 
@@ -229,6 +230,10 @@ def handle_classify_fias(db: Session, job: Job) -> None:
     finish_job(db, job)
     db.commit()
     log_event("fias_pronto", aula_id=aula.id, job_id=job.id)
+    # Leva a aula do fim do FIAS até o relatório (ou até WAITING_QTI, se o
+    # ciclo exigir o questionário aqui). Depois do commit acima, para que
+    # FIAS_COMPLETED já esteja gravado antes de qualquer novo estado.
+    avancar(db, aula)
 
 
 HANDLERS = {

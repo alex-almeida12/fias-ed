@@ -229,7 +229,9 @@ def _status(client, aula) -> str:
 
 def test_aula_validada_percorre_o_pipeline_ate_o_fim_sem_ajuda(client, db, tmp_path, monkeypatch):
     """Critério de aceitação 1 do spec: uma aula que chega a AUDIO_VALIDATED
-    percorre o pipeline até FIAS_COMPLETED.
+    percorre o pipeline até REPORT_READY. Até a Task 9 o fim era FIAS_COMPLETED;
+    esta aula é fora de qualquer ciclo (`make_aula` não cria ciclo nenhum), então
+    `avancar` (Task 9) a leva direto até o relatório, sem parar em WAITING_QTI.
 
     Quem põe o primeiro job na fila é POST /processar, e quem põe o último é POST
     /transcricao/concluir — os dois caminhos de produção. Tudo entre eles tem de
@@ -253,5 +255,5 @@ def test_aula_validada_percorre_o_pipeline_ate_o_fim_sem_ajuda(client, db, tmp_p
     assert client.post(f"/api/aulas/{aula.id}/vozes/escolher", json={"rotulo": "voz-1"}).status_code == 200
     assert client.post(f"/api/aulas/{aula.id}/transcricao/concluir").status_code == 200
     _esvaziar_a_fila(db)
-    assert _status(client, aula) == "FIAS_COMPLETED"
+    assert _status(client, aula) == "REPORT_READY"
     assert db.query(Job).filter_by(aula_id=aula.id, status="failed").count() == 0

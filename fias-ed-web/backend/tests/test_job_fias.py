@@ -246,10 +246,13 @@ def test_indices_sao_gravados_com_evidencia_e_rules_version(db, aula_revisada, c
     assert all(i.rules_version for i in indicadores)
 
 
-def test_classificacao_leva_a_fias_completed(db, aula_revisada, classificador_falso):
+def test_classificacao_leva_ate_report_ready(db, aula_revisada, classificador_falso):
+    """Até a Task 9 o job parava em FIAS_COMPLETED. `aula_revisada` é fora de
+    qualquer ciclo (`make_aula` não cria ciclo nenhum), então `avancar` (Task 9)
+    a leva direto até o relatório, sem parar em WAITING_QTI."""
     _rodar(db, aula_revisada)
     db.refresh(aula_revisada)
-    assert aula_revisada.status == "FIAS_COMPLETED"
+    assert aula_revisada.status == "REPORT_READY"
 
 
 def test_guarda_a_predicao_crua_e_a_restrita_por_papel(db, aula_revisada, classificador_falso_categoria_8):

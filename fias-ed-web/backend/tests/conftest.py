@@ -192,6 +192,32 @@ def aula_classificada(db, monkeypatch, ciclo, aula_em):
 
 
 @pytest.fixture
+def aula_classificada_em(db, monkeypatch, aula_em):
+    """Como `aula_classificada`, mas com a data da aula escolhida pelo teste —
+    necessário para exercitar `posicao_no_ciclo` (primeira/meio), que depende
+    de quando cada aula do ciclo caiu, não só de que ela existe."""
+    def _aula_classificada_em(ciclo_ou_id, lesson_date: str) -> Aula:
+        aula = aula_em(ciclo_ou_id, lesson_date)
+        aula.status = "READY_FOR_FIAS"
+        db.commit()
+        classificar_para_triangulacao(db, aula, monkeypatch)
+        db.refresh(aula)
+        return aula
+    return _aula_classificada_em
+
+
+@pytest.fixture
+def aula_avulsa_classificada(db, monkeypatch, aula_avulsa):
+    """O mesmo molde de `aula_classificada`, mas fora de qualquer ciclo —
+    `posicao_no_ciclo` tem de devolver "fora" para ela."""
+    aula_avulsa.status = "READY_FOR_FIAS"
+    db.commit()
+    classificar_para_triangulacao(db, aula_avulsa, monkeypatch)
+    db.refresh(aula_avulsa)
+    return aula_avulsa
+
+
+@pytest.fixture
 def aula_transcrita(db):
     """Simula o estado em que handle_transcribe (Task 5) deixa a aula: um
     falante provisório (role=UNASSIGNED, diarization_label="pendente") ao qual

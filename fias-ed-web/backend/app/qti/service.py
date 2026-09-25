@@ -45,7 +45,8 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.messages import error_message
-from app.models import Ciclo, ColetaQTI, RespostaQTI, ResultadoQTI, utcnow
+from app.models import Aula, Ciclo, ColetaQTI, RespostaQTI, ResultadoQTI, utcnow
+from app.pipeline.estados import avancar
 
 
 def importar_relatorio(db: Session, ciclo: Ciclo, texto: str, coletado_em: dt.date) -> ColetaQTI:
@@ -79,4 +80,17 @@ def importar_relatorio(db: Session, ciclo: Ciclo, texto: str, coletado_em: dt.da
     db.add(ResultadoQTI(coleta_id=coleta.id, octantes=agregado["octants"],
                         agency=agregado["agency"], communion=agregado["communion"]))
     db.commit()
+
+    # Destrava quem estava parado esperando exatamente este questionário: sem
+    # isto WAITING_QTI é beco sem saída, e a primeira aula do ciclo nunca
+    # chega ao relatório. Só aulas já paradas em WAITING_QTI — nenhuma outra é
+    # tocada, e quem já passou por aqui não é reprocessado.
+    presas = db.scalars(select(Aula).where(Aula.turma_id == ciclo.turma_id,
+                                            Aula.disciplina_id == ciclo.disciplina_id,
+                                            Aula.lesson_date >= ciclo.iniciado_em,
+                                            Aula.status == "WAITING_QTI",
+                                            Aula.deleted_at.is_(None))).all()
+    for presa in presas:
+        avancar(db, presa)
+
     return coleta
