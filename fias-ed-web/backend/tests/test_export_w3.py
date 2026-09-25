@@ -8,6 +8,8 @@ VIGENTE (não qualquer coleta, `coleta_vigente`, o mesmo que a triangulação e 
 MTSS usam), a evidência de fala do diarizador quando existe, e nunca captura
 `ExportPrivacyError` — e nunca calcula nada por conta própria.
 """
+from datetime import datetime, timezone
+
 import pytest
 
 from app.export.service import montar_dataset
@@ -132,3 +134,52 @@ def test_usa_a_coleta_vigente_e_nao_uma_posterior_a_aula(db, ciclo, coleta_em, c
 
     ds = montar_dataset(db, [ciclo_completo], include_text=False, exported_at="2026-09-24T12:00:00Z")
     assert {linha["q1"] for linha in ds["qti_responses"]} == {3}
+
+
+# Os três casos de borda abaixo exercitam a fronteira de `coleta_vigente` pelo
+# caminho do dataset. A regra é "a coleta mais recente com data ANTERIOR OU
+# IGUAL à da aula" — e cada teste fixa uma das três formas de errá-la.
+
+
+def test_coleta_no_mesmo_dia_da_aula_vale_para_ela(db, ciclo, coleta_em, aula_classificada_em):
+    """A fronteira é inclusiva: uma turma que responde no mesmo dia da aula já
+    tinha a percepção formada quando a aula terminou. Trocar `<=` por `<` no
+    `coleta_vigente` faria a aula sair sem questionário nenhum, e o dataset
+    registraria ausência onde havia dado."""
+    coleta = coleta_em(ciclo, "2026-10-01")
+    _gravar_respostas(db, coleta, valor=4)
+    aula = aula_classificada_em(ciclo, "2026-10-01")
+
+    ds = montar_dataset(db, [aula], include_text=False, exported_at="2026-09-24T12:00:00Z")
+    assert {linha["q1"] for linha in ds["qti_responses"]} == {4}
+
+
+def test_aula_anterior_a_qualquer_coleta_sai_sem_questionario(db, ciclo, coleta_em, aula_classificada_em):
+    """A aula aconteceu antes de a turma responder qualquer coisa. Não é erro:
+    é o começo do acompanhamento. O dataset sai com `qti_responses` vazio e o
+    motor marca `displayable: false` — o que não pode acontecer é a aula ser
+    comparada com uma percepção que ainda não existia."""
+    coleta = coleta_em(ciclo, "2026-12-01")
+    _gravar_respostas(db, coleta, valor=5)
+    aula = aula_classificada_em(ciclo, "2026-10-01")
+
+    ds = montar_dataset(db, [aula], include_text=False, exported_at="2026-09-24T12:00:00Z")
+    assert ds["qti_responses"] == []
+    assert ds["qti_results"][0]["displayable"] is False
+
+
+def test_duas_coletas_na_mesma_data_escolhem_sempre_a_mesma(db, ciclo, coleta_em, aula_classificada_em):
+    """Duas coletas vivas na mesma data só aparecem por caminho excepcional (a
+    reimportação substitui), mas quando aparecem a escolha não pode depender da
+    ordem em que o banco varreu a tabela: dois pesquisadores exportando o mesmo
+    banco têm de receber o mesmo arquivo. O desempate é por `created_at` e
+    depois por `id`."""
+    primeira = coleta_em(ciclo, "2026-09-01", created_at=datetime(2026, 9, 1, 10, 0, tzinfo=timezone.utc))
+    _gravar_respostas(db, primeira, valor=2)
+    segunda = coleta_em(ciclo, "2026-09-01", created_at=datetime(2026, 9, 1, 11, 0, tzinfo=timezone.utc))
+    _gravar_respostas(db, segunda, valor=5)
+    aula = aula_classificada_em(ciclo, "2026-10-01")
+
+    for _ in range(5):
+        ds = montar_dataset(db, [aula], include_text=False, exported_at="2026-09-24T12:00:00Z")
+        assert {linha["q1"] for linha in ds["qti_responses"]} == {5}
