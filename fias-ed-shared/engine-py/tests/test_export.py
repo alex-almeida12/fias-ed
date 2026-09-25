@@ -69,6 +69,92 @@ def test_derived_tables_consistent_with_engine():
     assert {r["pair_id"] for r in ds["triangulation"]} >= {"TRI_WARMTH"}
 
 
+# ---- Defeito C: a qualificação do MTSS pelo QTI não chegava ao dataset --------
+
+def test_mtss_e_recommendations_trazem_qti_agreement():
+    """`build_dataset` chamava `evaluate` e montava `mtss` sem nunca chamar
+    `qualify` — as regras chegavam ao dataset sem dizer se o questionário
+    concordou com elas, ao contrário do que a tela do professor mostra
+    (`app/mtss/service.py`, que sempre qualifica). `recommendations` tem que
+    vir de `qualificadas`, não de `fired`, e cada recomendação carrega a
+    mesma qualificação da regra que a originou (mesmo `rule_id`).
+
+    A aula de `lesson()` tem professor em categoria 4 (pergunta) e aluno em 8
+    (responde): dispara MTSS_QUESTIONS_PRESENT (sem par de triangulação, logo
+    "unpaired") e três regras com par (NO_STUDENT_INITIATIVE, NO_IDEA_UPTAKE,
+    NO_PRAISE) — com 10 respostas QTI uniformes (todo item = 3), os oito
+    octantes saem em 0,5 (escala normalizada de `aggregate`), abaixo do corte
+    "baixo" de 2,33, e as três regras têm `agrees_when: "low"` — todas
+    concordam."""
+    ds = build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    validate(ds)
+    agreement_por_regra_mtss = {r["rule_id"]: r["qti_agreement"] for r in ds["mtss"]}
+    assert agreement_por_regra_mtss == {
+        "MTSS_NO_STUDENT_INITIATIVE": "agree", "MTSS_NO_IDEA_UPTAKE": "agree",
+        "MTSS_NO_PRAISE": "agree", "MTSS_QUESTIONS_PRESENT": "unpaired"}
+    agreement_por_regra_rec = {r["rule_id"]: r["qti_agreement"] for r in ds["recommendations"]}
+    assert agreement_por_regra_rec == agreement_por_regra_mtss
+
+
+def test_qti_agreement_e_no_qti_sem_questionario():
+    """Aula sem nenhuma resposta QTI: as regras com par de triangulação saem
+    "no_qti" (não "disagree" nem erro — a ausência de questionário não é
+    desacordo), e a regra sem par continua "unpaired", exatamente como com
+    questionário — o campo não depende de o QTI existir para ter um par."""
+    item = lesson()
+    item["qti_responses"] = []
+    ds = build_dataset([item], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    validate(ds)
+    agreement_por_regra_mtss = {r["rule_id"]: r["qti_agreement"] for r in ds["mtss"]}
+    assert agreement_por_regra_mtss == {
+        "MTSS_NO_STUDENT_INITIATIVE": "no_qti", "MTSS_NO_IDEA_UPTAKE": "no_qti",
+        "MTSS_NO_PRAISE": "no_qti", "MTSS_QUESTIONS_PRESENT": "unpaired"}
+    agreement_por_regra_rec = {r["rule_id"]: r["qti_agreement"] for r in ds["recommendations"]}
+    assert agreement_por_regra_rec == agreement_por_regra_mtss
+
+
+def test_triangulation_reusa_os_mesmos_pares_que_qualificaram_o_mtss():
+    """`triangulate` não pode ser chamado duas vezes por aula (uma para
+    `qualify`, outra para a tabela `triangulation`): além do custo em dobro,
+    duas chamadas são dois cálculos do mesmo fato que só coincidem por
+    construção determinística. Prova indireta: o par que qualificou
+    MTSS_NO_STUDENT_INITIATIVE (TRI_STUDENT_VOICE) aparece na tabela
+    `triangulation` com o mesmo `fias_value` que embasou o "agree" acima."""
+    ds = build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    tri = {r["pair_id"]: r for r in ds["triangulation"]}
+    assert "TRI_STUDENT_VOICE" in tri
+    assert tri["TRI_STUDENT_VOICE"]["qti_available"] is True
+
+
+def test_recommendations_recebe_as_regras_qualificadas_nao_as_cruas(monkeypatch):
+    """`qualify` não filtra nem reordena `fired`: toda regra continua com o
+    mesmo `rule_id` e os mesmos `recommendation_ids`, só ganha campos novos
+    (`qti_agreement` etc.). Por isso `recommendations(fired, P)` e
+    `recommendations(qualificadas, P)` devolvem listas byte-idênticas — a
+    mutação 1 do brief da Task 14 ("volte para `recommendations(fired, P)`")
+    não muda `ds["recommendations"]` nem `ds["mtss"]` em nenhum campo
+    observável, e nenhuma asserção de conteúdo a pega (verificado: rodando o
+    motor com a mutação aplicada, as 265 asserções de conteúdo da suíte
+    continuam passando).
+
+    Este é um espião, não uma asserção de conteúdo: prova que `build_dataset`
+    chama `recommendations` com objetos que já têm `qti_agreement` (só
+    `qualificadas` tem esse campo; `fired` não) — a única forma de proteger
+    esta linha contra a regressão, já que o resultado não muda."""
+    import fias_ed_engine.export as export_mod
+    chamadas = []
+    original = export_mod.recommendations
+
+    def espiao(regras, pedagogical):
+        chamadas.append(regras)
+        return original(regras, pedagogical)
+
+    monkeypatch.setattr(export_mod, "recommendations", espiao)
+    build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    assert chamadas
+    assert all("qti_agreement" in r for r in chamadas[0])
+
+
 def test_multiple_lessons():
     ds = build_dataset([lesson(), lesson(lid="01926b3e-7a1c-7c3e-9f00-000000000002")], include_text=False,
                        exported_at="2026-09-21T12:00:00Z")
@@ -284,7 +370,8 @@ def test_aula_sem_versao_declarada_recusada():
 
 def test_export_version_acompanha_a_mudanca_de_significado_das_tabelas():
     """`intervals` e `indices` mudaram de grandeza com rules_version 2.0.0;
-    um dataset 1.0.0 e um desta versão não se empilham."""
+    um dataset 1.0.0 e um desta versão não se empilham. 2.2.0 (não 2.1.0):
+    `mtss`/`recommendations` ganharam a coluna `qti_agreement`."""
     ds = build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
-    assert ds["manifest"]["export_version"] == "2.1.0"
+    assert ds["manifest"]["export_version"] == "2.2.0"
     assert ds["manifest"]["rules_version"] == RULES_VERSION

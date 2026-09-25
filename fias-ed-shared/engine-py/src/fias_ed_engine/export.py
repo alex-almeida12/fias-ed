@@ -22,7 +22,7 @@ from pathlib import Path
 
 from .indices import compute_indices
 from .intervals import CodedSegment, code_lesson, transition_matrix
-from .mtss import build_facts, evaluate, recommendations
+from .mtss import build_facts, evaluate, qualify, recommendations
 from .qti import aggregate
 from .rules import load_rules
 from .triangulation import triangulate
@@ -41,7 +41,17 @@ from .triangulation import triangulate
 # o schema exige. Nenhum valor das colunas antigas mudou, por isso não é 3.0.0 —
 # mas um dataset 2.0.0 não tem a coluna e falha a validação de hoje, e é pelo
 # número da versão que se distingue "exportado antes" de "exportado errado".
-EXPORT_VERSION = "2.1.0"
+#
+# 2.2.0: `mtss` e `recommendations` ganharam a coluna `qti_agreement` — a
+# qualificação de cada regra pelo QTI (`qualify`), que já existia no motor e no
+# Web (`app/mtss/service.py`) mas não chegava ao dataset, apesar de a decisão
+# de 2026-09-24 (seção 4.4 de ESTADO_DE_VALIDACAO.md) já valer para o sistema
+# inteiro. Sem ela, quem analisa o dataset não consegue reproduzir a
+# qualificação que a tela do professor mostrou. Não é 3.0.0: nenhuma coluna
+# existente mudou de significado, e as duas novas são aditivas — quem lia
+# `mtss.csv`/`recommendations.csv` antes desta versão continua lendo as mesmas
+# colunas com os mesmos valores, só com uma coluna a mais no fim.
+EXPORT_VERSION = "2.2.0"
 TABLES = ("lessons", "segments", "intervals", "matrix", "indices", "qti_responses",
           "qti_results", "mtss", "recommendations", "triangulation")
 _LESSON_FIELDS = ("lesson_id", "lesson_date", "disciplina", "turma_id", "duration_ms", "transcript_source")
@@ -75,8 +85,8 @@ TABLE_FIELDS: dict[str, tuple[str, ...]] = {
     "indices": ("lesson_id", "index_id", "value", "reason", "numerator_count", "denominator_count", "validation_status"),
     "qti_responses": ("lesson_id", "response_index", *(f"q{i}" for i in range(1, 25))),
     "qti_results": ("lesson_id", "response_count", "displayable", *(f"oc{i}" for i in range(1, 9)), "agency", "communion"),
-    "mtss": ("lesson_id", "rule_id", "tier1_dimension", "framing", "validation_status", "rules_version"),
-    "recommendations": ("lesson_id", "recommendation_id", "rule_id", "validation_status"),
+    "mtss": ("lesson_id", "rule_id", "tier1_dimension", "framing", "validation_status", "rules_version", "qti_agreement"),
+    "recommendations": ("lesson_id", "recommendation_id", "rule_id", "validation_status", "qti_agreement"),
     "triangulation": ("lesson_id", "pair_id", "fias_value", "qti_available", "qti_values"),
 }
 
@@ -160,6 +170,14 @@ def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> 
         answers = [{int(k): v for k, v in r.items()} for r in item["qti_responses"]]
         qti = aggregate(answers, Q)
         fired = evaluate(build_facts(intervals, indices), M)
+        # `pares` calculado uma vez, antes de `mtss`: `qualify` precisa dele
+        # para dizer se o QTI concorda com cada regra disparada (decisão de
+        # 2026-09-24, seção 4.4 de ESTADO_DE_VALIDACAO.md — o MTSS considera as
+        # duas medidas), e a tabela `triangulation` abaixo reaproveita o mesmo
+        # valor em vez de chamar `triangulate` de novo, mesmo padrão de
+        # `fonte_silencio` acima: um cálculo, escrito em dois lugares.
+        pares = triangulate(intervals, indices, qti, P, Q)
+        qualificadas = qualify(fired, pares, P)
 
         ds["lessons"].append({**{f: meta[f] for f in _LESSON_FIELDS}, "silence_source": fonte_silencio,
                               "n_segments": len(segs), "n_intervals": len(intervals),
@@ -188,12 +206,21 @@ def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> 
                                   "agency": qti["agency"], "communion": qti["communion"]})
         ds["mtss"] += [{"lesson_id": lid, "rule_id": f["rule_id"], "tier1_dimension": f["tier1_dimension"],
                         "framing": f["framing"], "validation_status": f["validation_status"],
-                        "rules_version": f["rules_version"]} for f in fired]
+                        "rules_version": f["rules_version"], "qti_agreement": f["qti_agreement"]}
+                       for f in qualificadas]
+        # `qti_agreement` da recomendação é cópia do campo da regra que a
+        # originou (`rule_id`) — `recommendations` não carrega esse campo,
+        # só o `rule_id`, então é preciso buscá-lo de volta em `qualificadas`.
+        # Mesmo desenho de `app/mtss/service.py` (Web), para que o dataset
+        # nunca discorde da tela.
+        qti_agreement_por_regra = {q["rule_id"]: q["qti_agreement"] for q in qualificadas}
         ds["recommendations"] += [{"lesson_id": lid, "recommendation_id": r["recommendation_id"], "rule_id": r["rule_id"],
-                                   "validation_status": r["validation_status"]} for r in recommendations(fired, P)]
+                                   "validation_status": r["validation_status"],
+                                   "qti_agreement": qti_agreement_por_regra[r["rule_id"]]}
+                                  for r in recommendations(qualificadas, P)]
         ds["triangulation"] += [{"lesson_id": lid, "pair_id": t["pair_id"], "fias_value": t["fias"]["value"],
                                  "qti_available": t["qti_available"], "qti_values": [q["value"] for q in t["qti"]]}
-                                for t in triangulate(intervals, indices, qti, P, Q)]
+                                for t in pares]
         processing.append({"lesson_id": lid, **{f: item["processing"].get(f) for f in _PROCESSING_FIELDS},
                            "silence_source": fonte_silencio})
     ds["manifest"] = {"export_version": EXPORT_VERSION, "rules_version": F["rules_version"], "exported_at": exported_at,
