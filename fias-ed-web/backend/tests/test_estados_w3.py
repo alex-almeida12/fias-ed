@@ -46,6 +46,50 @@ def test_primeira_aula_com_coleta_vigente_segue_ate_report_ready(db, ciclo, cole
     assert _status(db, aula) == "REPORT_READY"
 
 
+def test_ultima_aula_de_ciclo_encerrado_sem_coleta_para_em_waiting_qti(db, ciclo, aula_classificada_em, client):
+    """`posicao_no_ciclo` só devolve "ultima" depois do encerramento — sem
+    encerrar o ciclo esta aula seria "meio", e o teste passaria pelo motivo
+    errado. É a ponta mais importante de proteger: é a última aula que fecha
+    a comparação de ponta a ponta do ciclo."""
+    aula_classificada_em(ciclo, "2026-03-02")            # primeira
+    ultima = aula_classificada_em(ciclo, "2026-03-09")   # candidata a "ultima" após o encerramento
+    login(client, "professora-ciclo")
+    assert client.post(f"/api/ciclos/{ciclo.id}/encerrar").status_code == 200
+    # client.post roda em outra sessão: sem isto o identity map desta sessão
+    # devolveria o Ciclo com encerrado_em antigo (None) — mesmo motivo da
+    # fixture `posicao` em conftest.py.
+    db.expire_all()
+    avancar(db, ultima)
+    assert _status(db, ultima) == "WAITING_QTI"
+
+
+def test_ultima_aula_de_ciclo_encerrado_com_coleta_vigente_segue_ate_report_ready(
+        db, ciclo, aula_classificada_em, coleta_em, client):
+    """Par do teste anterior: sem ele, nada distingue "esperou porque é a
+    última" de "esperou sempre"."""
+    aula_classificada_em(ciclo, "2026-03-02")
+    ultima = aula_classificada_em(ciclo, "2026-03-09")
+    coleta_em(ciclo, "2026-03-01")
+    login(client, "professora-ciclo")
+    assert client.post(f"/api/ciclos/{ciclo.id}/encerrar").status_code == 200
+    db.expire_all()
+    avancar(db, ultima)
+    assert _status(db, ultima) == "REPORT_READY"
+
+
+def test_ciclo_de_uma_aula_encerrado_sem_coleta_para_em_waiting_qti(db, ciclo, aula_classificada_em, client):
+    """"primeira_e_ultima" sai de graça do mesmo desenho acima (mesma tupla de
+    pontas, mesmas fixtures): ciclo de uma aula só, encerrado. Não escrevo o
+    par "com coleta" para este caso — é o mesmo ramo de código que o teste
+    acima já prova, e duplicar só encheria a tabela sem cobrir mutação nova."""
+    unica = aula_classificada_em(ciclo, "2026-03-02")
+    login(client, "professora-ciclo")
+    assert client.post(f"/api/ciclos/{ciclo.id}/encerrar").status_code == 200
+    db.expire_all()
+    avancar(db, unica)
+    assert _status(db, unica) == "WAITING_QTI"
+
+
 def test_aula_do_meio_vai_direto_a_report_ready(db, ciclo, aula_classificada_em):
     aula_classificada_em(ciclo, "2026-03-02")           # primeira: só para a próxima não ser a primeira
     meio = aula_classificada_em(ciclo, "2026-03-09")    # meio: nunca esperou, mesmo sem coleta nenhuma
