@@ -120,6 +120,13 @@ test("ciclo em andamento não mostra data vazia", async () => {
   expect(await screen.findByText(/em andamento/i)).toBeInTheDocument();
 });
 
+test("ciclo com data de encerramento mostra a data, não 'em andamento'", async () => {
+  mockRelatorio(relatorio({ ciclo: { ...CICLO, encerrado_em: "2026-06-30" } }));
+  renderApp("/ciclos/c1/relatorio");
+  expect(await screen.findByText(/30\/06\/2026/)).toBeInTheDocument();
+  expect(screen.queryByText(/em andamento/i)).not.toBeInTheDocument();
+});
+
 test("nenhuma aula do ciclo foi classificada ainda: a tabela só tem Data e Situação", async () => {
   mockRelatorio(relatorio({
     trajetoria: [

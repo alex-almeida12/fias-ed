@@ -212,6 +212,22 @@ def _coletas(db: Session, ciclo: Ciclo, qti_cfg: dict) -> list[dict]:
     # rótulo em português vem de `qti_config.json` (`octants[].label_pt_br`),
     # igual ao que `fias_ed_engine.triangulation.triangulate` já faz para os
     # pares de triangulação: é o motor que nomeia, não a tela.
+    #
+    # `labels.get(codigo, codigo)`, não `labels[codigo]`: a gravação (`app/qti/
+    # service.py`) monta os octantes a partir do `qti_config.json` de QUANDO A
+    # COLETA FOI FEITA; esta rota relê o `qti_config.json` CORRENTE a cada
+    # abertura. Se o instrumento for editado depois — um octante renomeado ou
+    # removido —, uma coleta antiga pode ter um código que o arquivo atual não
+    # conhece mais. `ColetaQTI.qti_config_version` grava qual versão gerou cada
+    # coleta, mas isso é só para auditoria: `load_rules` (fias-ed-shared/
+    # engine-py/src/fias_ed_engine/rules.py) sempre lê o arquivo atual, sem
+    # nenhum jeito de carregar uma versão antiga por número — recarregar a
+    # versão certa exigiria guardar regras versionadas, o que está fora do
+    # escopo desta tarefa. Por isso o recuo aqui é degradar para o próprio
+    # código em vez de derrubar a rota com 500: pior for um professor ver
+    # "oc1" cru do que a tela inteira do relatório do ciclo parar de abrir por
+    # causa de UMA coleta velha. Quem um dia implementar versionamento de
+    # regras deveria trocar este fallback por uma leitura da versão gravada.
     labels = {o["code"]: o["label_pt_br"] for o in qti_cfg["octants"]}
     linhas = db.execute(
         select(ColetaQTI, ResultadoQTI)
@@ -221,7 +237,7 @@ def _coletas(db: Session, ciclo: Ciclo, qti_cfg: dict) -> list[dict]:
     ).all()
     return [{"id": str(c.id), "coletado_em": c.coletado_em.isoformat(), "origem": c.origem,
             "response_count": c.response_count, "displayable": c.displayable,
-            "octantes": [{"octant": codigo, "label": labels[codigo], "value": valor}
+            "octantes": [{"octant": codigo, "label": labels.get(codigo, codigo), "value": valor}
                         for codigo, valor in r.octantes.items()]} for c, r in linhas]
 
 

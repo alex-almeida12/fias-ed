@@ -13,10 +13,12 @@ porque cobrem coisas diferentes: um pega campo novo (qualquer nome), o outro
 pega texto ruim dentro de um campo permitido.
 """
 import re
+from datetime import date
 
 import pytest
 from fias_ed_engine.rules import load_rules
 
+from app.models import ColetaQTI, ResultadoQTI
 from tests.helpers import login, make_user
 
 
@@ -159,6 +161,35 @@ def test_octantes_da_coleta_trazem_o_rotulo_do_qti_config(cliente, ciclo_com_tre
     assert coleta["octantes"]
     for octante in coleta["octantes"]:
         assert octante["label"] == labels_do_motor[octante["octant"]]
+
+
+def test_octante_gravado_que_o_qti_config_atual_nao_conhece_nao_derruba_a_rota(cliente, db, ciclo_com_tres_aulas):
+    """A gravação (`app/qti/service.py`) monta os octantes a partir do
+    `qti_config.json` de QUANDO A COLETA FOI FEITA; esta rota relê o arquivo
+    CORRENTE a cada abertura. Se o instrumento for editado depois — um
+    octante renomeado ou removido —, uma coleta antiga pode ter um código
+    que o arquivo atual não conhece mais. `ColetaQTI.qti_config_version`
+    registra qual versão gerou cada coleta, mas isso não ajuda a recarregar
+    essa versão: `load_rules` (fias-ed-shared/engine-py/src/fias_ed_engine/
+    rules.py) sempre lê o arquivo atual, sem suporte a versão histórica
+    nenhuma — versionar regras é escopo de outra tarefa. Por isso a rota tem
+    que degradar (mostrar o próprio código como rótulo) em vez de devolver
+    500 por causa de uma única coleta velha."""
+    ciclo, _ = ciclo_com_tres_aulas
+    coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=date.fromisoformat("2026-03-05"),
+                       origem="COLETA_NATIVA", response_count=12, displayable=True,
+                       qti_config_version="0.0.1-versao-que-nao-existe-mais")
+    db.add(coleta)
+    db.flush()
+    db.add(ResultadoQTI(coleta_id=coleta.id, octantes={"oc_removido_do_instrumento": 3.0},
+                        agency=0.0, communion=0.0))
+    db.commit()
+
+    resposta = cliente.get(f"/api/ciclos/{ciclo.id}/relatorio")
+    assert resposta.status_code == 200
+    item = next(c for c in resposta.json()["coletas"] if c["id"] == str(coleta.id))
+    assert item["octantes"] == [{"octant": "oc_removido_do_instrumento",
+                                 "label": "oc_removido_do_instrumento", "value": 3.0}]
 
 
 def test_ciclo_de_outro_professor_da_404(client_factory, db, ciclo_com_tres_aulas):
