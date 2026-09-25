@@ -77,12 +77,18 @@ def test_listar_ciclos_devolve_so_os_do_professor(client_factory, db, ciclo):
     assert outro.get("/api/ciclos").json() == []
 
 
-def test_listar_ciclos_ordena_do_mais_recente_para_o_mais_antigo(client, turma, disciplina):
+def test_listar_ciclos_ordena_pela_data_que_o_professor_declarou(client, turma, disciplina):
+    """Achado da revisão: criar o de `iniciado_em` mais recente primeiro e o
+    mais antigo depois faz `iniciado_em` e `created_at` discordarem. Com os
+    dois criados em ordem crescente de data (o molde anterior), qualquer uma
+    das duas colunas dá a mesma ordem e o teste não prova qual delas a rota
+    realmente usa — uma mutação para `Ciclo.created_at.desc()` passava
+    despercebida."""
     login(client, "professora-ciclo")
-    antigo = client.post("/api/ciclos", json={"turma_id": str(turma.id), "disciplina_id": str(disciplina.id),
-                                              "n_aulas_previstas": 4, "iniciado_em": "2026-01-01"}).json()
     recente = client.post("/api/ciclos", json={"turma_id": str(turma.id), "disciplina_id": str(disciplina.id),
                                                "n_aulas_previstas": 6, "iniciado_em": "2026-06-01"}).json()
+    antigo = client.post("/api/ciclos", json={"turma_id": str(turma.id), "disciplina_id": str(disciplina.id),
+                                              "n_aulas_previstas": 4, "iniciado_em": "2026-01-01"}).json()
     r = client.get("/api/ciclos")
     assert [c["id"] for c in r.json()] == [recente["id"], antigo["id"]]
 

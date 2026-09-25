@@ -46,6 +46,22 @@ test("o menu tem a entrada 'Meus acompanhamentos' apontando para /ciclos", async
   expect(await screen.findByRole("link", { name: "Meus acompanhamentos" })).toHaveAttribute("href", "/ciclos");
 });
 
+test("mostra 'Em andamento' para o que não encerrou, a data para o que encerrou, e as aulas previstas", async () => {
+  const emAndamento = ACOMPANHAMENTO;
+  const encerrado = { ...ACOMPANHAMENTO, id: "c2", turma: { id: "t2", name: "8º A" },
+    n_aulas_previstas: 5, encerrado_em: "2026-07-15" };
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/ciclos": () => jsonResponse([emAndamento, encerrado]),
+  });
+  renderApp("/ciclos");
+  await screen.findByText("9º B · História");
+  expect(screen.getByText(/Em andamento/)).toBeInTheDocument();
+  expect(screen.getByText(/Encerrado em 15\/07\/2026/)).toBeInTheDocument();
+  expect(screen.getByText(/8 aulas previstas/)).toBeInTheDocument();
+  expect(screen.getByText(/5 aulas previstas/)).toBeInTheDocument();
+});
+
 test("a tela não usa a palavra 'ciclo' nem vocabulário de avaliação", async () => {
   mockApi({
     "GET /api/auth/me": () => jsonResponse(PROFESSORA),
