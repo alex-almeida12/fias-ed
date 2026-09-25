@@ -53,7 +53,7 @@ test("a trajetória aparece na ordem recebida, uma linha por aula", async () => 
     ],
   }));
   renderApp("/ciclos/c1/relatorio");
-  await screen.findByText(/trajetória do ciclo/i);
+  await screen.findByText(/trajetória do acompanhamento/i);
   const linhas = screen.getAllByRole("row").slice(1); // primeira é o cabeçalho
   expect(linhas.map((l) => l.textContent)).toEqual([
     expect.stringContaining("01/03/2026"),
@@ -72,7 +72,7 @@ test("as coletas aparecem, com a data e a contagem de respostas", async () => {
 test("nenhum texto de veredito aparece na tela", async () => {
   mockRelatorio();
   renderApp("/ciclos/c1/relatorio");
-  await screen.findByText(/trajetória do ciclo/i);
+  await screen.findByText(/trajetória do acompanhamento/i);
   expect(document.body.textContent).not.toMatch(/melhor|pior|evolu|progress|regred|avalia|nota|desempenho|ranking/i);
 });
 
@@ -84,7 +84,7 @@ test("aula sem índices aparece na tabela, marcada como ainda sem análise", asy
     ],
   }));
   renderApp("/ciclos/c1/relatorio");
-  await screen.findByText(/trajetória do ciclo/i);
+  await screen.findByText(/trajetória do acompanhamento/i);
   expect(screen.getByText(/ainda sem análise/i)).toBeInTheDocument();
 });
 
@@ -135,7 +135,7 @@ test("nenhuma aula do ciclo foi classificada ainda: a tabela só tem Data e Situ
     ],
   }));
   renderApp("/ciclos/c1/relatorio");
-  await screen.findByText(/trajetória do ciclo/i);
+  await screen.findByText(/trajetória do acompanhamento/i);
   const cabecalhos = screen.getAllByRole("columnheader").map((th) => th.textContent);
   expect(cabecalhos).toEqual(["Data", "Situação"]);
 });
@@ -145,4 +145,16 @@ test("sem coletas, a tela diz que a turma ainda não respondeu, sem role de aler
   renderApp("/ciclos/c1/relatorio");
   expect(await screen.findByText(/turma ainda não respondeu ao questionário/i)).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+// Mesma proibição de Acompanhamentos.test.tsx: a tela nasceu antes da decisão de
+// vocabulário (Task 15, conserto pedido em revisão), então o termo interno
+// vazava para o texto visível. "ciclo" continua valendo como nome de arquivo,
+// rota (/ciclos/:id/relatorio) e entidade de teste — só não no que o professor lê.
+test("a tela não usa a palavra 'ciclo' nem vocabulário de avaliação", async () => {
+  mockRelatorio();
+  renderApp("/ciclos/c1/relatorio");
+  await screen.findByText("9º B · História");
+  expect(document.body.textContent).not.toMatch(/ciclo/i);
+  expect(document.body.textContent).not.toMatch(/avalia|nota|desempenho|ranking/i);
 });

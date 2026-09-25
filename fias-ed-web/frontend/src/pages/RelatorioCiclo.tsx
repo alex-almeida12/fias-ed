@@ -38,7 +38,7 @@ export function RelatorioCiclo() {
       const resposta = await api<CicloRelatorio>(`/ciclos/${id}/relatorio`);
       setDados(resposta);
     } catch (err) {
-      setErro(err instanceof ApiError ? err.message : "Não foi possível carregar o relatório deste ciclo.");
+      setErro(err instanceof ApiError ? err.message : "Não foi possível carregar o relatório deste acompanhamento.");
     }
   }, [id]);
 
@@ -50,7 +50,7 @@ export function RelatorioCiclo() {
 
   return (
     <>
-      <h1>Relatório do ciclo</h1>
+      <h1>Relatório do acompanhamento</h1>
       {erro && <Banner kind="error">{erro}</Banner>}
       {dados === null && !erro && <p role="status">Carregando…</p>}
 
@@ -65,7 +65,7 @@ export function RelatorioCiclo() {
 
           <section>
             <h2>Trajetória</h2>
-            {dados.trajetoria.length === 0 && <p>Ainda não há aulas neste ciclo.</p>}
+            {dados.trajetoria.length === 0 && <p>Ainda não há aulas neste acompanhamento.</p>}
             {dados.trajetoria.length > 0 && (
               // Uma coluna por índice: em 360px a tabela não cabe (medido em
               // navegador). A saída é rolagem contida à tabela — nunca um gráfico
@@ -74,7 +74,7 @@ export function RelatorioCiclo() {
               // matriz de transições.
               <div className="tabela-rolante">
                 <table className="table">
-                  <caption>Trajetória do ciclo: uma linha por aula, na ordem em que aconteceram.</caption>
+                  <caption>Trajetória do acompanhamento: uma linha por aula, na ordem em que aconteceram.</caption>
                   <thead>
                     <tr>
                       <th scope="col">Data</th>
