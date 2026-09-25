@@ -115,6 +115,9 @@ export function AulaPage() {
       {aula.status === "FIAS_COMPLETED" && (
         <p><Link className="btn btn--primary" to={`/aulas/${id}/padroes`}>Ver padrões de interação</Link></p>
       )}
+      {aula.status === "REPORT_READY" && (
+        <p><Link className="btn btn--primary" to={`/aulas/${id}/relatorio`}>Ver relatório da aula</Link></p>
+      )}
 
       {aula.audio && (
         <section className="audio-area" aria-labelledby="audio-original">

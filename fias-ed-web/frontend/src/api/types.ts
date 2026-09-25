@@ -101,6 +101,53 @@ export interface Padroes {
   indices: Indice[];
 }
 
+export type QtiAgreement = "agree" | "disagree" | "inconclusive" | "unpaired" | "no_qti";
+
+export interface TriangulacaoQtiValor { octant: string; label: string; value: number | null }
+
+export interface TriangulacaoPar {
+  pair_id: string;
+  fias: { kind: string; ref: string | number[]; value: number | null };
+  qti_values: TriangulacaoQtiValor[];
+  qti_available: boolean;
+  reflection_question: string;
+  source_reference: string;
+  validation_status: string;
+}
+
+export interface InterpretacaoMTSS {
+  rule_id: string;
+  tier1_dimension: string;
+  framing: string;
+  interpretation: string;
+  evidence: Record<string, unknown>;
+  evidence_segment_categories: number[];
+  source_reference: string;
+  validation_status: string;
+  rules_version: string;
+  qti_agreement: QtiAgreement;
+  qti_evidence: Record<string, unknown> | null;
+  divergence_question: string | null;
+  evidencias: Evidencia[];
+}
+
+export interface RecomendacaoMTSS {
+  recommendation_id: string;
+  rule_id: string;
+  text: string;
+  validation_status: string;
+  source_reference: string;
+  qti_agreement: QtiAgreement;
+}
+
+export interface Relatorio {
+  aula: Aula;
+  indices: Indice[];
+  triangulacao: TriangulacaoPar[];
+  interpretacoes: InterpretacaoMTSS[];
+  recomendacoes: RecomendacaoMTSS[];
+}
+
 export interface Conta {
   id: string;
   username: string;

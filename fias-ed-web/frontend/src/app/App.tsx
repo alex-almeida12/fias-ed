@@ -8,6 +8,7 @@ import { ImportarQTI } from "../pages/ImportarQTI";
 import { NovaAula } from "../pages/NovaAula";
 import { NovoCiclo } from "../pages/NovoCiclo";
 import { PadroesInteracao } from "../pages/PadroesInteracao";
+import { RelatorioAula } from "../pages/RelatorioAula";
 import { RevisaoTranscricao } from "../pages/RevisaoTranscricao";
 import { AdminAulas } from "../pages/admin/AdminAulas";
 import { Contas } from "../pages/admin/Contas";
@@ -32,6 +33,7 @@ export function App() {
             <Route path="/aulas/:id/vozes" element={<EscolhaVoz />} />
             <Route path="/aulas/:id/transcricao" element={<RevisaoTranscricao />} />
             <Route path="/aulas/:id/padroes" element={<PadroesInteracao />} />
+            <Route path="/aulas/:id/relatorio" element={<RelatorioAula />} />
             <Route path="/admin/contas" element={<RequireAdmin><Contas /></RequireAdmin>} />
             <Route path="/admin/aulas" element={<RequireAdmin><AdminAulas /></RequireAdmin>} />
             <Route path="/admin/escolas" element={<RequireAdmin><Escolas /></RequireAdmin>} />
