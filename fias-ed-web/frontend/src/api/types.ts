@@ -148,6 +148,38 @@ export interface Relatorio {
   recomendacoes: RecomendacaoMTSS[];
 }
 
+export interface Ciclo {
+  id: string;
+  turma: { id: string; name: string };
+  disciplina: { id: string; name: string };
+  n_aulas_previstas: number;
+  iniciado_em: string;
+  encerrado_em: string | null;
+}
+
+export interface TrajetoriaItem {
+  aula_id: string;
+  lesson_date: string;
+  status: string;
+  indices: Indice[];
+}
+
+export interface Coleta {
+  id: string;
+  coletado_em: string;
+  origem: string;
+  response_count: number;
+  displayable: boolean;
+  octantes: Record<string, number>;
+}
+
+export interface CicloRelatorio {
+  ciclo: Ciclo;
+  n_aulas_realizadas: number;
+  trajetoria: TrajetoriaItem[];
+  coletas: Coleta[];
+}
+
 export interface Conta {
   id: string;
   username: string;
