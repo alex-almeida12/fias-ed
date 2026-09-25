@@ -101,8 +101,8 @@ export function RelatorioCiclo() {
                     <p className="meta">{formatDate(c.coletado_em)} · {c.response_count} respostas</p>
                     {c.displayable ? (
                       <ul>
-                        {Object.entries(c.octantes).map(([codigo, valor]) => (
-                          <li key={codigo}>{codigo}: {formatOctante(valor)}</li>
+                        {c.octantes.map((o) => (
+                          <li key={o.octant}>{o.label}: {formatOctante(o.value)}</li>
                         ))}
                       </ul>
                     ) : (

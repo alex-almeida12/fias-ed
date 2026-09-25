@@ -205,7 +205,14 @@ def _trajetoria(db: Session, ciclo: Ciclo, regras: dict) -> list[dict]:
             "indices": indices_payload(db, a.id, regras)} for a in aulas_do_ciclo(db, ciclo)]
 
 
-def _coletas(db: Session, ciclo: Ciclo) -> list[dict]:
+def _coletas(db: Session, ciclo: Ciclo, qti_cfg: dict) -> list[dict]:
+    # `ResultadoQTI.octantes` grava só código -> valor ("oc1": 4.0). O código é
+    # vocabulário interno do instrumento, não algo para o professor ler — mesmo
+    # motivo pelo qual `pair_id` nunca aparece cru no relatório da aula. O
+    # rótulo em português vem de `qti_config.json` (`octants[].label_pt_br`),
+    # igual ao que `fias_ed_engine.triangulation.triangulate` já faz para os
+    # pares de triangulação: é o motor que nomeia, não a tela.
+    labels = {o["code"]: o["label_pt_br"] for o in qti_cfg["octants"]}
     linhas = db.execute(
         select(ColetaQTI, ResultadoQTI)
         .join(ResultadoQTI, ResultadoQTI.coleta_id == ColetaQTI.id)
@@ -214,7 +221,8 @@ def _coletas(db: Session, ciclo: Ciclo) -> list[dict]:
     ).all()
     return [{"id": str(c.id), "coletado_em": c.coletado_em.isoformat(), "origem": c.origem,
             "response_count": c.response_count, "displayable": c.displayable,
-            "octantes": r.octantes} for c, r in linhas]
+            "octantes": [{"octant": codigo, "label": labels[codigo], "value": valor}
+                        for codigo, valor in r.octantes.items()]} for c, r in linhas]
 
 
 @router.get("/ciclos/{ciclo_id}/relatorio")
@@ -230,5 +238,5 @@ def relatorio_do_ciclo(ciclo_id: uuid.UUID, actor: Actor = Depends(current_actor
         "ciclo": _ciclo_payload(ciclo, turma, disciplina),
         "n_aulas_realizadas": len(trajetoria),
         "trajetoria": trajetoria,
-        "coletas": _coletas(db, ciclo),
+        "coletas": _coletas(db, ciclo, load_rules("qti_config")),
     }

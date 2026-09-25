@@ -15,6 +15,7 @@ pega texto ruim dentro de um campo permitido.
 import re
 
 import pytest
+from fias_ed_engine.rules import load_rules
 
 from tests.helpers import login, make_user
 
@@ -65,6 +66,10 @@ CHAVES_TOPO = {"ciclo", "n_aulas_realizadas", "trajetoria", "coletas"}
 CHAVES_CICLO = {"id", "turma", "disciplina", "n_aulas_previstas", "iniciado_em", "encerrado_em"}
 CHAVES_TRAJETORIA = {"aula_id", "lesson_date", "status", "indices"}
 CHAVES_COLETA = {"id", "coletado_em", "origem", "response_count", "displayable", "octantes"}
+# octantes deixou de ser {codigo: valor} para virar uma lista de objetos com
+# rótulo: o código sozinho ("oc1") é vocabulário interno do instrumento, não
+# algo que o professor leia — mesma lista de permissão, um nível mais fundo.
+CHAVES_OCTANTE = {"octant", "label", "value"}
 
 
 def test_corpo_so_tem_os_campos_esperados(cliente, ciclo_com_tres_aulas, coleta_em):
@@ -90,6 +95,9 @@ def test_corpo_so_tem_os_campos_esperados(cliente, ciclo_com_tres_aulas, coleta_
     assert corpo["coletas"]
     for coleta in corpo["coletas"]:
         assert set(coleta) == CHAVES_COLETA
+        assert coleta["octantes"]
+        for octante in coleta["octantes"]:
+            assert set(octante) == CHAVES_OCTANTE
 
 
 def test_aula_sem_indices_aparece_na_trajetoria_com_lista_vazia(cliente, ciclo_com_tres_aulas):
@@ -131,6 +139,26 @@ def test_coletas_em_ordem_de_coletado_em_com_valores_gravados(cliente, ciclo_com
         assert item["response_count"] == gravada.response_count
         assert item["displayable"] == gravada.displayable
         assert item["octantes"]
+        for octante in item["octantes"]:
+            assert set(octante) == CHAVES_OCTANTE
+
+
+def test_octantes_da_coleta_trazem_o_rotulo_do_qti_config(cliente, ciclo_com_tres_aulas, coleta_em):
+    """O código do octante ("oc1") é vocabulário interno do instrumento QTI-24,
+    não algo para o professor ler — mesmo motivo pelo qual `pair_id` nunca
+    aparece cru no relatório da aula. O rótulo em português tem que vir de
+    `qti_config.json` (`octants[].label_pt_br`), igual ao que
+    `fias_ed_engine.triangulation.triangulate` já faz para os pares de
+    triangulação: é o motor que nomeia, não a rota escrevendo texto à mão."""
+    ciclo, _ = ciclo_com_tres_aulas
+    coleta_em(ciclo, "2026-03-05")
+    labels_do_motor = {o["code"]: o["label_pt_br"] for o in load_rules("qti_config")["octants"]}
+
+    corpo = cliente.get(f"/api/ciclos/{ciclo.id}/relatorio").json()
+    coleta = corpo["coletas"][0]
+    assert coleta["octantes"]
+    for octante in coleta["octantes"]:
+        assert octante["label"] == labels_do_motor[octante["octant"]]
 
 
 def test_ciclo_de_outro_professor_da_404(client_factory, db, ciclo_com_tres_aulas):

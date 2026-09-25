@@ -17,10 +17,19 @@ function aula(overrides: Record<string, unknown> = {}) {
   return { aula_id: "a1", lesson_date: "2026-03-02", status: "FIAS_COMPLETED", indices: indices(), ...overrides };
 }
 
+// Rótulos deliberadamente fictícios (não são os de qti_config.json de verdade):
+// provam que a tela mostra o que a API mandou, não um texto próprio.
+function octantes() {
+  return [
+    { octant: "oc1", label: "Rótulo simulado A", value: 4 },
+    { octant: "oc2", label: "Rótulo simulado B", value: 3.5 },
+  ];
+}
+
 function coleta(overrides: Record<string, unknown> = {}) {
   return {
     id: "col1", coletado_em: "2026-03-10", origem: "COLETA_NATIVA", response_count: 12,
-    displayable: true, octantes: { oc1: 4, oc2: 3.5 }, ...overrides,
+    displayable: true, octantes: octantes(), ...overrides,
   };
 }
 
@@ -87,17 +96,41 @@ test("índice com valor null não vira zero nem célula vazia", async () => {
 
 test("coleta com displayable false mostra a contagem e não mostra octantes", async () => {
   mockRelatorio(relatorio({
-    coletas: [coleta({ displayable: false, response_count: 3, octantes: { oc1: 4 } })],
+    coletas: [coleta({ displayable: false, response_count: 3 })],
   }));
   renderApp("/ciclos/c1/relatorio");
   expect(await screen.findByText(/3 respostas/)).toBeInTheDocument();
-  expect(screen.queryByText(/oc1/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/rótulo simulado/i)).not.toBeInTheDocument();
+});
+
+test("o rótulo do octante é o que a API mandou, não um mapa fixo na tela", async () => {
+  // "oc9" não existe em qti_config.json de verdade — se a tela tivesse seu
+  // próprio mapa código→rótulo copiado de lá, esse código não constaria nele
+  // e o rótulo fictício abaixo não apareceria como veio.
+  mockRelatorio(relatorio({
+    coletas: [coleta({ octantes: [{ octant: "oc9", label: "Rótulo Fictício Só Para Este Teste", value: 2 }] })],
+  }));
+  renderApp("/ciclos/c1/relatorio");
+  expect(await screen.findByText(/rótulo fictício só para este teste/i)).toBeInTheDocument();
 });
 
 test("ciclo em andamento não mostra data vazia", async () => {
   mockRelatorio(relatorio({ ciclo: { ...CICLO, encerrado_em: null } }));
   renderApp("/ciclos/c1/relatorio");
   expect(await screen.findByText(/em andamento/i)).toBeInTheDocument();
+});
+
+test("nenhuma aula do ciclo foi classificada ainda: a tabela só tem Data e Situação", async () => {
+  mockRelatorio(relatorio({
+    trajetoria: [
+      aula({ aula_id: "a1", lesson_date: "2026-03-01", status: "DRAFT", indices: [] }),
+      aula({ aula_id: "a2", lesson_date: "2026-03-08", status: "AUDIO_IMPORTED", indices: [] }),
+    ],
+  }));
+  renderApp("/ciclos/c1/relatorio");
+  await screen.findByText(/trajetória do ciclo/i);
+  const cabecalhos = screen.getAllByRole("columnheader").map((th) => th.textContent);
+  expect(cabecalhos).toEqual(["Data", "Situação"]);
 });
 
 test("sem coletas, a tela diz que a turma ainda não respondeu, sem role de alerta", async () => {

@@ -164,13 +164,15 @@ export interface TrajetoriaItem {
   indices: Indice[];
 }
 
+export interface OctanteValor { octant: string; label: string; value: number }
+
 export interface Coleta {
   id: string;
   coletado_em: string;
   origem: string;
   response_count: number;
   displayable: boolean;
-  octantes: Record<string, number>;
+  octantes: OctanteValor[];
 }
 
 export interface CicloRelatorio {
