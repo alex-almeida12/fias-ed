@@ -207,6 +207,26 @@ def aula_classificada_em(db, monkeypatch, aula_em):
 
 
 @pytest.fixture
+def ciclo_com_tres_aulas(db, monkeypatch, ciclo, aula_em, aula_classificada_em):
+    """Um ciclo (fixture `ciclo`: n_aulas_previstas=8) com três aulas em datas
+    crescentes — molde de `aula_em`/`aula_classificada_em` (mesmo desenho de
+    `aula_classificada`, mas com data escolhida). A do meio é classificada, com
+    IndicadorFIAS gravado; as outras duas ficam em DRAFT, sem índice nenhum —
+    é o que a Task 12 (relatório do ciclo) precisa para provar que uma aula
+    sem índices ainda entra na trajetória, com lista vazia.
+
+    Gravadas fora de ordem cronológica de propósito (a mais recente primeiro,
+    depois a mais antiga, depois a do meio): se a rota parasse de ordenar por
+    `lesson_date`, a ordem de inserção devolvida pelo banco já bastaria para
+    fazer `test_trajetoria_em_ordem_de_data` falhar — inserir em ordem
+    coincidiria com a ordem de data e deixaria esse teste sem provar nada."""
+    a3 = aula_em(ciclo, "2026-03-16")
+    a1 = aula_em(ciclo, "2026-03-02")
+    a2 = aula_classificada_em(ciclo, "2026-03-09")
+    return ciclo, [a1, a2, a3]
+
+
+@pytest.fixture
 def aula_avulsa_classificada(db, monkeypatch, aula_avulsa):
     """O mesmo molde de `aula_classificada`, mas fora de qualquer ciclo —
     `posicao_no_ciclo` tem de devolver "fora" para ela."""

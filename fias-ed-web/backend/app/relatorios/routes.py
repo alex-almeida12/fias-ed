@@ -43,10 +43,12 @@ from fias_ed_engine.rules import load_rules
 from app.audit import audit
 from app.auth.deps import Actor, current_actor
 from app.aulas.service import aula_payload, get_owned_aula
+from app.ciclos.service import aulas_do_ciclo, ciclo_do_professor
 from app.core.db import get_db
 from app.core.errors import AppError
 from app.fias.routes import indices_payload
-from app.models import ClassificacaoFIAS, InterpretacaoMTSS, RecomendacaoMTSS, Segmento, Triangulacao
+from app.models import (Ciclo, ClassificacaoFIAS, ColetaQTI, Disciplina, InterpretacaoMTSS,
+                        RecomendacaoMTSS, ResultadoQTI, Segmento, Triangulacao, Turma)
 from app.transcricao.service import texto_efetivo, transcricao_da_aula
 
 router = APIRouter()
@@ -162,4 +164,71 @@ def relatorio_da_aula(aula_id: uuid.UUID, actor: Actor = Depends(current_actor),
         "triangulacao": [_triangulacao_payload(t) for t in triangulacao],
         "interpretacoes": [_interpretacao_payload(i, segmentos) for i in interpretacoes],
         "recomendacoes": [_recomendacao_payload(r) for r in recomendacoes],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Task 12: GET /api/ciclos/{ciclo_id}/relatorio — o relatório do ciclo.
+#
+# Mostra a trajetória: os índices de cada aula do ciclo ao longo do tempo, e as
+# coletas do questionário. **Não diz se o professor melhorou.** O classificador
+# que produz esses índices tem taxa de erro sobre aula brasileira real ainda
+# não medida (seção 4 de docs/ESTADO_DE_VALIDACAO.md) — subtrair dois números
+# carregados dessa incerteza e chamar o resultado de progresso emprestaria ao
+# sistema uma autoridade que ele não tem sobre a prática de uma pessoa. Por
+# isso nenhum campo aqui compara começo e fim: nenhuma diferença, nenhuma
+# tendência, nenhum "subiu"/"desceu". Mostrar os números em ordem cronológica é
+# honesto; comparar por conta própria, não.
+#
+# Igual à rota da aula: só lê o que já foi gravado. Nenhuma tabela nova, nada
+# recalculado aqui.
+# ---------------------------------------------------------------------------
+
+
+def _ciclo_payload(ciclo: Ciclo, turma: Turma, disciplina: Disciplina) -> dict:
+    return {
+        "id": str(ciclo.id),
+        "turma": {"id": str(turma.id), "name": turma.name},
+        "disciplina": {"id": str(disciplina.id), "name": disciplina.name},
+        "n_aulas_previstas": ciclo.n_aulas_previstas,
+        "iniciado_em": ciclo.iniciado_em.isoformat(),
+        "encerrado_em": ciclo.encerrado_em.isoformat() if ciclo.encerrado_em else None,
+    }
+
+
+def _trajetoria(db: Session, ciclo: Ciclo, regras: dict) -> list[dict]:
+    # Uma entrada por aula do ciclo, em ordem de data (aulas_do_ciclo já ordena
+    # por lesson_date e depois created_at). Uma aula sem índices ainda entra,
+    # com lista vazia: ela faz parte da trajetória mesmo sem número, e omiti-la
+    # esconderia do professor que a aula existe.
+    return [{"aula_id": str(a.id), "lesson_date": a.lesson_date.isoformat(), "status": a.status,
+            "indices": indices_payload(db, a.id, regras)} for a in aulas_do_ciclo(db, ciclo)]
+
+
+def _coletas(db: Session, ciclo: Ciclo) -> list[dict]:
+    linhas = db.execute(
+        select(ColetaQTI, ResultadoQTI)
+        .join(ResultadoQTI, ResultadoQTI.coleta_id == ColetaQTI.id)
+        .where(ColetaQTI.ciclo_id == ciclo.id, ColetaQTI.deleted_at.is_(None))
+        .order_by(ColetaQTI.coletado_em)
+    ).all()
+    return [{"id": str(c.id), "coletado_em": c.coletado_em.isoformat(), "origem": c.origem,
+            "response_count": c.response_count, "displayable": c.displayable,
+            "octantes": r.octantes} for c, r in linhas]
+
+
+@router.get("/ciclos/{ciclo_id}/relatorio")
+def relatorio_do_ciclo(ciclo_id: uuid.UUID, actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
+    ciclo = ciclo_do_professor(db, actor, ciclo_id)
+    turma, disciplina = db.get(Turma, ciclo.turma_id), db.get(Disciplina, ciclo.disciplina_id)
+    regras = load_rules("fias_rules")
+    trajetoria = _trajetoria(db, ciclo, regras)
+
+    audit(db, actor, "ciclo", ciclo.id, "read")
+    db.commit()
+    return {
+        "ciclo": _ciclo_payload(ciclo, turma, disciplina),
+        "n_aulas_realizadas": len(trajetoria),
+        "trajetoria": trajetoria,
+        "coletas": _coletas(db, ciclo),
     }
