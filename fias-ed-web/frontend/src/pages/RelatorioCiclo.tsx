@@ -67,27 +67,34 @@ export function RelatorioCiclo() {
             <h2>Trajetória</h2>
             {dados.trajetoria.length === 0 && <p>Ainda não há aulas neste ciclo.</p>}
             {dados.trajetoria.length > 0 && (
-              <table className="table">
-                <caption>Trajetória do ciclo: uma linha por aula, na ordem em que aconteceram.</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Data</th>
-                    <th scope="col">Situação</th>
-                    {colunas.map((idx) => <th key={idx.codigo} scope="col">{idx.nome}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {dados.trajetoria.map((item) => (
-                    <tr key={item.aula_id}>
-                      <th scope="row">{formatDate(item.lesson_date)}</th>
-                      <td>{statusText(item.status)}</td>
-                      {item.indices.length === 0
-                        ? colunas.length > 0 && <td colSpan={colunas.length}>Ainda sem análise.</td>
-                        : item.indices.map((idx) => <td key={idx.codigo}>{formatValorIndice(idx.valor)}</td>)}
+              // Uma coluna por índice: em 360px a tabela não cabe (medido em
+              // navegador). A saída é rolagem contida à tabela — nunca um gráfico
+              // de linha, que afirmaria melhora que o sistema não afirma (ver
+              // brief da Task 15). Mesmo padrão de .tabela-rolante já usado na
+              // matriz de transições.
+              <div className="tabela-rolante">
+                <table className="table">
+                  <caption>Trajetória do ciclo: uma linha por aula, na ordem em que aconteceram.</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Data</th>
+                      <th scope="col">Situação</th>
+                      {colunas.map((idx) => <th key={idx.codigo} scope="col">{idx.nome}</th>)}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {dados.trajetoria.map((item) => (
+                      <tr key={item.aula_id}>
+                        <th scope="row">{formatDate(item.lesson_date)}</th>
+                        <td>{statusText(item.status)}</td>
+                        {item.indices.length === 0
+                          ? colunas.length > 0 && <td colSpan={colunas.length}>Ainda sem análise.</td>
+                          : item.indices.map((idx) => <td key={idx.codigo}>{formatValorIndice(idx.valor)}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
 

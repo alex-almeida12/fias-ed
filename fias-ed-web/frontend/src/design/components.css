@@ -32,7 +32,12 @@
 .field { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
 .field__label { font-family: var(--type-label-font); font-size: var(--type-label-size); font-weight: var(--type-label-weight);
   line-height: var(--type-label-line); }
-.field__input { min-height: 44px; padding: var(--space-2) var(--space-3); border: var(--border-hairline) solid var(--color-muted);
+/* Sem `width: 100%` o Chrome dimensiona um <select> pela opção mais larga (medido
+   em navegador: Turma/Disciplina do NovoCiclo, com nome de escola longo, estourava
+   a tela em 360px) e o <input type="file"> pelo texto nativo do controle. Ambos são
+   filhos de um flex column (`.field`), que já teria esticado os dois — a intrínseca
+   do próprio controle é o que ignorava isso. */
+.field__input { width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3); border: var(--border-hairline) solid var(--color-muted);
   border-radius: var(--radius-sm); font: inherit; color: var(--color-text); background: var(--color-white); }
 .field__input[aria-invalid="true"] { border-color: var(--color-error); }
 .field__error { margin: 0; color: var(--color-error); font-size: var(--type-caption-size); }
