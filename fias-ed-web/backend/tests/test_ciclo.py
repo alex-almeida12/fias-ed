@@ -1,7 +1,7 @@
 import datetime as dt
 
 from app.models import Ciclo
-from tests.helpers import login
+from tests.helpers import login, make_user
 
 
 def test_ciclo_nasce_aberto_e_com_o_numero_declarado(db, turma, disciplina, professor):
@@ -57,3 +57,16 @@ def test_encerrar_define_a_ultima_pela_aula_realmente_gravada(db, client, ciclo,
 
 def test_aula_fora_de_ciclo_devolve_fora(db, aula_avulsa, posicao):
     assert posicao(aula_avulsa) == "fora"
+
+
+def test_encerrar_ciclo_de_outro_professor_da_404(client_factory, db, ciclo):
+    """Lacuna pré-existente, achada de passagem na revisão da Task 12: as
+    três rotas que dependem de posse de ciclo (encerrar, relatório do ciclo,
+    importar QTI) compartilham `ciclo_do_professor`
+    (app/ciclos/service.py), mas só as duas últimas tinham teste de 404 para
+    ciclo alheio."""
+    make_user(db, "outro-professor-encerrar")
+    outro = client_factory()
+    login(outro, "outro-professor-encerrar")
+    r = outro.post(f"/api/ciclos/{ciclo.id}/encerrar")
+    assert r.status_code == 404

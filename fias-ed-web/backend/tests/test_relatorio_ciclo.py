@@ -7,7 +7,10 @@ classificador que produz os índices tem taxa de erro sobre aula brasileira
 real ainda não medida (seção 4 de docs/ESTADO_DE_VALIDACAO.md) — subtrair dois
 números carregados dessa incerteza e chamar o resultado de progresso
 emprestaria ao sistema uma autoridade que ele não tem sobre a prática de uma
-pessoa. `test_corpo_bruto_sem_veredito` é quem prova isso.
+pessoa. `test_corpo_so_tem_os_campos_esperados` e
+`test_corpo_bruto_sem_palavra_de_veredito` são quem prova isso — juntos,
+porque cobrem coisas diferentes: um pega campo novo (qualquer nome), o outro
+pega texto ruim dentro de um campo permitido.
 """
 import re
 
@@ -38,34 +41,55 @@ def test_declara_previstas_e_realizadas(cliente, ciclo_com_tres_aulas):
     assert corpo["n_aulas_realizadas"] == len(aulas) == 3
 
 
-def _chaves(obj) -> set[str]:
-    """Todas as chaves usadas em qualquer nível do JSON (corpo ou sub-objetos/listas)."""
-    chaves: set[str] = set()
-    if isinstance(obj, dict):
-        for k, v in obj.items():
-            chaves.add(k)
-            chaves |= _chaves(v)
-    elif isinstance(obj, list):
-        for item in obj:
-            chaves |= _chaves(item)
-    return chaves
-
-
-def test_corpo_bruto_sem_veredito(cliente, ciclo_com_tres_aulas):
-    """Nenhuma palavra de veredito no corpo bruto da resposta — mas uma
-    checagem só de vocabulário não basta: um campo `"variacao": ultimo -
-    primeiro` passaria batido por ela sem usar nenhuma dessas palavras (a
-    mutação 2 do brief da task provou isso). Por isso o teste também nega
-    explicitamente o NOME de qualquer campo derivado de comparação, e não só
-    as palavras no texto."""
+def test_corpo_bruto_sem_palavra_de_veredito(cliente, ciclo_com_tres_aulas):
+    """Nenhuma palavra de veredito no texto bruto da resposta. Cobre texto
+    dentro de um campo permitido — o que `test_corpo_so_tem_os_campos_esperados`
+    (abaixo) não cobre, porque olha só para nomes de chave, não para valores."""
     ciclo, _ = ciclo_com_tres_aulas
     resposta = cliente.get(f"/api/ciclos/{ciclo.id}/relatorio")
     assert resposta.status_code == 200
     assert not re.search(r"melhor|pior|evolu|progress|regred", resposta.text.lower())
 
-    chaves = {c.lower() for c in _chaves(resposta.json())}
-    for proibida in ("variacao", "diferenca", "delta", "tendencia", "trend", "comparacao"):
-        assert proibida not in chaves, proibida
+
+# Lista de permissão, não de proibição: uma lista negra de nomes proibidos
+# ("variacao", "diferenca", "delta"...) é jogo de adivinhação — a revisão
+# achou "resumo_numerico" em um minuto, e sempre existe um nome novo. Mesmo
+# mecanismo de app/core/logging.py (ALLOWED_FIELDS): lá uma lista fechada de
+# campos permitidos impede nome de pessoa ou texto de transcrição de vazar
+# para o log; aqui a mesma ideia protege honestidade científica em vez de
+# privacidade. É mais fácil enumerar o que PODE existir do que adivinhar tudo
+# que não pode: qualquer campo novo, com qualquer nome, quebra este teste, e
+# quem acrescentar um campo legítimo tem de atualizar a lista aqui
+# conscientemente — o comentário acima é o que lê nesse momento.
+CHAVES_TOPO = {"ciclo", "n_aulas_realizadas", "trajetoria", "coletas"}
+CHAVES_CICLO = {"id", "turma", "disciplina", "n_aulas_previstas", "iniciado_em", "encerrado_em"}
+CHAVES_TRAJETORIA = {"aula_id", "lesson_date", "status", "indices"}
+CHAVES_COLETA = {"id", "coletado_em", "origem", "response_count", "displayable", "octantes"}
+
+
+def test_corpo_so_tem_os_campos_esperados(cliente, ciclo_com_tres_aulas, coleta_em):
+    """O classificador que produz os índices tem taxa de erro sobre aula
+    brasileira real ainda não medida (seção 4 de docs/ESTADO_DE_VALIDACAO.md)
+    — por isso o sistema mostra os números em ordem cronológica mas nunca os
+    compara por conta própria (nenhuma diferença, tendência, "subiu"/"desceu").
+    Este teste é quem garante que nenhum campo novo, disfarçado de nome
+    inócuo, introduza essa comparação: o conjunto de chaves de cada nível do
+    corpo tem de ser EXATAMENTE o esperado, não apenas "sem as palavras
+    óbvias"."""
+    ciclo, _ = ciclo_com_tres_aulas
+    coleta_em(ciclo, "2026-03-05")  # sem isto corpo["coletas"] ficaria vazio e o loop abaixo não provaria nada
+    corpo = cliente.get(f"/api/ciclos/{ciclo.id}/relatorio").json()
+
+    assert set(corpo) == CHAVES_TOPO
+    assert set(corpo["ciclo"]) == CHAVES_CICLO
+
+    assert corpo["trajetoria"]  # a fixture grava 3 aulas — loop vazio não provaria nada
+    for item in corpo["trajetoria"]:
+        assert set(item) == CHAVES_TRAJETORIA
+
+    assert corpo["coletas"]
+    for coleta in corpo["coletas"]:
+        assert set(coleta) == CHAVES_COLETA
 
 
 def test_aula_sem_indices_aparece_na_trajetoria_com_lista_vazia(cliente, ciclo_com_tres_aulas):
@@ -84,15 +108,29 @@ def test_aula_sem_indices_aparece_na_trajetoria_com_lista_vazia(cliente, ciclo_c
         assert por_aula[str(a.id)]
 
 
-def test_coletas_em_ordem_de_coletado_em_com_octantes(cliente, ciclo_com_tres_aulas, coleta_em):
+def test_coletas_em_ordem_de_coletado_em_com_valores_gravados(cliente, ciclo_com_tres_aulas, coleta_em):
+    """Além da ordem, os valores de cada coleta têm de bater com o que foi
+    gravado para AQUELA linha, não com qualquer coleta do ciclo — displayable
+    varia entre as duas de propósito, para que um `SELECT` que cruzasse
+    ColetaQTI/ResultadoQTI de linhas diferentes tivesse uma chance real de ser
+    pego (antes deste teste, a única checagem era "octantes não vazio", que
+    não provava nada sobre qual octante pertence a qual coleta)."""
     ciclo, _ = ciclo_com_tres_aulas
-    coleta_em(ciclo, "2026-03-20")
-    coleta_em(ciclo, "2026-03-05")
+    c_tarde = coleta_em(ciclo, "2026-03-20", displayable=True)
+    c_cedo = coleta_em(ciclo, "2026-03-05", displayable=False)
 
     corpo = cliente.get(f"/api/ciclos/{ciclo.id}/relatorio").json()
     datas = [c["coletado_em"] for c in corpo["coletas"]]
     assert datas == ["2026-03-05", "2026-03-20"]
-    assert all(c["octantes"] for c in corpo["coletas"])
+
+    gravadas = {str(c_cedo.id): c_cedo, str(c_tarde.id): c_tarde}
+    assert {c["id"] for c in corpo["coletas"]} == set(gravadas)
+    for item in corpo["coletas"]:
+        gravada = gravadas[item["id"]]
+        assert item["origem"] == gravada.origem
+        assert item["response_count"] == gravada.response_count
+        assert item["displayable"] == gravada.displayable
+        assert item["octantes"]
 
 
 def test_ciclo_de_outro_professor_da_404(client_factory, db, ciclo_com_tres_aulas):
