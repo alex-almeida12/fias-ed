@@ -69,6 +69,30 @@ def test_derived_tables_consistent_with_engine():
     assert {r["pair_id"] for r in ds["triangulation"]} >= {"TRI_WARMTH"}
 
 
+def test_a_origem_do_qti_viaja_ate_o_dataset():
+    """Critério de aceite 12 da W3 (§13 da spec): a exportação traz a origem do
+    QTI declarada. O questionário entra por duas portas — estudantes
+    respondendo direto pelo link público, ou um relatório importado de outro
+    sistema — com vieses potencialmente diferentes; um dataset que misturasse
+    as duas sem marcar qual é qual impediria quem analisa de separá-las.
+
+    `build_dataset` não decide a origem, só a repassa: lê `qti_origin` do
+    item (o Web preenche a partir de `coleta.origem`) e, quando o item não
+    declara (chave ausente), grava None — a aula ainda existe no dataset
+    mesmo sem questionário, e a ausência é informação, não erro."""
+    com_origem = lesson()
+    com_origem["qti_origin"] = "IMPORTACAO_EXTERNA"
+    sem_origem = lesson(lid="01926b3e-7a1c-7c3e-9f00-000000000002")
+
+    ds = build_dataset([com_origem, sem_origem], include_text=False, exported_at="2026-09-21T12:00:00Z")
+    validate(ds)
+    origem_por_aula = {r["lesson_id"]: r["origem"] for r in ds["qti_results"]}
+    assert origem_por_aula == {
+        "01926b3e-7a1c-7c3e-9f00-000000000001": "IMPORTACAO_EXTERNA",
+        "01926b3e-7a1c-7c3e-9f00-000000000002": None,
+    }
+
+
 # ---- Defeito C: a qualificação do MTSS pelo QTI não chegava ao dataset --------
 
 def test_mtss_e_recommendations_trazem_qti_agreement():
@@ -198,7 +222,8 @@ def test_empty_table_has_header():
     assert csv.DictReader(io.StringIO(files["qti_responses.csv"])).fieldnames == \
         ["lesson_id", "response_index"] + [f"q{i}" for i in range(1, 25)]
     assert csv.DictReader(io.StringIO(files["qti_results.csv"])).fieldnames == \
-        ["lesson_id", "response_count", "displayable"] + [f"oc{i}" for i in range(1, 9)] + ["agency", "communion"]
+        ["lesson_id", "response_count", "displayable"] + [f"oc{i}" for i in range(1, 9)] + \
+        ["agency", "communion", "origem"]
     for t in TABLES:
         assert files[f"{t}.csv"].splitlines()[0] != "" and len(files[f"{t}.csv"].splitlines()) == 1
 
@@ -371,7 +396,8 @@ def test_aula_sem_versao_declarada_recusada():
 def test_export_version_acompanha_a_mudanca_de_significado_das_tabelas():
     """`intervals` e `indices` mudaram de grandeza com rules_version 2.0.0;
     um dataset 1.0.0 e um desta versão não se empilham. 2.2.0 (não 2.1.0):
-    `mtss`/`recommendations` ganharam a coluna `qti_agreement`."""
+    `mtss`/`recommendations` ganharam a coluna `qti_agreement`. 2.3.0 (não
+    2.2.1): `qti_results` ganhou a coluna `origem`."""
     ds = build_dataset([lesson()], include_text=False, exported_at="2026-09-21T12:00:00Z")
-    assert ds["manifest"]["export_version"] == "2.2.0"
+    assert ds["manifest"]["export_version"] == "2.3.0"
     assert ds["manifest"]["rules_version"] == RULES_VERSION

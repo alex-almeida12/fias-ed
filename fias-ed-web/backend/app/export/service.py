@@ -69,8 +69,7 @@ def _segments(db: Session, transcricao_id, *, include_text: bool) -> list[dict]:
     return out
 
 
-def _qti_responses(db: Session, aula: Aula) -> list[dict]:
-    coleta = coleta_vigente(db, aula)
+def _qti_responses(db: Session, coleta) -> list[dict]:
     if coleta is None:
         return []
     respostas = db.scalars(
@@ -88,10 +87,18 @@ def montar_dataset(db: Session, aulas: list[Aula], *, include_text: bool, export
     for aula in aulas:
         processamento = db.scalar(select(Processamento).where(Processamento.aula_id == aula.id))
         transcricao = transcricao_da_aula(db, aula.id)
+        # Calculada uma vez e reaproveitada nas duas leituras que dependem dela
+        # (as respostas e a origem), mesmo padrão de `fonte_silencio`/`pares`
+        # no motor: duas chamadas a `coleta_vigente` poderiam, em tese,
+        # divergir se o banco mudasse entre elas.
+        coleta = coleta_vigente(db, aula)
         item = {
             "lesson": _lesson(db, aula, processamento),
             "segments": _segments(db, transcricao.id, include_text=include_text),
-            "qti_responses": _qti_responses(db, aula),
+            "qti_responses": _qti_responses(db, coleta),
+            # Sem coleta vigente, None — a aula existe no dataset mesmo sem
+            # questionário, e a ausência é informação (Task 15b).
+            "qti_origin": coleta.origem if coleta is not None else None,
             "processing": {f: getattr(processamento, f) for f in _PROCESSING_FIELDS},
         }
         # Ausente (None) quando a aula não tem evidência de fala gravada —

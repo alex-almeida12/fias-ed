@@ -1,7 +1,9 @@
 """Exportação do dataset de uma ou mais aulas (JSON e ZIP de CSVs). Sem áudio, sem texto por padrão.
 
 Cada item de `lessons` traz `lesson`, `segments`, `qti_responses`, `processing`
-e, opcionalmente, `speech`: a linha do tempo de fala do diarizador
+e, opcionalmente, `qti_origin` (a procedência do questionário: `COLETA_NATIVA`
+ou `IMPORTACAO_EXTERNA`, ausente quando a aula não tem coleta vigente) e
+`speech`: a linha do tempo de fala do diarizador
 (`list[SpeechSpan]`), a mesma evidência que a tela do professor usa para medir
 silêncio. Sem ela o motor cai nos próprios segmentos do ASR e mede outra coisa —
 o dataset diria SC ≈ 0,0038 para a aula em que a tela mostra 0,0725 —, então
@@ -51,7 +53,16 @@ from .triangulation import triangulate
 # existente mudou de significado, e as duas novas são aditivas — quem lia
 # `mtss.csv`/`recommendations.csv` antes desta versão continua lendo as mesmas
 # colunas com os mesmos valores, só com uma coluna a mais no fim.
-EXPORT_VERSION = "2.2.0"
+#
+# 2.3.0: `qti_results` ganhou a coluna `origem` — a procedência do
+# questionário (critério de aceite 12 da W3, §13 da spec): estudantes
+# respondendo direto pelo link público (`COLETA_NATIVA`) ou um relatório
+# importado de outro sistema (`IMPORTACAO_EXTERNA`), `None` quando a aula não
+# tem coleta vigente. São situações de coleta com vieses potencialmente
+# diferentes; um dataset que mistura as duas sem marcar qual é qual impede
+# quem analisa de separá-las — e impede até de perceber que precisaria
+# separar. Aditiva, como 2.2.0: nenhuma coluna existente mudou de valor.
+EXPORT_VERSION = "2.3.0"
 TABLES = ("lessons", "segments", "intervals", "matrix", "indices", "qti_responses",
           "qti_results", "mtss", "recommendations", "triangulation")
 _LESSON_FIELDS = ("lesson_id", "lesson_date", "disciplina", "turma_id", "duration_ms", "transcript_source")
@@ -84,7 +95,7 @@ TABLE_FIELDS: dict[str, tuple[str, ...]] = {
     "matrix": ("lesson_id", "from_category", "to_category", "count"),
     "indices": ("lesson_id", "index_id", "value", "reason", "numerator_count", "denominator_count", "validation_status"),
     "qti_responses": ("lesson_id", "response_index", *(f"q{i}" for i in range(1, 25))),
-    "qti_results": ("lesson_id", "response_count", "displayable", *(f"oc{i}" for i in range(1, 9)), "agency", "communion"),
+    "qti_results": ("lesson_id", "response_count", "displayable", *(f"oc{i}" for i in range(1, 9)), "agency", "communion", "origem"),
     "mtss": ("lesson_id", "rule_id", "tier1_dimension", "framing", "validation_status", "rules_version", "qti_agreement"),
     "recommendations": ("lesson_id", "recommendation_id", "rule_id", "validation_status", "qti_agreement"),
     "triangulation": ("lesson_id", "pair_id", "fias_value", "qti_available", "qti_values"),
@@ -203,7 +214,12 @@ def build_dataset(lessons: list[dict], include_text: bool, exported_at: str) -> 
                                 for n, a in enumerate(answers)]
         ds["qti_results"].append({"lesson_id": lid, "response_count": qti["response_count"], "displayable": qti["displayable"],
                                   **{f"oc{i}": (qti["octants"] or {}).get(f"oc{i}") for i in range(1, 9)},
-                                  "agency": qti["agency"], "communion": qti["communion"]})
+                                  "agency": qti["agency"], "communion": qti["communion"],
+                                  # A procedência do questionário: quem monta o item declara em
+                                  # `qti_origin` (o Web lê `coleta.origem` da coleta vigente); sem
+                                  # coleta vigente, ausente, e `.get` devolve None — a aula ainda
+                                  # entra no dataset, só sem questionário.
+                                  "origem": item.get("qti_origin")})
         ds["mtss"] += [{"lesson_id": lid, "rule_id": f["rule_id"], "tier1_dimension": f["tier1_dimension"],
                         "framing": f["framing"], "validation_status": f["validation_status"],
                         "rules_version": f["rules_version"], "qti_agreement": f["qti_agreement"]}

@@ -8,12 +8,12 @@ VIGENTE (não qualquer coleta, `coleta_vigente`, o mesmo que a triangulação e 
 MTSS usam), a evidência de fala do diarizador quando existe, e nunca captura
 `ExportPrivacyError` — e nunca calcula nada por conta própria.
 """
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
 from app.export.service import montar_dataset
-from app.models import RespostaQTI
+from app.models import ColetaQTI, RespostaQTI, ResultadoQTI
 from app.pipeline.estados import avancar
 from fias_ed_engine.export import TABLES, ExportPrivacyError
 
@@ -92,6 +92,45 @@ def test_aula_sem_coleta_vigente_dataset_sai_sem_erro(db, aula_avulsa_classifica
     valores = {r["qti_agreement"] for r in ds["mtss"]}
     assert valores <= {"no_qti", "unpaired"}, valores
     assert "no_qti" in valores
+
+
+# ---- Task 15b: a procedência do QTI (critério de aceite 12 da W3, §13 da spec) --
+
+
+def test_aula_com_coleta_importada_sai_com_origem_importacao_externa(db, ciclo, aula_classificada):
+    """O questionário entra por duas portas: estudantes respondendo direto
+    pelo link público, ou um relatório importado de outro sistema. A fixture
+    `coleta_em` (conftest.py) só grava `origem="COLETA_NATIVA"` — testar só com
+    ela provaria apenas que uma constante bate com ela mesma. Para provar que
+    o campo viaja de verdade, a coleta é gravada direto via `db` com a outra
+    origem, como o teste do octante fictício já faz em test_relatorio_ciclo.py.
+
+    `aula_classificada` vive no ciclo da fixture `ciclo` (fixtures cacheadas
+    por teste), então a coleta gravada aqui é a que `coleta_vigente` escolhe
+    para ela."""
+    coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=date.fromisoformat("2026-09-01"),
+                       origem="IMPORTACAO_EXTERNA", response_count=12, displayable=True,
+                       qti_config_version="1.0.0")
+    db.add(coleta)
+    db.flush()
+    db.add(ResultadoQTI(coleta_id=coleta.id, octantes={f"oc{i}": 3.0 for i in range(1, 9)},
+                        agency=0.0, communion=0.0))
+    db.commit()
+    _gravar_respostas(db, coleta)
+    avancar(db, aula_classificada)
+    db.refresh(aula_classificada)
+
+    ds = montar_dataset(db, [aula_classificada], include_text=False, exported_at="2026-09-24T12:00:00Z")
+    assert ds["qti_results"][0]["origem"] == "IMPORTACAO_EXTERNA"
+
+
+def test_aula_sem_coleta_vigente_sai_com_origem_none(db, aula_avulsa_classificada):
+    """Mesma aula do teste de `qti_responses` vazio acima, agora olhando
+    `origem`: sem coleta vigente, `None` — a ausência é informação, não erro
+    (não pode haver KeyError nem uma string vazia no lugar)."""
+    ds = montar_dataset(db, [aula_avulsa_classificada], include_text=False,
+                        exported_at="2026-09-24T12:00:00Z")
+    assert ds["qti_results"][0]["origem"] is None
 
 
 def test_include_text_false_nao_traz_texto_em_nenhum_segmento(db, ciclo_completo):
