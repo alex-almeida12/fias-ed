@@ -115,3 +115,20 @@ def test_speech_ausente_registra_que_o_silencio_caiu_nos_segmentos(db, ciclo_com
     próprios segmentos e declara isso em `silence_source`."""
     ds = montar_dataset(db, [ciclo_completo], include_text=False, exported_at="2026-09-24T12:00:00Z")
     assert ds["lessons"][0]["silence_source"] == "asr_segments"
+
+
+def test_usa_a_coleta_vigente_e_nao_uma_posterior_a_aula(db, ciclo, coleta_em, ciclo_completo):
+    """Lacuna encontrada por mutação: trocar `coleta_vigente` por "a coleta mais
+    recente do ciclo" não derrubava nenhum teste, porque o ciclo da fixture só
+    tem uma coleta.
+
+    Um dataset que usasse a coleta mais recente compararia a aula com uma
+    percepção medida DEPOIS dela — uma opinião que ainda não existia quando a
+    aula aconteceu. As respostas desta coleta posterior valem 5; as da vigente,
+    3. É por isso que a asserção olha o valor: contar respostas não distingue
+    as duas, já que ambas têm 12."""
+    posterior = coleta_em(ciclo, "2026-12-01")
+    _gravar_respostas(db, posterior, valor=5)
+
+    ds = montar_dataset(db, [ciclo_completo], include_text=False, exported_at="2026-09-24T12:00:00Z")
+    assert {linha["q1"] for linha in ds["qti_responses"]} == {3}
