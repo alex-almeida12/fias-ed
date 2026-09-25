@@ -1,6 +1,8 @@
 import { screen } from "@testing-library/react";
 import { expect, test } from "vitest";
+import type { QtiAgreement } from "../api/types";
 import { jsonResponse, mockApi, PROFESSORA, renderApp } from "../test-utils";
+import { textoConcordancia } from "./RelatorioAula";
 
 const RELATORIO = "GET /api/aulas/a1/relatorio";
 
@@ -137,6 +139,28 @@ test("recomendação sem par de triangulação não parece erro", async () => {
   renderApp("/aulas/a1/relatorio");
   await screen.findByText(/recomendação isolada/i);
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  // Não basta não ser alerta: o texto ao lado tem que ser o de "unpaired", não
+  // um genérico que colapsaria os cinco estados numa única mensagem.
+  expect(screen.getByText(textoConcordancia("unpaired", "Esta recomendação"))).toBeInTheDocument();
+});
+
+test("cada um dos cinco estados de concordância mostra o texto correspondente, não um genérico", async () => {
+  // achado da revisão: os 7 testes anteriores passavam mesmo com as cinco
+  // mensagens colapsadas numa string só ("Concordância registrada."), porque
+  // nenhum comparava o texto exibido contra o que textoConcordancia devolve.
+  const estados: QtiAgreement[] = ["agree", "disagree", "inconclusive", "unpaired", "no_qti"];
+  mockRelatorio(relatorio({
+    interpretacoes: estados.map((qti_agreement, i) => interpretacao({
+      rule_id: `RULE_${i}`, tier1_dimension: `Dimensão ${i}`, qti_agreement,
+      // divergence_question fora do escopo deste teste: já coberta em teste próprio.
+      divergence_question: null,
+    })),
+  }));
+  renderApp("/aulas/a1/relatorio");
+  await screen.findByText(/dimensão 0/i);
+  for (const estado of estados) {
+    expect(screen.getByText(textoConcordancia(estado, "Esta interpretação"))).toBeInTheDocument();
+  }
 });
 
 test("aula que ainda não chegou mostra a mensagem do servidor, não um texto genérico", async () => {

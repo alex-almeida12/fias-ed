@@ -19,7 +19,7 @@ function formatNumero(valor: number | null): string {
 // da Task 11, tabela "cada estado precisa ser legível"). `unpaired` e `no_qti`
 // não são falha: são leitura normal quando não há par de triangulação ou
 // quando a turma ainda não respondeu ao questionário.
-function textoConcordancia(valor: QtiAgreement, sujeito: string): string {
+export function textoConcordancia(valor: QtiAgreement, sujeito: string): string {
   switch (valor) {
     case "agree": return "As duas evidências apontam na mesma direção.";
     case "disagree": return "As duas evidências divergem.";
@@ -110,6 +110,10 @@ export function RelatorioAula() {
             <ul className="list">
               {dados.triangulacao.map((par) => (
                 <li key={par.pair_id} className="list__item observacao">
+                  {/* A pergunta abre o item: ela nomeia o que está sendo comparado
+                     (achado de usabilidade da revisão da Task 11) — sem ela, o
+                     professor lê um número antes de saber do que ele trata. */}
+                  <p>{par.reflection_question}</p>
                   <p className="meta">Medição da aula: {formatNumero(par.fias.value)}</p>
                   {par.qti_available ? (
                     <ul>
@@ -120,7 +124,6 @@ export function RelatorioAula() {
                   ) : (
                     <Banner>A turma ainda não respondeu ao questionário.</Banner>
                   )}
-                  <p>{par.reflection_question}</p>
                 </li>
               ))}
             </ul>
