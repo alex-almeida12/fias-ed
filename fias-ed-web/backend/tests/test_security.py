@@ -6,7 +6,13 @@ import pytest
 from app.main import create_app
 from tests.helpers import login, make_user
 
-PUBLIC = {("POST", "/api/auth/login"), ("GET", "/api/health")}
+# As três rotas de app/publico/routes.py são as únicas portas do sistema sem
+# autenticação (§10 da spec) — não vivem sob /api de propósito (main.py). Cada
+# entrada aqui é uma decisão de segurança explícita: nenhuma outra rota deve
+# ser acrescentada a este conjunto sem a mesma revisão que estas três tiveram.
+PUBLIC = {("POST", "/api/auth/login"), ("GET", "/api/health"),
+         ("GET", "/publico/qti/{token}"), ("POST", "/publico/qti/{token}/consentir"),
+         ("POST", "/publico/qti/{token}/responder")}
 MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
 _HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 
@@ -15,9 +21,13 @@ def _routes():
     # app.routes é uma lista de _IncludedRouter (wrappers internos do FastAPI 0.141) e não expõe
     # method/path diretamente nem o prefixo "/api" nos objetos aninhados. app.openapi() é a API
     # pública e estável que já resolve tudo isso (funciona mesmo com openapi_url=None).
+    #
+    # /publico entra aqui também: são as únicas rotas do sistema fora de /api, e se ficassem de
+    # fora desta coleta nunca seriam varridas por este teste nem por PUBLIC — a isenção delas
+    # deixaria de ser uma decisão registrada e passaria a ser um buraco silencioso.
     schema = create_app().openapi()
     for path, operations in schema["paths"].items():
-        if not path.startswith("/api"):
+        if not (path.startswith("/api") or path.startswith("/publico")):
             continue
         for method in operations:
             if method in _HTTP_METHODS:

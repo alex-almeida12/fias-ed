@@ -56,6 +56,15 @@ def client(client_factory):
     return client_factory()
 
 
+@pytest.fixture
+def client_publico(client_factory):
+    """Como `client`, mas documentando a garantia das rotas públicas: nunca
+    faz login e nunca envia cabeçalho de CSRF. `client` já nasce assim (só
+    ganha os dois depois de `login()`); este fixture só torna essa garantia
+    legível nos testes de `test_rotas_publicas.py`."""
+    return client_factory()
+
+
 @pytest.fixture(scope="session")
 def migrator_engine():
     command.upgrade(alembic_config(), "head")
