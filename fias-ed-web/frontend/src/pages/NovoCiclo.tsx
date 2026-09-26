@@ -37,7 +37,7 @@ export function NovoCiclo() {
     try {
       await api("/ciclos", { method: "POST", json: {
         turma_id: turmaId, disciplina_id: disciplinaId, n_aulas_previstas: n, iniciado_em: inicio } });
-      navigate("/aulas");
+      navigate("/ciclos");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível começar o acompanhamento.");
       setEnviando(false);

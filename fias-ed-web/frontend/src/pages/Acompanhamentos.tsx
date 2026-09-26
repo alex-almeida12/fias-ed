@@ -1,19 +1,41 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api, ApiError } from "../api/client";
 import type { Ciclo } from "../api/types";
 import { formatDate } from "../app/format";
 import { Banner } from "../design/components/Banner";
+import { Button } from "../design/components/Button";
+import { Dialog } from "../design/components/Dialog";
 import { EmptyState } from "../design/components/EmptyState";
 
 export function Acompanhamentos() {
   const [acompanhamentos, setAcompanhamentos] = useState<Ciclo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [encerrando, setEncerrando] = useState<Ciclo | null>(null);
 
-  useEffect(() => {
-    api<Ciclo[]>("/ciclos").then(setAcompanhamentos).catch((err) =>
+  // Reaproveitada após encerrar (Task 18): a resposta de POST /ciclos/{id}/encerrar não tem o
+  // formato de Ciclo (traz turma_id/disciplina_id, não os objetos turma/disciplina) — em vez de
+  // remontar a lista a partir dela, buscamos a lista de novo pela rota já testada.
+  const carregar = useCallback(() => {
+    return api<Ciclo[]>("/ciclos").then(setAcompanhamentos).catch((err) =>
       setError(err instanceof ApiError ? err.message : "Não foi possível carregar os acompanhamentos. Recarregue a página."));
   }, []);
+
+  useEffect(() => {
+    void carregar();
+  }, [carregar]);
+
+  async function encerrar() {
+    const alvo = encerrando!;
+    setEncerrando(null);
+    setError(null);
+    try {
+      await api(`/ciclos/${alvo.id}/encerrar`, { method: "POST" });
+      await carregar();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Não foi possível encerrar o acompanhamento.");
+    }
+  }
 
   const comecar = <Link className="btn btn--primary" to="/ciclos/novo">Começar um acompanhamento</Link>;
 
@@ -46,11 +68,30 @@ export function Acompanhamentos() {
                   <Link to={`/ciclos/${c.id}/relatorio`}>Ver o acompanhamento</Link>
                   {" · "}
                   <Link to={`/ciclos/${c.id}/qti`}>Enviar o relatório do questionário</Link>
+                  {!c.encerrado_em && (
+                    <>
+                      {" · "}
+                      <Button variant="tertiary" onClick={() => setEncerrando(c)}>Encerrar acompanhamento</Button>
+                    </>
+                  )}
                 </p>
               </div>
             </li>
           ))}
         </ul>
+      )}
+      {encerrando && (
+        <Dialog title={`Encerrar o acompanhamento de ${encerrando.turma.name}?`} onClose={() => setEncerrando(null)}
+          actions={<>
+            <Button variant="tertiary" onClick={() => setEncerrando(null)}>Cancelar</Button>
+            <Button onClick={() => void encerrar()}>Confirmar encerramento</Button>
+          </>}>
+          <p>
+            A última aula passa a precisar do questionário respondido pelos estudantes para gerar o relatório —
+            é ela que fecha a comparação com o começo.
+          </p>
+          <p>Isto não pode ser desfeito por aqui.</p>
+        </Dialog>
       )}
     </>
   );

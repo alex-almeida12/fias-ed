@@ -30,6 +30,22 @@ test("o professor declara quantas aulas vai acompanhar", async () => {
   });
 });
 
+test("criar um acompanhamento leva para /ciclos", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/turmas": () => jsonResponse([TURMA]),
+    "GET /api/disciplinas": () => jsonResponse([DISCIPLINA]),
+    "POST /api/ciclos": () => jsonResponse(CICLO, 201),
+    "GET /api/ciclos": () => jsonResponse([]),
+  });
+  renderApp("/ciclos/novo");
+  await screen.findByRole("option", { name: /9º B/ });
+  await userEvent.selectOptions(screen.getByLabelText(/turma/i), "t1");
+  await userEvent.selectOptions(screen.getByLabelText(/disciplina/i), "d1");
+  await userEvent.click(screen.getByRole("button", { name: /começar/i }));
+  expect(await screen.findByRole("heading", { name: "Meus acompanhamentos" })).toBeInTheDocument();
+});
+
 test("a tela não usa vocabulário de avaliação", async () => {
   mockApi({
     "GET /api/auth/me": () => jsonResponse(PROFESSORA),
