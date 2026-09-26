@@ -5,6 +5,9 @@ para que ninguém acrescente uma rota autenticada aqui por engano, nem o
 contrário. Nada que identifique o professor ou a turma sai daqui: quem abre o
 link vê as 24 perguntas e a escala, e mais nada.
 """
+import hashlib
+import hmac
+
 from fastapi import APIRouter, Depends, Request, Response
 from fias_ed_engine.qti import IncompleteResponseError, QtiImportError, aggregate, score_response
 from fias_ed_engine.rules import load_rules
@@ -20,16 +23,31 @@ from app.qti.links import link_valido
 
 router = APIRouter()
 
-# Cookie do navegador do estudante, sem identidade nenhuma: guarda só os ids
-# de LinkQTI para os quais este navegador já consentiu, nesta sessão (sem
-# max_age — morre quando o navegador fecha). Não é gravado no banco e não
-# tem ligação nenhuma com RespostaQTI: é só o que autoriza a própria
-# requisição de responder a seguir, exatamente como pedido no design ("o
-# consentimento fica na sessão do navegador, não no banco ligado à
-# resposta"). Path restrito a /publico para não se misturar com o cookie de
-# sessão do professor.
+# Cookie do navegador do estudante, sem identidade nenhuma: guarda, para cada
+# LinkQTI ao qual este navegador já consentiu nesta sessão (sem max_age —
+# morre quando o navegador fecha), um HMAC-SHA256 do `link.id` chaveado por
+# `link.token_hash` — nunca o `link.id` cru. `token_hash` já é um segredo por
+# link, já vive no banco e nunca sai dele; não introduzimos chave de
+# aplicação nova (não há `secret_key` em `Settings`, e criar uma significa
+# variável de ambiente nova e um jeito de invalidar consentimento em
+# andamento). Sem a assinatura, quem só sabe o `link.id` (que nem chega ao
+# estudante, mas não é o único jeito de alguém obtê-lo) conseguiria forjar o
+# cookie e gravar resposta sem nunca passar por `/consentir` — achado da
+# verificação final da fatia, 2026-09-26. Não é gravado no banco e não tem
+# ligação nenhuma com RespostaQTI: é só o que autoriza a própria requisição
+# de responder a seguir, exatamente como pedido no design ("o consentimento
+# fica na sessão do navegador, não no banco ligado à resposta"). Path
+# restrito a /publico para não se misturar com o cookie de sessão do
+# professor.
 COOKIE_CONSENTIMENTO = "fias_qti_consentimento"
 _COOKIE_KWARGS = {"httponly": True, "secure": True, "samesite": "strict", "path": "/publico"}
+
+
+def _valor_consentimento(link: LinkQTI) -> str:
+    """HMAC-SHA256 do `link.id`, chaveado por `link.token_hash`. Quem tem o
+    token consegue calcular este valor — mas quem tem o token já pode chamar
+    `/consentir` do jeito certo, então isso não é perda nenhuma."""
+    return hmac.new(link.token_hash.encode("utf-8"), str(link.id).encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def _link_invalido() -> AppError:
@@ -40,14 +58,15 @@ def _link_invalido() -> AppError:
     return AppError(404, "LINK_INVALIDO", "Este link não está mais disponível.")
 
 
-def _consentiu_na_sessao(request: Request, link_id) -> bool:
-    ids = request.cookies.get(COOKIE_CONSENTIMENTO, "").split(",")
-    return str(link_id) in ids
+def _consentiu_na_sessao(request: Request, link: LinkQTI) -> bool:
+    esperado = _valor_consentimento(link)
+    valores = request.cookies.get(COOKIE_CONSENTIMENTO, "").split(",")
+    return any(hmac.compare_digest(v, esperado) for v in valores)
 
 
-def _marcar_consentimento_na_sessao(request: Request, response: Response, link_id) -> None:
+def _marcar_consentimento_na_sessao(request: Request, response: Response, link: LinkQTI) -> None:
     atuais = {v for v in request.cookies.get(COOKIE_CONSENTIMENTO, "").split(",") if v}
-    atuais.add(str(link_id))
+    atuais.add(_valor_consentimento(link))
     response.set_cookie(COOKIE_CONSENTIMENTO, ",".join(atuais), **_COOKIE_KWARGS)
 
 
@@ -91,7 +110,7 @@ def consentir(token: str, body: ConsentirIn, request: Request, response: Respons
         raise _link_invalido()
     _registrar_consentimento(db, link.coleta_id, body.documento_versao)
     db.commit()
-    _marcar_consentimento_na_sessao(request, response, link.id)
+    _marcar_consentimento_na_sessao(request, response, link)
     return {"ok": True}
 
 
@@ -100,7 +119,7 @@ def responder(token: str, body: ResponderIn, request: Request, db: Session = Dep
     link = link_valido(db, token)
     if link is None:
         raise _link_invalido()
-    if not _consentiu_na_sessao(request, link.id):
+    if not _consentiu_na_sessao(request, link):
         raise AppError(409, "QTI_CONSENTIMENTO_AUSENTE", "É preciso aceitar o convite antes de responder.")
 
     try:

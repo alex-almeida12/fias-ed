@@ -10,6 +10,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.core.db import SessionLocal, get_engine
 from app.models import ConsentimentoQTI, LinkQTI, RespostaQTI
+from app.publico.routes import COOKIE_CONSENTIMENTO, _valor_consentimento
 from app.qti.links import criar_link, revogar
 
 RESPOSTAS = {str(i): 4 for i in range(1, 25)}
@@ -232,3 +233,84 @@ def test_as_rotas_publicas_nao_exigem_login(db, client_publico, coleta_nativa):
     assert client_publico.get(f"/publico/qti/{token}").status_code == 200
     assert client_publico.post(f"/publico/qti/{token}/consentir",
                                json={"documento_versao": "1.0.0"}).status_code == 201
+
+
+def test_cookie_forjado_com_o_link_id_cru_e_recusado(db, client_publico, coleta_nativa):
+    """A razão desta tarefa (achado da verificação final, 2026-09-26): antes
+    do HMAC, `_consentiu_na_sessao` comparava o `link.id` cru contra o
+    cookie. O estudante não recebe o `link.id` em resposta nenhuma, mas quem
+    o obtivesse por outro meio gravava resposta sem nunca passar por
+    `/consentir` — e a coleta ficava com `aceites = 0` e uma resposta
+    registrada. As duas afirmações importam: o 409 sozinho não prova que
+    nada entrou."""
+    link, token = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    client_publico.cookies.set(COOKIE_CONSENTIMENTO, str(link.id))
+    r = client_publico.post(f"/publico/qti/{token}/responder", json={"respostas": RESPOSTAS})
+    assert r.status_code == 409
+    assert db.query(RespostaQTI).count() == 0
+
+
+def test_o_valor_de_consentimento_de_um_link_nao_vale_para_outro(db, client_publico, coleta_nativa):
+    """O que impede o HMAC de virar uma senha universal: ele é uma função do
+    par (link.id, link.token_hash), não só do id. Consentir no link A e
+    tentar usar o valor resultante no link B tem que ser recusado do mesmo
+    jeito que o cookie cru era."""
+    link_a, token_a = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    link_b, token_b = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+
+    client_publico.post(f"/publico/qti/{token_a}/consentir", json={"documento_versao": "1.0.0"})
+    valor_de_a = _valor_consentimento(link_a)
+    assert valor_de_a in client_publico.cookies.get(COOKIE_CONSENTIMENTO, "").split(",")
+
+    client_publico.cookies.set(COOKIE_CONSENTIMENTO, valor_de_a)
+    r = client_publico.post(f"/publico/qti/{token_b}/responder", json={"respostas": RESPOSTAS})
+    assert r.status_code == 409
+    assert db.query(RespostaQTI).count() == 0
+
+
+def test_o_cookie_emitido_nao_contem_o_link_id(db, client_publico, coleta_nativa):
+    """O ganho de graça do HMAC: o cookie deixa de carregar o `link.id` em
+    formato nenhum. Compara contra o id de verdade (não contra um literal
+    escrito à mão), para o teste continuar valendo se o formato do id mudar."""
+    token = _token(db, coleta_nativa)
+    r = client_publico.post(f"/publico/qti/{token}/consentir", json={"documento_versao": "1.0.0"})
+    link = db.query(LinkQTI).one()
+    cookie_emitido = r.cookies.get(COOKIE_CONSENTIMENTO)
+    assert cookie_emitido is not None
+    assert str(link.id) not in cookie_emitido.split(",")
+
+
+def test_o_hmac_depende_do_token_hash_e_nao_so_do_id():
+    """Fora do brief original desta tarefa: a verificação de mutação pedida
+    para o teste 3 ("troque `link.token_hash` por uma chave fixa") não o
+    derruba, porque a mensagem do HMAC já é `link.id` — dois `id`s diferentes
+    já produzem valores diferentes com QUALQUER chave, fixa ou não. O teste 3
+    prova então uma propriedade mais fraca do que a decisão do pesquisador
+    precisa: que o `id` participa do cálculo, não que o `token_hash`
+    participa. Este teste unitário fecha essa lacuna diretamente: dois
+    objetos com o MESMO `id` e `token_hash` diferentes (não dá para
+    persistir dois `LinkQTI` com o mesmo id de verdade — é chave primária —
+    então o duplo local é a forma de isolar só essa variável) têm que
+    produzir valores diferentes. Sob a mutação "chave fixa", ele falha; sob o
+    código real, passa."""
+    from types import SimpleNamespace
+    link_1 = SimpleNamespace(id="11111111-1111-1111-1111-111111111111", token_hash="hash-a")
+    link_2 = SimpleNamespace(id="11111111-1111-1111-1111-111111111111", token_hash="hash-b")
+    assert _valor_consentimento(link_1) != _valor_consentimento(link_2)
+
+
+def test_um_navegador_com_dois_links_consentidos_responde_aos_dois(db, client_publico, coleta_nativa):
+    """A lista de valores no cookie não pode ter virado campo único: um
+    estudante que responde a dois questionários no mesmo navegador precisa
+    continuar conseguindo consentir e responder aos dois."""
+    token_a = _token(db, coleta_nativa)
+    token_b = _token(db, coleta_nativa)
+
+    client_publico.post(f"/publico/qti/{token_a}/consentir", json={"documento_versao": "1.0.0"})
+    client_publico.post(f"/publico/qti/{token_b}/consentir", json={"documento_versao": "1.0.0"})
+
+    assert client_publico.post(f"/publico/qti/{token_a}/responder",
+                               json={"respostas": RESPOSTAS}).status_code == 201
+    assert client_publico.post(f"/publico/qti/{token_b}/responder",
+                               json={"respostas": RESPOSTAS}).status_code == 201
+    assert db.query(RespostaQTI).count() == 2
