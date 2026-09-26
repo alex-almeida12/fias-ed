@@ -49,6 +49,28 @@ from app.models import Aula, Ciclo, ColetaQTI, RespostaQTI, ResultadoQTI, utcnow
 from app.pipeline.estados import avancar
 
 
+def coleta_nativa_do_dia(db: Session, ciclo: Ciclo, data: dt.date) -> ColetaQTI:
+    """A coleta nativa daquela data, criada se ainda não existir. Gerar um
+    segundo link para o mesmo dia reusa a coleta: duas coletas vivas na mesma
+    data fariam a triangulação escolher arbitrariamente qual vale, que é o
+    mesmo defeito que a reimportação já evita do outro lado."""
+    existente = db.execute(
+        select(ColetaQTI).where(ColetaQTI.ciclo_id == ciclo.id,
+                                ColetaQTI.coletado_em == data,
+                                ColetaQTI.origem == "COLETA_NATIVA",
+                                ColetaQTI.deleted_at.is_(None))
+    ).scalars().first()
+    if existente is not None:
+        return existente
+    cfg = load_rules("qti_config")
+    coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=data, origem="COLETA_NATIVA",
+                       response_count=0, displayable=False,
+                       qti_config_version=cfg["rules_version"], cabecalho_recebido=None)
+    db.add(coleta)
+    db.flush()
+    return coleta
+
+
 def importar_relatorio(db: Session, ciclo: Ciclo, texto: str, coletado_em: dt.date) -> ColetaQTI:
     cfg = load_rules("qti_config")
     try:
