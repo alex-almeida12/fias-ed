@@ -326,9 +326,18 @@ class LinkQTI(Base):
 
 
 class ConsentimentoQTI(Base):
-    """Registra QUE houve consentimento, nunca de quem. Sem chave estrangeira
-    para RespostaQTI e sem índice de respondente: a ausência é o mecanismo,
-    pelo mesmo princípio do §48 que proíbe agrupar voz por estudante.
+    """Uma linha por COLETA, não por estudante. Registra QUE houve
+    consentimento e sob qual versão do documento — nunca quem, nem quando
+    cada um consentiu. `aceites` é um contador, incrementado a cada
+    consentimento; não é um carimbo de tempo individual.
+
+    O carimbo individual foi cogitado (`aceito_em`) e descartado: no fluxo
+    real o consentimento antecede a resposta por poucos segundos, e numa
+    turma de trinta, ordenar `consentimento_qti` e `resposta_qti` por tempo e
+    parear vizinhos reconstruiria o vínculo que o §7 proíbe — sem chave
+    estrangeira, sem índice de respondente, sem nome suspeito, só relógio.
+    Uma linha por coleta fecha esse canal: sem linha por estudante, não há o
+    que parear. Mesmo princípio do §48 que proíbe agrupar voz por estudante.
 
     Não usa EntityMixin, pelo mesmo motivo de `RespostaQTI`: `device_id` do
     mixin é a instalação do professor, não do estudante, e aqui — um ato do
@@ -346,7 +355,7 @@ class ConsentimentoQTI(Base):
                                              nullable=False)
     coleta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("coleta_qti.id"), index=True, nullable=False)
     documento_versao: Mapped[str] = mapped_column(String(32), nullable=False)
-    aceito_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    aceites: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 TRIANGULACAO_FIAS_KIND = ("index", "categories")

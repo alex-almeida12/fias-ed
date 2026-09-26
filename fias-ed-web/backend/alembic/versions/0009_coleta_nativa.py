@@ -3,16 +3,20 @@
 O link e o registro de consentimento da coleta nativa do QTI (`link_qti`,
 `consentimento_qti`). Nenhuma das duas tabelas carrega identidade de
 respondente: `link_qti` guarda o hash do token, nunca o token, e
-`consentimento_qti` não tem chave estrangeira para `resposta_qti` nem
-índice de respondente. Nenhuma das duas tem `device_id`: embora `link_qti`
-seja artefato do professor autenticado (onde a coluna seria honesta),
-uniformizamos com `consentimento_qti` e `resposta_qti` — que precisam da
-ausência por serem tocadas pelo estudante — para que "nas três tabelas da
-coleta nativa não existe device_id" seja uma frase verificável em segundos,
-em vez de uma exceção por tabela. A procedência de `link_qti` já está na
-cadeia (coleta → ciclo → professor). A ausência é o mecanismo do §7 (ver
-test_coleta_nativa_modelo.py). Conferido contra o diff gerado por
-autogenerate: nenhuma outra tabela aparece nele.
+`consentimento_qti` é uma linha por COLETA (não por estudante), com
+`aceites` como contador — nunca um carimbo de tempo por aceite, que seria
+um canal de correlação temporal com `resposta_qti` (ordenar as duas tabelas
+por tempo e parear vizinhos reconstruiria o vínculo que o §7 proíbe).
+Nenhuma das duas tem `device_id`: embora `link_qti` seja artefato do
+professor autenticado (onde a coluna seria honesta), uniformizamos com
+`consentimento_qti` e `resposta_qti` — que precisam da ausência por serem
+tocadas pelo estudante — para que "nas três tabelas da coleta nativa não
+existe device_id" seja uma frase verificável em segundos, em vez de uma
+exceção por tabela. A procedência de `link_qti` já está na cadeia (coleta →
+ciclo → professor). A forma das três tabelas é travada por lista de colunas
+permitidas em test_coleta_nativa_modelo.py (não por lista de proibidas).
+Conferido contra o diff gerado por autogenerate: nenhuma outra tabela
+aparece nele.
 
 Revision ID: 0009
 Revises: 0008
@@ -39,7 +43,7 @@ def upgrade() -> None:
     sa.Column('sync_status', sa.Enum('LOCAL_ONLY', 'PENDING_SYNC', 'SYNCED', 'CONFLICT', name='sync_status', native_enum=False, create_constraint=True, length=32), nullable=False),
     sa.Column('coleta_id', sa.UUID(), nullable=False),
     sa.Column('documento_versao', sa.String(length=32), nullable=False),
-    sa.Column('aceito_em', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('aceites', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['coleta_id'], ['coleta_qti.id'], name=op.f('fk_consentimento_qti_coleta_id_coleta_qti')),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_consentimento_qti'))
     )
