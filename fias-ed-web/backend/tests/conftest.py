@@ -174,6 +174,20 @@ def coleta_em(db):
 
 
 @pytest.fixture
+def coleta_nativa(db, ciclo):
+    """Coleta de origem COLETA_NATIVA, ainda sem respostas — é o estado em que
+    o professor gera o link. `coleta_em` grava o agregado e serve à triangulação;
+    aqui o que importa é a coleta vazia que vai receber as respostas."""
+    from app.models import ColetaQTI
+    c = ColetaQTI(ciclo_id=ciclo.id, coletado_em=date(2026, 9, 1), origem="COLETA_NATIVA",
+                  response_count=0, displayable=False, qti_config_version="1.0.0")
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return c
+
+
+@pytest.fixture
 def aula_classificada(db, monkeypatch, ciclo, aula_em):
     """Uma aula com transcrição, segmentos, ClassificacaoFIAS e IndicadorFIAS,
     pronta para triangular — mesmo molde de `aula_transcrita`. Vive no ciclo da
