@@ -7,6 +7,9 @@ escapou de uma lista assim. Uma lista de permitidos quebra para QUALQUER
 coluna nova, com qualquer nome: quem acrescentar uma coluna por um motivo
 legítimo tem que atualizar esta lista conscientemente, lendo este comentário
 no processo."""
+import pytest
+from sqlalchemy.exc import IntegrityError
+
 from app.models import ConsentimentoQTI, LinkQTI, RespostaQTI
 
 
@@ -51,3 +54,19 @@ def test_link_guarda_o_hash_do_token_nunca_o_token():
     colunas = {c.name for c in LinkQTI.__table__.columns}
     assert "token_hash" in colunas
     assert "token" not in colunas
+
+
+def test_consentimento_qti_recusa_duas_linhas_para_a_mesma_coleta(db, ciclo, coleta_em):
+    """'Uma linha por coleta' precisa ser garantia de banco, não de boa
+    vontade de quem chamar: sem a restrição de unicidade em `coleta_id`, duas
+    respostas chegando ao mesmo tempo poderiam fazer busca-ou-cria em
+    paralelo, as duas encontrarem vazio, as duas inserirem — e a coleta
+    voltaria a ter estrutura por evento, reabrindo o pareamento que a linha
+    única existe para fechar (§7)."""
+    coleta = coleta_em(ciclo, "2026-03-01")
+    db.add(ConsentimentoQTI(coleta_id=coleta.id, documento_versao="1.0", aceites=1))
+    db.commit()
+    db.add(ConsentimentoQTI(coleta_id=coleta.id, documento_versao="1.0", aceites=1))
+    with pytest.raises(IntegrityError):
+        db.commit()
+    db.rollback()

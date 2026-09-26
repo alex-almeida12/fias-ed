@@ -339,6 +339,13 @@ class ConsentimentoQTI(Base):
     Uma linha por coleta fecha esse canal: sem linha por estudante, não há o
     que parear. Mesmo princípio do §48 que proíbe agrupar voz por estudante.
 
+    `coleta_id` é `unique=True`: "uma linha por coleta" é uma garantia de
+    banco, não de boa vontade de quem chamar. Sem essa restrição, duas
+    respostas chegando ao mesmo tempo poderiam fazer busca-ou-cria em
+    paralelo, ambas encontrarem vazio, ambas inserirem — e aí a coleta
+    voltaria a ter estrutura por evento, reabrindo o pareamento que a
+    linha única existe para fechar.
+
     Não usa EntityMixin, pelo mesmo motivo de `RespostaQTI`: `device_id` do
     mixin é a instalação do professor, não do estudante, e aqui — um ato do
     estudante — o nome mentiria. Ver o docstring de `LinkQTI` para por que
@@ -353,7 +360,7 @@ class ConsentimentoQTI(Base):
                                          nullable=False)
     sync_status: Mapped[str] = mapped_column(_enum(SYNC_STATUS, "sync_status"), default="LOCAL_ONLY",
                                              nullable=False)
-    coleta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("coleta_qti.id"), index=True, nullable=False)
+    coleta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("coleta_qti.id"), unique=True, nullable=False)
     documento_versao: Mapped[str] = mapped_column(String(32), nullable=False)
     aceites: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
