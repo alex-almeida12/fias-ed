@@ -62,7 +62,7 @@ Cinco modos de falha que a spec implica e que nenhum teste óbvio cobre. Cada um
 - Consumes: `ColetaQTI` (W3a), `EntityMixin`, `_enum`
 - Produces: `LinkQTI(coleta_id, token_hash, expira_em, limite_respostas, revogado_em)`, `ConsentimentoQTI(coleta_id, documento_versao, aceito_em)`
 
-- [ ] **Step 1: Escrever o teste que falha**
+- [x] **Step 1: Escrever o teste que falha**
 
 ```python
 # backend/tests/test_coleta_nativa_modelo.py
@@ -97,12 +97,12 @@ def test_link_guarda_o_hash_do_token_nunca_o_token():
     assert "token" not in colunas
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd fias-ed-web && docker compose -f docker-compose.test.yml run --rm api-test pytest tests/test_coleta_nativa_modelo.py -q`
 Expected: FAIL com `ImportError: cannot import name 'LinkQTI'`
 
-- [ ] **Step 3: Escrever os modelos**
+- [x] **Step 3: Escrever os modelos**
 
 Em `backend/app/models.py`, depois de `ResultadoQTI`:
 
@@ -128,7 +128,7 @@ class ConsentimentoQTI(EntityMixin, Base):
     aceito_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 ```
 
-- [ ] **Step 4: Gerar a migração e conferir o arquivo**
+- [x] **Step 4: Gerar a migração e conferir o arquivo**
 
 ```bash
 cd fias-ed-web && docker compose -f docker-compose.test.yml run --rm api-test \
@@ -139,16 +139,16 @@ Renomeie para `0009_coleta_nativa.py`, com `revision = '0009'` e `down_revision 
 
 **Leia o arquivo gerado antes de aceitar.** Na W3a o autogenerate trouxe diffs de tabelas alheias mais de uma vez. Só as duas tabelas novas podem aparecer.
 
-- [ ] **Step 5: Rodar e ver passar**
+- [x] **Step 5: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest tests/test_coleta_nativa_modelo.py -q`
 Expected: PASS (3 testes)
 
-- [ ] **Step 6: Desfazer e conferir**
+- [x] **Step 6: Desfazer e conferir**
 
 Acrescente `ip: Mapped[str | None] = mapped_column(String(45), nullable=True)` a `LinkQTI`, rode, confirme que o primeiro teste falha nomeando a coluna, e remova. Cole a saída real no relatório.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend/app/models.py fias-ed-web/backend/alembic/versions/0009_coleta_nativa.py fias-ed-web/backend/tests/test_coleta_nativa_modelo.py
@@ -177,7 +177,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `revogar(db, link: LinkQTI) -> None`
   - `LIMITE_FOLGA = 1.10`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 ```python
 # backend/tests/test_link_qti.py
@@ -249,12 +249,12 @@ def test_o_token_nunca_aparece_em_repr_nem_em_str(db, coleta_nativa):
     assert token not in repr(link) and token not in str(link)
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest tests/test_link_qti.py -q`
 Expected: FAIL com `ModuleNotFoundError: No module named 'app.qti.links'`
 
-- [ ] **Step 3: Escrever a fixture `coleta_nativa`**
+- [x] **Step 3: Escrever a fixture `coleta_nativa`**
 
 Em `backend/tests/conftest.py`:
 
@@ -273,7 +273,7 @@ def coleta_nativa(db, ciclo):
     return c
 ```
 
-- [ ] **Step 4: Escrever `links.py`**
+- [x] **Step 4: Escrever `links.py`**
 
 ```python
 # backend/app/qti/links.py
@@ -339,17 +339,17 @@ def revogar(db: Session, link: LinkQTI) -> None:
     db.commit()
 ```
 
-- [ ] **Step 5: Rodar e ver passar**
+- [x] **Step 5: Rodar e ver passar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest tests/test_link_qti.py -q`
 Expected: PASS (9 testes)
 
-- [ ] **Step 6: Desfazer e conferir**
+- [x] **Step 6: Desfazer e conferir**
 
 Troque `token_hash=_hash(token)` por `token_hash=token` e confirme que
 `test_o_token_em_claro_nao_fica_no_banco` falha. Restaure. Cole a saída real.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add fias-ed-web/backend/app/qti/links.py fias-ed-web/backend/tests/test_link_qti.py fias-ed-web/backend/tests/conftest.py
@@ -374,7 +374,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: `criar_link`, `revogar`, `link_valido`, `ciclo_do_professor` (`app/ciclos/service.py`)
 - Produces: `POST /api/ciclos/{ciclo_id}/qti/link` → `{"url", "expira_em", "limite_respostas"}`; `POST /api/qti/links/{link_id}/revogar` → 204
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 ```python
 # backend/tests/test_qti_link_rotas.py
@@ -430,12 +430,12 @@ def test_revogar_link_de_outro_professor_da_404(db, client, link_de_outro):
 (`tests/test_qti_import.py`), que já monta escola, turma, disciplina e ciclo de
 outro professor.
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `docker compose -f docker-compose.test.yml run --rm api-test pytest tests/test_qti_link_rotas.py -q`
 Expected: FAIL com 404 em `/qti/link`
 
-- [ ] **Step 3: Escrever as rotas**
+- [x] **Step 3: Escrever as rotas**
 
 Em `backend/app/qti/routes.py`, seguindo o padrão da rota de importação que já
 está no arquivo — `ciclo_do_professor`, `audit(...)`, `db.commit()`:
@@ -495,16 +495,16 @@ entre duas coletas vivas do mesmo dia.
 A revogação recebe `link_id`, busca o link, confere que a coleta pertence a um
 ciclo do professor (`ciclo_do_professor`), chama `revogar`, audita e devolve 204.
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Expected: PASS (5 testes)
 
-- [ ] **Step 5: Desfazer e conferir**
+- [x] **Step 5: Desfazer e conferir**
 
 Remova a chamada a `ciclo_do_professor` da geração e confirme que
 `test_gerar_link_em_ciclo_de_outro_professor_da_404` falha. Restaure.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fias-ed-web/backend/app/qti/ fias-ed-web/backend/tests/test_qti_link_rotas.py
@@ -529,7 +529,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: `link_valido`, `RespostaQTI`, `ConsentimentoQTI`, `score_response` e `aggregate` (`fias_ed_engine.qti`)
 - Produces: `GET /publico/qti/{token}`, `POST /publico/qti/{token}/consentir`, `POST /publico/qti/{token}/responder`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 ```python
 # backend/tests/test_rotas_publicas.py
@@ -659,11 +659,11 @@ def test_as_rotas_publicas_nao_exigem_login(db, client_publico, coleta_nativa):
 `client_publico`: em `conftest.py`, um cliente como `client` mas **sem login
 nenhum** e sem cabeçalho de CSRF.
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Expected: FAIL com 404 em `/publico/qti/...`
 
-- [ ] **Step 3: Escrever o router público**
+- [x] **Step 3: Escrever o router público**
 
 ```python
 # backend/app/publico/routes.py
@@ -685,11 +685,11 @@ Regras de implementação:
 - **O limite é verificado com `SELECT ... FOR UPDATE` sobre o `LinkQTI`**, na mesma transação do INSERT. Sem isso, o Review Focus 2 acontece.
 - Monte em `main.py` com `app.include_router(publico_router)` — **sem** o prefixo `/api` e **sem** a dependência de autenticação.
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Expected: PASS (10 testes)
 
-- [ ] **Step 5: Desfazer e conferir (três vezes)**
+- [x] **Step 5: Desfazer e conferir (três vezes)**
 
 1. Troque o `FOR UPDATE` por leitura simples → o teste da corrida tem que falhar.
 2. Devolva o nome da turma no `GET` → o teste do vazamento tem que falhar.
@@ -697,7 +697,7 @@ Expected: PASS (10 testes)
 
 Cole a saída real das três.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fias-ed-web/backend/app/publico/ fias-ed-web/backend/app/main.py fias-ed-web/backend/tests/test_rotas_publicas.py fias-ed-web/backend/tests/conftest.py
@@ -726,7 +726,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Consumes: `GET/POST /publico/qti/{token}`
 - Produces: rota `/responder/:token`, **fora** de `RequireAuth` e **fora** de `Layout`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 ```tsx
 // frontend/src/pages/Responder.test.tsx
@@ -785,12 +785,12 @@ test("enviar só é possível com as 24 respondidas", async () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `cd fias-ed-web/frontend && npx vitest run src/pages/Responder.test.tsx`
 Expected: FAIL — a rota não existe
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 - Rota em `src/app/App.tsx`: `<Route path="/responder/:token" element={<Responder />} />`, **irmã de `/`**, fora do bloco `RequireAuth`/`Layout`. Um estudante não tem conta e não deve ver o menu do professor.
 - Três estados: consentimento → formulário → agradecimento.
@@ -800,17 +800,17 @@ Expected: FAIL — a rota não existe
 - Botão de enviar desabilitado até as 24 estarem respondidas.
 - Erro: mensagem do servidor em `Banner kind="error"`.
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `npx vitest run src/pages/Responder.test.tsx && npm run lint && npm run build`
 Expected: PASS (5 testes)
 
-- [ ] **Step 5: Desfazer e conferir**
+- [x] **Step 5: Desfazer e conferir**
 
 Remova a leitura do `localStorage` na montagem e confirme que o teste do
 "já respondeu" falha. Restaure. Cole a saída real.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add fias-ed-web/frontend/src/pages/Responder.tsx fias-ed-web/frontend/src/pages/Responder.test.tsx fias-ed-web/frontend/src/app/App.tsx fias-ed-web/frontend/src/api/types.ts
@@ -833,7 +833,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 **Interfaces:**
 - Consumes: `POST /api/ciclos/{id}/qti/link`, `POST /api/qti/links/{id}/revogar`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 ```tsx
 test("gerar o link mostra a url uma vez, com aviso de que não se recupera", async () => {
@@ -864,19 +864,19 @@ test("a tela não mostra o link antigo ao reabrir a lista", async () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
-- [ ] **Step 3: Implementar** — diálogo com "Quantos estudantes tem a turma?" e a validade; depois de gerar, mostrar a URL com botão de copiar e o aviso de que ela não se recupera; ação de revogar em link ativo.
-- [ ] **Step 4: Rodar e ver passar**
-- [ ] **Step 5: Desfazer e conferir** — guarde a URL em estado que sobreviva ao recarregar e confirme que o segundo teste falha.
-- [ ] **Step 6: Commit**
+- [x] **Step 2: Rodar e ver falhar**
+- [x] **Step 3: Implementar** — diálogo com "Quantos estudantes tem a turma?" e a validade; depois de gerar, mostrar a URL com botão de copiar e o aviso de que ela não se recupera; ação de revogar em link ativo.
+- [x] **Step 4: Rodar e ver passar**
+- [x] **Step 5: Desfazer e conferir** — guarde a URL em estado que sobreviva ao recarregar e confirme que o segundo teste falha.
+- [x] **Step 6: Commit**
 
 ---
 
 ## Task 7: verificação final da W3b
 
-- [ ] **Step 1:** As três suítes e as auditorias (`bandit -r app --severity-level high`, `pip-audit --skip-editable`, `npm audit --audit-level=high`). Reconstrua a imagem antes.
-- [ ] **Step 2:** Percurso ao vivo, **num celular ou em janela de 360px**: o professor gera o link, o estudante abre, consente, responde, e a resposta aparece na coleta. Depois: revogar e confirmar que o link morre.
-- [ ] **Step 3:** Os três critérios que a W3a não pôde verificar — **4**, **10** e a segunda metade do **5** —, cada um com o comando ou a tela que o comprova.
-- [ ] **Step 4:** Teste intermitente é defeito: rode cinco vezes e conte, não repita até passar.
+- [x] **Step 1:** As três suítes e as auditorias (`bandit -r app --severity-level high`, `pip-audit --skip-editable`, `npm audit --audit-level=high`). Reconstrua a imagem antes.
+- [x] **Step 2:** Percurso ao vivo, **num celular ou em janela de 360px**: o professor gera o link, o estudante abre, consente, responde, e a resposta aparece na coleta. Depois: revogar e confirmar que o link morre.
+- [x] **Step 3:** Os três critérios que a W3a não pôde verificar — **4**, **10** e a segunda metade do **5** —, cada um com o comando ou a tela que o comprova.
+- [x] **Step 4:** Teste intermitente é defeito: rode cinco vezes e conte, não repita até passar.
 - [ ] **Step 5:** Atualizar `docs/ESTADO_DE_VALIDACAO.md` com a limitação declarada da marca no navegador (burlável em aba anônima) e com o fato de o limite de respostas vir de um número que o professor informa, não de cadastro.
 - [ ] **Step 6:** Commit com o resultado de cada critério no corpo.
