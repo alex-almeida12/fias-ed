@@ -293,6 +293,62 @@ class ResultadoQTI(EntityMixin, Base):
     communion: Mapped[float] = mapped_column(Float, nullable=False)
 
 
+class LinkQTI(Base):
+    """O segredo do link nunca é gravado — só o hash. Quem tem o link consegue
+    responder; quem tem o banco, não consegue reconstruí-lo.
+
+    Não usa EntityMixin: replica os campos de auditoria à mão, sem
+    `device_id`, mesmo padrão de `RespostaQTI`. `LinkQTI` sozinha seria
+    artefato do professor autenticado — `device_id` aqui significaria a
+    instalação dele, e seria honesto. Mesmo assim uniformizamos com
+    `ConsentimentoQTI` e `RespostaQTI`, que precisam da ausência por serem
+    tocadas pelo estudante: "nas três tabelas da coleta nativa não existe
+    device_id" é uma frase que qualquer auditoria de privacidade verifica em
+    segundos; "existe numa e não nas outras duas" exige reconstruir o
+    raciocínio tabela por tabela. A procedência de LinkQTI já está na
+    cadeia (coleta → ciclo → professor); perder qual instalação gerou cada
+    link, num sistema de uso local e single-user, é custo aceito."""
+    __tablename__ = "link_qti"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow,
+                                                 nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, onupdate=literal_column("version + 1"),
+                                         nullable=False)
+    sync_status: Mapped[str] = mapped_column(_enum(SYNC_STATUS, "sync_status"), default="LOCAL_ONLY",
+                                             nullable=False)
+    coleta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("coleta_qti.id"), index=True, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    limite_respostas: Mapped[int] = mapped_column(Integer, nullable=False)
+    revogado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ConsentimentoQTI(Base):
+    """Registra QUE houve consentimento, nunca de quem. Sem chave estrangeira
+    para RespostaQTI e sem índice de respondente: a ausência é o mecanismo,
+    pelo mesmo princípio do §48 que proíbe agrupar voz por estudante.
+
+    Não usa EntityMixin, pelo mesmo motivo de `RespostaQTI`: `device_id` do
+    mixin é a instalação do professor, não do estudante, e aqui — um ato do
+    estudante — o nome mentiria. Ver o docstring de `LinkQTI` para por que
+    a ausência é uniforme nas três tabelas da coleta nativa."""
+    __tablename__ = "consentimento_qti"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow,
+                                                 nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, onupdate=literal_column("version + 1"),
+                                         nullable=False)
+    sync_status: Mapped[str] = mapped_column(_enum(SYNC_STATUS, "sync_status"), default="LOCAL_ONLY",
+                                             nullable=False)
+    coleta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("coleta_qti.id"), index=True, nullable=False)
+    documento_versao: Mapped[str] = mapped_column(String(32), nullable=False)
+    aceito_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+
+
 TRIANGULACAO_FIAS_KIND = ("index", "categories")
 
 
