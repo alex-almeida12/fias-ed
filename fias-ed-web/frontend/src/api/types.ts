@@ -103,6 +103,7 @@ export interface Indice {
   nome: string;
   valor: number | null;
   descricao: string;
+  resumo: string;
 }
 
 export interface Padroes {

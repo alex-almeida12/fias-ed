@@ -114,10 +114,27 @@ def test_nenhum_indice_vem_com_limiar_de_bom_ou_ruim(cliente, aula_classificada)
     corpo = cliente.get(f"/api/aulas/{aula_classificada.id}/padroes").json()
     assert corpo["indices"]
     for i in corpo["indices"]:
-        assert set(i) == {"codigo", "nome", "valor", "descricao"}
-        texto = (i["descricao"] + i["nome"]).lower()
+        # "resumo" (Task 19) entrou no contrato do índice: o cartão do relatório
+        # da aula usa ele em vez da descrição longa.
+        assert set(i) == {"codigo", "nome", "valor", "descricao", "resumo"}
+        texto = (i["descricao"] + i["nome"] + i["resumo"]).lower()
         assert not any(p in texto for p in ("bom", "ruim", "ideal", "abaixo do esperado"))
         assert not any(p in texto for p in ("avaliaç", "avaliar", "nota", "desempenho", "ranking"))
+
+
+def test_indices_trazem_resumo_curto_para_o_cartao(cliente, aula_classificada):
+    """Task 19: o cartão do relatório da aula precisa de uma linha curta por
+    índice — `_DESCRICAO_INDICE` é longa demais para caber num cartão. O
+    resumo de TT é comparado contra o dicionário-fonte, não contra um literal
+    copiado à mão (se o texto mudar num lugar só, o teste acompanha)."""
+    from app.fias.routes import _RESUMO_INDICE
+
+    corpo = cliente.get(f"/api/aulas/{aula_classificada.id}/padroes").json()
+    assert corpo["indices"]
+    for i in corpo["indices"]:
+        assert i["resumo"]
+    tt = next(i for i in corpo["indices"] if i["codigo"] == "TT")
+    assert tt["resumo"] == _RESUMO_INDICE["TT"]
 
 
 def test_aula_ainda_nao_classificada_da_409(cliente, aula_em_revisao):

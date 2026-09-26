@@ -1,13 +1,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router";
 import { api, ApiError } from "../api/client";
-import type { InterpretacaoMTSS, QtiAgreement, RecomendacaoMTSS, Relatorio } from "../api/types";
+import type { Indice, InterpretacaoMTSS, QtiAgreement, RecomendacaoMTSS, Relatorio } from "../api/types";
 import { formatDate, formatTimestamp } from "../app/format";
 import { Banner } from "../design/components/Banner";
 
 function formatIndiceValor(valor: number | null): string {
   if (valor === null) return "Sem trechos suficientes nesta aula para calcular.";
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(valor);
+}
+
+// Cartão do índice (Task 19, brief): TT/PT/SC/PIR/PUPIL_RESPONSE_RATIO são
+// proporções de 0 a 1 — formatadas como porcentagem inteira. ID_RATIO é uma
+// razão (quantas vezes um tipo de influência aparece para cada uma do outro),
+// não uma fração de 0 a 1: levar o "%" para ele inventaria um significado que
+// o número não tem. `valor: null` nunca vira "0%" — usa o mesmo texto que a
+// tela já mostra hoje para "não deu para calcular".
+function formatCartaoValor(idx: Indice): string {
+  if (idx.valor === null || idx.codigo === "ID_RATIO") return formatIndiceValor(idx.valor);
+  return `${Math.round(idx.valor * 100)}%`;
 }
 
 function formatNumero(valor: number | null): string {
@@ -90,21 +101,27 @@ export function RelatorioAula() {
             {formatDate(dados.aula.lesson_date)} · {dados.aula.turma.name} · {dados.aula.disciplina.name}
           </p>
 
+          {/* Bloco 1 — os cartões (brief da Task 19: "quem tem trinta segundos lê os
+             cartões"). Nome, valor em destaque e um resumo curto por baixo — a
+             descrição longa (`idx.descricao`) continua existindo no payload e
+             continua sendo mostrada, só que na tela de padrões de interação
+             (PadroesInteracao.tsx), não aqui: aqui não cabe uma frase inteira
+             por cartão. Nenhuma cor semântica, nenhum ícone: o sistema descreve
+             o número, não julga a aula. */}
           <section>
             <h2>O que a observação mediu</h2>
-            <ul className="list">
+            <ul className="indices-cartoes">
               {dados.indices.map((idx) => (
-                <li key={idx.codigo} className="list__item indice">
-                  <div>
-                    <h3>{idx.nome}</h3>
-                    <p>{idx.descricao}</p>
-                  </div>
-                  <p className="indice__valor">{formatIndiceValor(idx.valor)}</p>
+                <li key={idx.codigo} className="indice-cartao">
+                  <h3>{idx.nome}</h3>
+                  <p className="indice-cartao__valor">{formatCartaoValor(idx)}</p>
+                  <p className="indice-cartao__resumo">{idx.resumo}</p>
                 </li>
               ))}
             </ul>
           </section>
 
+          {/* Bloco 2 — a comparação com a percepção dos estudantes, como já funcionava. */}
           <section>
             <h2>Como isso se compara à percepção dos estudantes</h2>
             <ul className="list">
@@ -129,6 +146,12 @@ export function RelatorioAula() {
             </ul>
           </section>
 
+          {/* Bloco 3 — a leitura pedagógica: interpretações e recomendações, no fim
+             ("quem tem cinco minutos desce até as recomendações"). Nenhum cartão
+             está ligado a uma interpretação específica: das seis regras do MTSS
+             habilitadas, só MTSS_DIRECT_OVER_INDIRECT usa um índice (ID_RATIO) —
+             as demais olham categorias de fala, e inventar uma correspondência
+             cartão-a-regra para as outras cinco não teria base nenhuma. */}
           <section>
             <h2>Interpretações da aula</h2>
             <ul className="list">

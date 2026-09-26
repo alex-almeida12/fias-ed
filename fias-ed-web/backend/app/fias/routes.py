@@ -124,6 +124,22 @@ _DESCRICAO_INDICE = {
 }
 _DESCRICAO_PADRAO = "Um indicador calculado a partir da distribuição de fala ao longo da aula."
 
+# Mesmo índice, versão de uma linha (Task 19: o relatório da aula ganha um
+# cartão por índice). `_DESCRICAO_INDICE` continua a única fonte que
+# PadroesInteracao mostra — este dicionário é só para o cartão, que não cabe
+# uma frase inteira. Continua descrevendo, nunca qualificando (nada de "alto"
+# ou "baixo": exigiria um limiar que este projeto já recusou inventar três
+# vezes — spec §8.4 / ESTADO_DE_VALIDACAO.md §4.4).
+_RESUMO_INDICE = {
+    "TT": "do tempo da aula foi fala do professor",
+    "PT": "do tempo da aula foi fala dos estudantes",
+    "SC": "do tempo da aula foi silêncio",
+    "ID_RATIO": "momentos de influência indireta para cada um de influência direta",
+    "PIR": "da fala dos estudantes partiu da iniciativa deles",
+    "PUPIL_RESPONSE_RATIO": "da fala dos estudantes respondeu a uma pergunta",
+}
+_RESUMO_PADRAO = "calculado a partir da distribuição de fala na aula"
+
 
 def indices_payload(db: Session, aula_id: uuid.UUID, rules: dict) -> list[dict]:
     nomes = {idx["id"]: idx["name"] for idx in rules["indices"]}
@@ -135,7 +151,8 @@ def indices_payload(db: Session, aula_id: uuid.UUID, rules: dict) -> list[dict]:
                                                      IndicadorFIAS.deleted_at.is_(None))).all()
     ordenadas = sorted(linhas, key=lambda r: ordem.get(r.index_id, len(ordem)))
     return [{"codigo": r.index_id, "nome": nomes.get(r.index_id, r.index_id), "valor": r.value,
-            "descricao": _DESCRICAO_INDICE.get(r.index_id, _DESCRICAO_PADRAO)} for r in ordenadas]
+            "descricao": _DESCRICAO_INDICE.get(r.index_id, _DESCRICAO_PADRAO),
+            "resumo": _RESUMO_INDICE.get(r.index_id, _RESUMO_PADRAO)} for r in ordenadas]
 
 
 @router.get("/aulas/{aula_id}/padroes")

@@ -70,7 +70,8 @@ function relatorio(overrides: Record<string, unknown> = {}) {
   return {
     aula: AULA,
     indices: [{ codigo: "TT", nome: "Fala docente", valor: 0.5,
-      descricao: "Proporção do tempo da aula ocupada pela fala do professor." }],
+      descricao: "Proporção do tempo da aula ocupada pela fala do professor.",
+      resumo: "do tempo da aula foi fala do professor" }],
     triangulacao: quatroPares(),
     interpretacoes: [interpretacao()],
     recomendacoes: [recomendacao()],
@@ -177,5 +178,71 @@ test("a tela não usa vocabulário de veredito", async () => {
   mockRelatorio();
   renderApp("/aulas/a1/relatorio");
   await screen.findByRole("heading", { name: /fala docente/i, level: 3 });
-  expect(document.body.textContent).not.toMatch(/avalia|nota do professor|desempenho|ranking/i);
+  expect(document.body.textContent).not.toMatch(/avalia|nota|desempenho|ranking|melhor|pior/i);
+});
+
+// ---- Task 19: os cartões de índice no topo do relatório ---------------------
+
+test("os cartões de índice aparecem no topo, um por índice, com valor e resumo", async () => {
+  mockRelatorio(relatorio({
+    indices: [
+      { codigo: "TT", nome: "Fala docente", valor: 0.78,
+        descricao: "Proporção do tempo da aula ocupada pela fala do professor.",
+        resumo: "do tempo da aula foi fala do professor" },
+      { codigo: "ID_RATIO", nome: "Razão de influência", valor: 2.5,
+        descricao: "Razão entre influência indireta e direta.",
+        resumo: "momentos de influência indireta para cada um de influência direta" },
+    ],
+  }));
+  renderApp("/aulas/a1/relatorio");
+  expect(await screen.findByRole("heading", { name: /fala docente/i, level: 3 })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: /razão de influência/i, level: 3 })).toBeInTheDocument();
+  expect(screen.getByText("78%")).toBeInTheDocument();
+  expect(screen.getByText(/do tempo da aula foi fala do professor/i)).toBeInTheDocument();
+  expect(screen.getByText(/momentos de influência indireta para cada um de influência direta/i)).toBeInTheDocument();
+});
+
+test("índice com valor nulo não vira zero", async () => {
+  mockRelatorio(relatorio({
+    indices: [{ codigo: "PT", nome: "Fala do estudante", valor: null,
+      descricao: "Proporção do tempo da aula ocupada pela fala dos estudantes.",
+      resumo: "do tempo da aula foi fala dos estudantes" }],
+  }));
+  renderApp("/aulas/a1/relatorio");
+  await screen.findByRole("heading", { name: /fala do estudante/i, level: 3 });
+  expect(screen.queryByText(/^0%$/)).not.toBeInTheDocument();
+  expect(screen.getByText(/sem trechos suficientes/i)).toBeInTheDocument();
+});
+
+test("ID_RATIO aparece sem o símbolo de porcentagem; TT aparece com", async () => {
+  mockRelatorio(relatorio({
+    indices: [
+      { codigo: "TT", nome: "Fala docente", valor: 0.5,
+        descricao: "Proporção do tempo da aula ocupada pela fala do professor.",
+        resumo: "do tempo da aula foi fala do professor" },
+      { codigo: "ID_RATIO", nome: "Razão de influência", valor: 2,
+        descricao: "Razão entre influência indireta e direta.",
+        resumo: "momentos de influência indireta para cada um de influência direta" },
+    ],
+  }));
+  renderApp("/aulas/a1/relatorio");
+  await screen.findByRole("heading", { name: /fala docente/i, level: 3 });
+  expect(screen.getByText("50%")).toBeInTheDocument();
+  expect(screen.getByText("2")).toBeInTheDocument();
+  expect(screen.queryByText("2%")).not.toBeInTheDocument();
+});
+
+test("a ordem dos três blocos no documento é cartões, comparação e leitura pedagógica", async () => {
+  mockRelatorio();
+  renderApp("/aulas/a1/relatorio");
+  await screen.findByRole("heading", { name: /fala docente/i, level: 3 });
+  // Posição no documento (não a ordem em que o JSON chegou): cada marcador é um
+  // texto único de um dos três blocos.
+  const html = document.body.innerHTML;
+  const posCartoes = html.indexOf("Fala docente");
+  const posComparacao = html.indexOf("percepção dos estudantes");
+  const posLeitura = html.indexOf("Interpretações da aula");
+  expect(posCartoes).toBeGreaterThan(-1);
+  expect(posComparacao).toBeGreaterThan(posCartoes);
+  expect(posLeitura).toBeGreaterThan(posComparacao);
 });
