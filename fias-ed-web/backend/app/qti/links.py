@@ -32,7 +32,17 @@ def criar_link(db: Session, coleta: ColetaQTI, *, n_estudantes: int, dias: int) 
         coleta_id=coleta.id,
         token_hash=_hash(token),
         expira_em=dt.datetime.now(timezone.utc) + dt.timedelta(days=dias),
-        limite_respostas=math.ceil(n_estudantes * LIMITE_FOLGA),
+        # `LIMITE_FOLGA` documenta a intenção (10% de folga), mas o cálculo
+        # não passa por ela em ponto flutuante: `n * 1.10` sofre erro de
+        # arredondamento binário (50 * 1.10 == 55.00000000000001 em Python),
+        # e `math.ceil` desse valor entrega 56 em vez de 55. `n * 11 / 10`
+        # evita o problema porque a multiplicação inteira (`n * 11`) é exata
+        # e, quando o resultado da divisão por 10 é um inteiro matemático
+        # exato (como 550/10 = 55), o IEEE 754 devolve exatamente esse
+        # inteiro em ponto flutuante — sem a imprecisão que a multiplicação
+        # por 1.10 introduz. Achado da revisão (2026-09-26), confirmado em
+        # 12, 30, 50, 90 e 100.
+        limite_respostas=math.ceil(n_estudantes * 11 / 10),
     )
     db.add(link)
     db.commit()
