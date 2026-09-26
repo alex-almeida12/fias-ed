@@ -11,6 +11,7 @@ import { NovoCiclo } from "../pages/NovoCiclo";
 import { PadroesInteracao } from "../pages/PadroesInteracao";
 import { RelatorioAula } from "../pages/RelatorioAula";
 import { RelatorioCiclo } from "../pages/RelatorioCiclo";
+import { Responder } from "../pages/Responder";
 import { RevisaoTranscricao } from "../pages/RevisaoTranscricao";
 import { AdminAulas } from "../pages/admin/AdminAulas";
 import { Contas } from "../pages/admin/Contas";
@@ -25,6 +26,10 @@ export function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Home />} />
+          {/* Fora de RequireAuth e fora de Layout: quem responde não tem conta e não
+              deve ver o menu do professor (§10 da spec — a única tela usada por
+              alguém sem conta no sistema). */}
+          <Route path="/responder/:token" element={<Responder />} />
           <Route path="/trocar-senha" element={<RequireAuth allowPasswordChange><TrocarSenha /></RequireAuth>} />
           <Route element={<RequireAuth><Layout /></RequireAuth>}>
             <Route path="/aulas" element={<Dashboard />} />

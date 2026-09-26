@@ -258,6 +258,22 @@ progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--co
 .indice-cartao__valor { font-size: var(--type-h1-size); font-weight: 700; margin: var(--space-2) 0; }
 .indice-cartao__resumo { margin: 0; }
 
+/* Questionário QTI (Task 5, `Responder`): a escala de 1 a 5 por pergunta, na
+   tela de celular do estudante. Cada opção segue a Regra do Alvo de 44px como
+   o resto do produto — não é concessão ao toque, é o piso do sistema — e a
+   fileira de opções quebra em vez de encolher (Regra do Ar/`flex-wrap`), como
+   todo agrupamento horizontal do produto em tela estreita. */
+.likert { border: 0; padding: 0; margin: 0 0 var(--space-6); }
+.likert__legenda { padding: 0; margin: 0 0 var(--space-3); font-family: var(--type-body-font);
+  font-size: var(--type-body-size); color: var(--color-text); }
+.likert__escala { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.likert__rotulo { flex: 1 1 8rem; font-size: var(--type-caption-size); color: var(--color-text-muted); }
+.likert__opcoes { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.likert__opcao { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 44px; min-height: 44px;
+  padding: var(--space-2) var(--space-3); border: var(--border-hairline) solid var(--color-muted);
+  border-radius: var(--radius-sm); cursor: pointer; }
+.likert__opcao input { width: 20px; height: 20px; margin: 0; accent-color: var(--color-action-secondary); cursor: pointer; }
+
 /* A matriz de transições é o único conteúdo do produto que não quebra em linha:
    são 10 colunas numéricas, e esconder ou truncar coluna seria perder dado. Em
    360px ela mede 400px dentro de uma coluna de 328px e empurrava o scroll

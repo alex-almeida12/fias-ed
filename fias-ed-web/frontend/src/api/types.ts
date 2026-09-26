@@ -194,6 +194,10 @@ export interface CicloRelatorio {
   coletas: Coleta[];
 }
 
+export interface QtiItem { order: number; text: string }
+export interface QtiEscala { min: number; max: number; min_label: string; max_label: string }
+export interface QtiQuestionario { stem: string; itens: QtiItem[]; escala: QtiEscala }
+
 export interface Conta {
   id: string;
   username: string;
