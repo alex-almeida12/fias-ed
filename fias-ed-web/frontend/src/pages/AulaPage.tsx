@@ -12,6 +12,27 @@ import { StatusBadge } from "../design/components/StatusBadge";
 
 const PODE_TROCAR = new Set(["DRAFT", "AUDIO_IMPORTED", "AUDIO_VALIDATED", "ERROR"]);
 
+// Task 17: a espera do questionário significa coisas diferentes conforme a posição da
+// aula no acompanhamento — primeira, última ou (com uma aula só até agora) as duas.
+// "meio"/"fora" não deviam chegar aqui (app.pipeline.estados só para em WAITING_QTI
+// nas pontas do ciclo), mas o texto abaixo cobre o caso de forma defensiva.
+function textoAguardandoQti(posicao: string, turma: string): string {
+  switch (posicao) {
+    case "primeira":
+      return `Esta é a primeira aula do acompanhamento de ${turma}. O relatório fica disponível ` +
+        "quando a turma responder ao questionário.";
+    case "ultima":
+      return `Esta é a última aula do acompanhamento de ${turma}. O relatório fica disponível quando ` +
+        "a turma responder ao questionário desta vez, fechando a trajetória.";
+    case "primeira_e_ultima":
+      return `Esta é, até agora, a única aula do acompanhamento de ${turma}. O relatório fica ` +
+        "disponível quando a turma responder ao questionário.";
+    default:
+      return `Esta aula do acompanhamento de ${turma} está esperando a turma responder ao ` +
+        "questionário. O relatório fica disponível quando a resposta chegar.";
+  }
+}
+
 export function AulaPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
@@ -95,6 +116,15 @@ export function AulaPage() {
         <div>
           <h1>Aula de {formatDate(aula.lesson_date)}</h1>
           <p className="meta">{aula.turma.name} · {aula.disciplina.name}</p>
+          {/* Task 17: sempre visível, em qualquer estado — a aula sem acompanhamento é caso
+             legítimo (aula avulsa), não erro, então o texto não soa como alarme. */}
+          <p className="meta">
+            {aula.acompanhamento ? (
+              <>Acompanhamento: {aula.acompanhamento.turma.name} · {aula.acompanhamento.disciplina.name}
+                {" · "}
+                <Link to={`/ciclos/${aula.acompanhamento.id}/relatorio`}>Ver o acompanhamento</Link></>
+            ) : "Fora de qualquer acompanhamento"}
+          </p>
         </div>
         <StatusBadge status={aula.status} />
       </div>
@@ -103,6 +133,14 @@ export function AulaPage() {
         <Banner>Alterada pelo administrador em {formatDateTime(aula.alterada_pelo_admin_em)}.</Banner>
       )}
       {progresso && <Banner>{progresso}</Banner>}
+      {/* Task 17: o professor não fez nada de errado — o beco sem saída da Task 17 era não
+         ter aviso nem ação aqui. kind="info" (não "error") e a mensagem já leva à saída. */}
+      {aula.status === "WAITING_QTI" && aula.acompanhamento && (
+        <Banner kind="info">
+          <p>{textoAguardandoQti(aula.acompanhamento.posicao, aula.acompanhamento.turma.name)}</p>
+          <p><Link to={`/ciclos/${aula.acompanhamento.id}/qti`}>Enviar o relatório do questionário</Link></p>
+        </Banner>
+      )}
       {aula.status === "ERROR" && aula.error_message && <Banner kind="error">{aula.error_message}</Banner>}
       {error && <Banner kind="error">{error}</Banner>}
       {aula.note && <p>{aula.note}</p>}

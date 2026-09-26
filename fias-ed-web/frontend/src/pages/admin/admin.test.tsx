@@ -59,7 +59,8 @@ test("agir como professor a partir da lista de aulas", async () => {
     "POST /api/admin/agir-como": () => jsonResponse({ ...ADMIN, acting_as: { id: "p1", display_name: "Ana Souza" } }),
     "GET /api/aulas/a1": () => jsonResponse({ id: "a1", lesson_date: "2026-09-22", status: "AUDIO_VALIDATED",
       turma: { id: "t1", name: "9º B" }, disciplina: { id: "d1", name: "Ciências" }, note: null, error_code: null,
-      error_message: null, audio: null, upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null }),
+      error_message: null, audio: null, upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null,
+      acompanhamento: null }),
   });
   renderApp("/admin/aulas");
   await userEvent.click(await screen.findByRole("button", { name: "Agir como Ana Souza" }));

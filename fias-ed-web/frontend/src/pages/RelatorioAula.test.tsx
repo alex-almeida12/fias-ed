@@ -10,7 +10,7 @@ const AULA = {
   id: "a1", lesson_date: "2026-09-01", status: "REPORT_READY",
   turma: { id: "t1", name: "9º B" }, disciplina: { id: "d1", name: "História" },
   note: null, error_code: null, error_message: null, audio: null,
-  upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null,
+  upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null, acompanhamento: null,
 };
 
 function par(overrides: Record<string, unknown> = {}) {

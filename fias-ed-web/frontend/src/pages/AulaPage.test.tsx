@@ -5,7 +5,11 @@ import { jsonResponse, mockApi, PROFESSORA, renderApp } from "../test-utils";
 
 const BASE = { id: "a1", lesson_date: "2026-09-22", turma: { id: "t1", name: "9º B" },
   disciplina: { id: "d1", name: "Ciências" }, note: null, error_code: null, error_message: null, audio: null,
-  upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null, status: "DRAFT" };
+  upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null, status: "DRAFT",
+  acompanhamento: null };
+
+const ACOMPANHAMENTO = { id: "c1", turma: { id: "t1", name: "9º B" }, disciplina: { id: "d1", name: "Ciências" },
+  n_aulas_previstas: 8, posicao: "primeira" };
 
 afterEach(() => vi.useRealTimers());
 
@@ -154,4 +158,48 @@ test("áudio sem fala mostra a mensagem humana, a saída, e só anuncia quando a
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(await screen.findByRole("alert")).toHaveTextContent(/não conseguimos identificar fala/i);
   expect(screen.getByRole("button", { name: "Selecionar áudio" })).toBeInTheDocument();
+});
+
+// Task 17: o professor descobre o questionário — WAITING_QTI deixa de ser beco sem
+// saída: o aviso diz o que falta e leva direto à ação, sem soar como erro dele.
+test("aula esperando o questionário mostra o aviso e o link para enviar o relatório", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/aulas/a1": () => jsonResponse({ ...BASE, status: "WAITING_QTI", acompanhamento: ACOMPANHAMENTO }),
+  });
+  renderApp("/aulas/a1");
+  expect(await screen.findByText(/primeira aula do acompanhamento de 9º B/)).toBeInTheDocument();
+  const link = screen.getByRole("link", { name: "Enviar o relatório do questionário" });
+  expect(link).toHaveAttribute("href", "/ciclos/c1/qti");
+});
+
+test("o aviso do questionário não é role=alert — não é erro do professor", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/aulas/a1": () => jsonResponse({ ...BASE, status: "WAITING_QTI", acompanhamento: ACOMPANHAMENTO }),
+  });
+  renderApp("/aulas/a1");
+  await screen.findByRole("link", { name: "Enviar o relatório do questionário" });
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+test("aula fora de qualquer acompanhamento diz isso, sem link quebrado", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/aulas/a1": () => jsonResponse({ ...BASE, acompanhamento: null }),
+  });
+  renderApp("/aulas/a1");
+  expect(await screen.findByText("Fora de qualquer acompanhamento")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Ver o acompanhamento" })).not.toBeInTheDocument();
+});
+
+test("aula dentro de um acompanhamento mostra o link para o relatório dele, em qualquer estado", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/aulas/a1": () => jsonResponse({ ...BASE, status: "FIAS_COMPLETED", acompanhamento: ACOMPANHAMENTO }),
+    "GET /api/aulas/a1/padroes": () => jsonResponse({ faixa: [], observacoes: [], matriz: [], indices: [] }),
+  });
+  renderApp("/aulas/a1");
+  const link = await screen.findByRole("link", { name: "Ver o acompanhamento" });
+  expect(link).toHaveAttribute("href", "/ciclos/c1/relatorio");
 });

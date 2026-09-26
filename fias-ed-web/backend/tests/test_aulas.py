@@ -63,6 +63,29 @@ def test_note_limit(client, db):
     assert r.status_code == 422
 
 
+# Task 17: o professor descobre onde enviar o questionário — o servidor conta a que
+# acompanhamento a aula pertence (chave aditiva de aula_payload), reusando
+# ciclo_da_aula/posicao_no_ciclo de app.ciclos.service em vez de reimplementar a regra.
+def test_aula_dentro_de_acompanhamento_traz_a_posicao_certa(client, ciclo, aula_em):
+    login(client, "professora-ciclo")
+    aula = aula_em(ciclo, "2026-03-02")
+    body = client.get(f"/api/aulas/{aula.id}").json()
+    acompanhamento = body["acompanhamento"]
+    assert acompanhamento == {
+        "id": str(ciclo.id),
+        "turma": {"id": str(ciclo.turma_id), "name": "9º Ano B"},
+        "disciplina": {"id": str(ciclo.disciplina_id), "name": "Matemática"},
+        "n_aulas_previstas": ciclo.n_aulas_previstas,
+        "posicao": "primeira",
+    }
+
+
+def test_aula_fora_de_acompanhamento_traz_acompanhamento_none(client, aula_avulsa):
+    login(client, "professor-avulso")
+    body = client.get(f"/api/aulas/{aula_avulsa.id}").json()
+    assert body["acompanhamento"] is None
+
+
 def test_error_message_in_payload(client, db):
     ana = make_user(db, "ana")
     aula = make_aula(db, ana, status="ERROR")

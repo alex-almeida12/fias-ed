@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.audio.storage import work_rel
 from app.audit import last_admin_change
+from app.ciclos.service import ciclo_da_aula, posicao_no_ciclo
 from app.core.errors import AppError
 from app.core.messages import error_message
 from app.models import (Audio, AudioUpload, Aula, ClassificacaoFIAS, Disciplina, Falante,
@@ -41,11 +42,29 @@ def aula_summary(aula: Aula, turma: Turma, disciplina: Disciplina) -> dict:
             "disciplina": {"id": str(disciplina.id), "name": disciplina.name}}
 
 
+def acompanhamento_da_aula(db: Session, aula: Aula, turma: Turma, disciplina: Disciplina) -> dict | None:
+    """None quando a aula não pertence a nenhum acompanhamento — caso legítimo
+    (aula avulsa), não erro. A regra de pertencimento mora em app.ciclos.service
+    (ciclo_da_aula/posicao_no_ciclo); não reimplementá-la aqui evita duas cópias
+    divergentes da mesma regra."""
+    ciclo = ciclo_da_aula(db, aula)
+    if ciclo is None:
+        return None
+    return {
+        "id": str(ciclo.id),
+        "turma": {"id": str(turma.id), "name": turma.name},
+        "disciplina": {"id": str(disciplina.id), "name": disciplina.name},
+        "n_aulas_previstas": ciclo.n_aulas_previstas,
+        "posicao": posicao_no_ciclo(db, aula),
+    }
+
+
 def aula_payload(db: Session, aula: Aula) -> dict:
+    turma, disciplina = db.get(Turma, aula.turma_id), db.get(Disciplina, aula.disciplina_id)
     audio, upload = current_audio(db, aula.id), pending_upload(db, aula.id)
     changed = last_admin_change(db, aula.id)
     return {
-        **aula_summary(aula, db.get(Turma, aula.turma_id), db.get(Disciplina, aula.disciplina_id)),
+        **aula_summary(aula, turma, disciplina),
         "note": aula.note,
         "error_code": aula.error_code,
         "error_message": error_message(aula.error_code),
@@ -57,6 +76,7 @@ def aula_payload(db: Session, aula: Aula) -> dict:
             "original_filename": upload.original_filename, "size_bytes": upload.size_bytes},
         "job_ativo": has_active_job(db, aula.id),
         "alterada_pelo_admin_em": changed.isoformat() if changed else None,
+        "acompanhamento": acompanhamento_da_aula(db, aula, turma, disciplina),
     }
 
 

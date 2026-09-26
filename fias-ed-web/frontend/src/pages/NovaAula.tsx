@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { api, ApiError, sendAndProcess } from "../api/client";
-import type { Aula, Disciplina, Turma } from "../api/types";
+import type { Aula, Ciclo, Disciplina, Turma } from "../api/types";
 import { AudioPicker } from "../app/AudioPicker";
 import { localDateInput } from "../app/format";
 import { Banner } from "../design/components/Banner";
@@ -21,6 +21,7 @@ export function NovaAula() {
   const [file, setFile] = useState<File | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [temAcompanhamento, setTemAcompanhamento] = useState<boolean | null>(null);
 
   useEffect(() => {
     // Ruling P15: erro ao carregar turmas/disciplinas não deve ficar silencioso.
@@ -29,6 +30,28 @@ export function NovaAula() {
     api<Disciplina[]>("/disciplinas").then(setDisciplinas).catch((err) =>
       setError(err instanceof ApiError ? err.message : "Não foi possível carregar as disciplinas."));
   }, []);
+
+  const turmaEscolhida = turmaId && turmaId !== "__nova__";
+  const disciplinaEscolhida = disciplinaId && disciplinaId !== "__nova__";
+
+  // Task 17: só depois das duas escolhas, senão o aviso seria ruído (spec explícita
+  // do brief). A lista de acompanhamentos é do professor e curta — filtra no cliente
+  // em vez de pedir uma rota nova (GET /api/ciclos já existe).
+  useEffect(() => {
+    if (!turmaEscolhida || !disciplinaEscolhida) {
+      setTemAcompanhamento(null);
+      return;
+    }
+    let cancelado = false;
+    api<Ciclo[]>("/ciclos")
+      .then((ciclos) => {
+        if (!cancelado) {
+          setTemAcompanhamento(ciclos.some((c) => c.turma.id === turmaId && c.disciplina.id === disciplinaId));
+        }
+      })
+      .catch(() => { if (!cancelado) setTemAcompanhamento(null); });
+    return () => { cancelado = true; };
+  }, [turmaEscolhida, disciplinaEscolhida, turmaId, disciplinaId]);
 
   async function salvarDisciplina() {
     setError(null);
@@ -92,6 +115,15 @@ export function NovaAula() {
               Salvar disciplina
             </Button>
           </div>
+        )}
+        {/* Task 17: informa, não bloqueia — aula fora de acompanhamento é caso legítimo
+           (aula avulsa), então o botão de processar continua habilitado abaixo. */}
+        {temAcompanhamento === false && (
+          <Banner kind="info">
+            <p>Não há acompanhamento para esta turma e disciplina. Sem ele, esta aula não entra em nenhuma
+              trajetória e o questionário não se aplica a ela.</p>
+            <p><Link to="/ciclos/novo">Começar um acompanhamento</Link></p>
+          </Banner>
         )}
         <div className="form-grid">
           <TextField label="Data" type="date" value={data} onChange={(e) => setData(e.target.value)} required />

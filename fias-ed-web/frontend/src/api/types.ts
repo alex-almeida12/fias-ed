@@ -31,6 +31,16 @@ export interface AudioInfo {
   sample_rate: number;
 }
 
+export type Posicao = "primeira" | "primeira_e_ultima" | "meio" | "ultima" | "fora";
+
+export interface AulaAcompanhamento {
+  id: string;
+  turma: { id: string; name: string };
+  disciplina: { id: string; name: string };
+  n_aulas_previstas: number;
+  posicao: Posicao;
+}
+
 export interface Aula extends AulaResumo {
   note: string | null;
   error_code: string | null;
@@ -39,6 +49,7 @@ export interface Aula extends AulaResumo {
   upload_pendente: { original_filename: string; size_bytes: number } | null;
   job_ativo: boolean;
   alterada_pelo_admin_em: string | null;
+  acompanhamento: AulaAcompanhamento | null;
 }
 
 export interface VozAmostra { inicio_ms: number; fim_ms: number }

@@ -5,7 +5,8 @@ import { jsonResponse, mockApi, PROFESSORA, renderApp } from "../test-utils";
 
 const AULA = { id: "a1", lesson_date: "2026-09-22", turma: { id: "t1", name: "9º B" },
   disciplina: { id: "d1", name: "Ciências" }, note: null, error_code: null, error_message: null, audio: null,
-  upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null, status: "READY_FOR_SPEAKER_REVIEW" };
+  upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null, acompanhamento: null,
+  status: "READY_FOR_SPEAKER_REVIEW" };
 
 const VOZES = { vozes: [
   { rotulo: "voz-1", tempo_total_ms: 1_680_000, n_segmentos: 142, amostras: [{ inicio_ms: 0, fim_ms: 4000 }] },

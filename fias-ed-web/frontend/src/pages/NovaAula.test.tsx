@@ -13,7 +13,7 @@ const ESCOLA = { id: "e1", name: "Escola A", municipality: "Mossoró", region: "
 const TURMA = { id: "t1", name: "9º B", school_year: 2026, level: null, escola: ESCOLA };
 const AULA = { id: "a1", lesson_date: "2026-09-22", status: "DRAFT", turma: { id: "t1", name: "9º B" },
   disciplina: { id: "d1", name: "Ciências" }, note: null, error_code: null, error_message: null, audio: null,
-  upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null };
+  upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null, acompanhamento: null };
 
 // Nota: chaves obrigatórias aqui — mockReset() retorna o próprio mock (uma função); uma
 // arrow sem chaves devolveria essa função ao runner, que a trataria como callback de
@@ -29,6 +29,7 @@ test("preenche, seleciona o áudio e processa a aula", async () => {
     "GET /api/turmas": () => jsonResponse([TURMA]),
     "GET /api/disciplinas": () => jsonResponse([{ id: "d1", name: "Ciências" }]),
     "GET /api/escolas": () => jsonResponse([ESCOLA]),
+    "GET /api/ciclos": () => jsonResponse([]),
     "POST /api/aulas": () => jsonResponse(AULA, 201),
     "GET /api/aulas/a1": () => jsonResponse({ ...AULA, status: "AUDIO_IMPORTED", job_ativo: true }),
   });
@@ -53,6 +54,7 @@ test("processar fica desabilitado sem arquivo", async () => {
     "GET /api/turmas": () => jsonResponse([TURMA]),
     "GET /api/disciplinas": () => jsonResponse([{ id: "d1", name: "Ciências" }]),
     "GET /api/escolas": () => jsonResponse([ESCOLA]),
+    "GET /api/ciclos": () => jsonResponse([]),
   });
   renderApp("/aulas/nova");
   await screen.findByRole("option", { name: /9º B/ });
@@ -67,6 +69,7 @@ test("nova turma com escola duplicada oferece usar a existente", async () => {
     "GET /api/turmas": () => jsonResponse(turmas),
     "GET /api/disciplinas": () => jsonResponse([]),
     "GET /api/escolas": () => jsonResponse([]),
+    "GET /api/ciclos": () => jsonResponse([]),
     "POST /api/escolas": () => jsonResponse({ error_code: "ESCOLA_DUPLICADA",
       message: "Já existe uma escola com este nome neste município.", duplicatas: [ESCOLA] }, 409),
     "POST /api/turmas": (init) => {
@@ -96,6 +99,7 @@ test("upload falha após criar a aula: mensagem aparece na página da aula", asy
     "GET /api/turmas": () => jsonResponse([TURMA]),
     "GET /api/disciplinas": () => jsonResponse([{ id: "d1", name: "Ciências" }]),
     "GET /api/escolas": () => jsonResponse([ESCOLA]),
+    "GET /api/ciclos": () => jsonResponse([]),
     "POST /api/aulas": () => jsonResponse(AULA, 201),
     "GET /api/aulas/a1": () => jsonResponse(AULA),
   });
@@ -117,7 +121,66 @@ test("erro ao carregar turmas mostra aviso", async () => {
     "GET /api/turmas": () => jsonResponse({ error_code: "ERRO", message: "Falha ao listar turmas." }, 500),
     "GET /api/disciplinas": () => jsonResponse([]),
     "GET /api/escolas": () => jsonResponse([]),
+    "GET /api/ciclos": () => jsonResponse([]),
   });
   renderApp("/aulas/nova");
   expect(await screen.findByRole("alert")).toHaveTextContent("Falha ao listar turmas.");
+});
+
+// Task 17: aula avulsa (fora de acompanhamento) é caso legítimo e suportado — o aviso
+// informa, não bloqueia. GET /api/ciclos já existe (lista do professor, curta); filtra
+// no cliente por turma+disciplina em vez de uma rota nova.
+test("turma e disciplina sem acompanhamento mostram o aviso, com o link para criar um, sem travar o botão", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/turmas": () => jsonResponse([TURMA]),
+    "GET /api/disciplinas": () => jsonResponse([{ id: "d1", name: "Ciências" }]),
+    "GET /api/escolas": () => jsonResponse([ESCOLA]),
+    "GET /api/ciclos": () => jsonResponse([]),
+  });
+  renderApp("/aulas/nova");
+  await screen.findByRole("option", { name: /9º B/ });
+  await userEvent.selectOptions(screen.getByLabelText("Turma"), "t1");
+  await userEvent.selectOptions(screen.getByLabelText("Disciplina"), "d1");
+  expect(await screen.findByText(/Não há acompanhamento para esta turma e disciplina/)).toBeInTheDocument();
+  const link = screen.getByRole("link", { name: "Começar um acompanhamento" });
+  expect(link).toHaveAttribute("href", "/ciclos/novo");
+  // teste 9 do brief: o aviso informa, não bloqueia — o botão de processar segue habilitado.
+  const file = new File(["x"], "aula.mp3", { type: "audio/mpeg" });
+  await userEvent.upload(screen.getByLabelText("Arquivo de áudio"), file);
+  expect(screen.getByRole("button", { name: "Processar aula" })).toBeEnabled();
+});
+
+test("com acompanhamento existente para a turma e a disciplina, o aviso não aparece", async () => {
+  const spy = mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/turmas": () => jsonResponse([TURMA]),
+    "GET /api/disciplinas": () => jsonResponse([{ id: "d1", name: "Ciências" }]),
+    "GET /api/escolas": () => jsonResponse([ESCOLA]),
+    "GET /api/ciclos": () => jsonResponse([{ id: "c1", turma: { id: "t1", name: "9º B" },
+      disciplina: { id: "d1", name: "Ciências" }, n_aulas_previstas: 8, iniciado_em: "2026-03-01",
+      encerrado_em: null }]),
+  });
+  renderApp("/aulas/nova");
+  await screen.findByRole("option", { name: /9º B/ });
+  await userEvent.selectOptions(screen.getByLabelText("Turma"), "t1");
+  await userEvent.selectOptions(screen.getByLabelText("Disciplina"), "d1");
+  // Confirma que a consulta realmente aconteceu (não é ausência por a chamada nunca ter ocorrido).
+  await waitFor(() => expect(spy).toHaveBeenCalledWith("/api/ciclos", expect.anything()));
+  expect(screen.queryByText(/Não há acompanhamento/)).not.toBeInTheDocument();
+});
+
+test("com só turma ou só disciplina escolhida, o aviso não aparece e o acompanhamento não é consultado", async () => {
+  const spy = mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/turmas": () => jsonResponse([TURMA]),
+    "GET /api/disciplinas": () => jsonResponse([{ id: "d1", name: "Ciências" }]),
+    "GET /api/escolas": () => jsonResponse([ESCOLA]),
+    "GET /api/ciclos": () => jsonResponse([]),
+  });
+  renderApp("/aulas/nova");
+  await screen.findByRole("option", { name: /9º B/ });
+  await userEvent.selectOptions(screen.getByLabelText("Turma"), "t1");
+  expect(screen.queryByText(/Não há acompanhamento/)).not.toBeInTheDocument();
+  expect(spy.mock.calls.some(([url]) => url === "/api/ciclos")).toBe(false);
 });
