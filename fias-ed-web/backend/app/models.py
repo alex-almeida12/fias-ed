@@ -286,8 +286,16 @@ class RespostaQTI(Base):
 
 
 class ResultadoQTI(EntityMixin, Base):
+    """Uma coleta tem **um** resultado agregado — invariante de domínio, não
+    só cuidado de concorrência. `coleta_id` é `unique=True` (migração 0010):
+    sem essa restrição, duas respostas chegando por links diferentes da
+    mesma coleta poderiam fazer busca-ou-cria em paralelo em
+    `app/publico/routes.py`, as duas encontrarem vazio, as duas inserirem —
+    e um relatório que encontrasse dois resultados agregados da mesma coleta
+    escolheria arbitrariamente qual mostrar, com os números mudando entre
+    execuções. Mesmo padrão de `ConsentimentoQTI.coleta_id`."""
     __tablename__ = "resultado_qti"
-    coleta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("coleta_qti.id"), index=True, nullable=False)
+    coleta_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("coleta_qti.id"), unique=True, nullable=False)
     octantes: Mapped[dict] = mapped_column(JSON, nullable=False)
     agency: Mapped[float] = mapped_column(Float, nullable=False)
     communion: Mapped[float] = mapped_column(Float, nullable=False)

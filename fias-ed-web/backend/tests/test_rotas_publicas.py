@@ -1,13 +1,16 @@
 """As três rotas sem autenticação do sistema. O que se testa aqui não é só o
 caminho feliz: é que o limite não é furado, que resposta incompleta não entra,
 e que nada sobre o professor ou a turma vaza para quem abre o link."""
+import datetime as dt
+from datetime import timezone
+
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 
 from app.core.db import SessionLocal, get_engine
 from app.models import ConsentimentoQTI, LinkQTI, RespostaQTI
-from app.qti.links import criar_link
+from app.qti.links import criar_link, revogar
 
 RESPOSTAS = {str(i): 4 for i in range(1, 25)}
 
@@ -34,6 +37,40 @@ def test_token_invalido_da_404_sem_dizer_por_que(db, client_publico):
     r = client_publico.get("/publico/qti/token-que-nao-existe-de-jeito-nenhum")
     assert r.status_code == 404
     assert "expirado" not in r.text.lower() and "revogado" not in r.text.lower()
+
+
+def test_link_invalido_expirado_e_revogado_dao_a_mesma_resposta_nas_tres_rotas(db, client_publico, coleta_nativa):
+    """A garantia central do link público (§10: "a diferença entre 'não
+    existe' e 'expirou' já é informação sobre a turma") só tinha cobertura
+    de HTTP para token inventado — nada no nível da rota travava uma
+    regressão que voltasse a distinguir expirado de revogado; a garantia se
+    sustentava só porque `link_valido` já reduz os três casos a um `None`
+    só. Aqui as três rotas são batidas com um token inexistente, um expirado
+    de verdade e um revogado de verdade, e os corpos são comparados ENTRE SI
+    — não contra texto copiado à mão — para o teste continuar valendo se a
+    mensagem de erro mudar."""
+    token_inexistente = "token-que-nao-existe-de-jeito-nenhum"
+
+    link_expirado, token_expirado = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    link_expirado.expira_em = dt.datetime.now(timezone.utc) - dt.timedelta(seconds=1)
+    db.commit()
+
+    link_revogado, token_revogado = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    revogar(db, link_revogado)
+
+    rotas = (
+        ("GET", "/publico/qti/{token}", None),
+        ("POST", "/publico/qti/{token}/consentir", {"documento_versao": "1.0.0"}),
+        ("POST", "/publico/qti/{token}/responder", {"respostas": RESPOSTAS}),
+    )
+    for metodo, modelo, corpo in rotas:
+        base = client_publico.request(metodo, modelo.format(token=token_inexistente), json=corpo)
+        expirado = client_publico.request(metodo, modelo.format(token=token_expirado), json=corpo)
+        revogado = client_publico.request(metodo, modelo.format(token=token_revogado), json=corpo)
+
+        assert base.status_code == 404, (metodo, modelo, base.status_code)
+        assert expirado.status_code == 404 == revogado.status_code, (metodo, modelo)
+        assert expirado.json() == base.json() == revogado.json(), (metodo, modelo)
 
 
 def test_responder_sem_consentir_e_recusado(db, client_publico, coleta_nativa):
@@ -155,9 +192,30 @@ def test_for_update_no_link_serializa_duas_sessoes(db, coleta_nativa):
         db_b.close()
 
 
+def test_a_coleta_nao_e_exibivel_com_nove_respostas(db, client_publico, coleta_nativa):
+    """Achado da revisão: com exatamente dez respostas (o limiar), um `Web`
+    que decidisse `displayable` por conta própria (`coleta.displayable =
+    True`, fixo) coincidiria com o valor certo, e o teste abaixo passaria do
+    mesmo jeito — dando confiança falsa justo no ponto que a spec protege
+    (com poucos respondentes numa turma grande, o professor pode inferir
+    quem respondeu). Nove respostas é o caso que distingue: o motor
+    (`aggregate`) diz que NÃO é exibível abaixo do limiar, e só um `Web` que
+    de fato persista o que `aggregate` devolveu — em vez de inventar — pega
+    isso."""
+    token = _token(db, coleta_nativa, n=20)
+    for _ in range(9):
+        client_publico.post(f"/publico/qti/{token}/consentir", json={"documento_versao": "1.0.0"})
+        client_publico.post(f"/publico/qti/{token}/responder", json={"respostas": RESPOSTAS})
+    db.refresh(coleta_nativa)
+    assert coleta_nativa.response_count == 9 and coleta_nativa.displayable is False
+
+
 def test_a_coleta_passa_a_ser_exibivel_na_decima_resposta(db, client_publico, coleta_nativa):
     """`min_responses` é 10 em qti_config.json, e quem decide é o motor:
-    `aggregate` devolve `displayable`. O Web só persiste o que ele disse."""
+    `aggregate` devolve `displayable`. O Web só persiste o que ele disse.
+    Complementa `test_a_coleta_nao_e_exibivel_com_nove_respostas`: aquele
+    prova o lado "abaixo do limiar, não exibível"; este prova "no limiar,
+    exibível" — juntos, os dois lados do limite."""
     token = _token(db, coleta_nativa, n=20)
     for i in range(10):
         client_publico.post(f"/publico/qti/{token}/consentir", json={"documento_versao": "1.0.0"})
