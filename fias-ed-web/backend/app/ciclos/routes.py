@@ -1,5 +1,6 @@
 import datetime as dt
 import uuid
+from datetime import timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -11,7 +12,7 @@ from app.ciclos.schemas import CicloIn, ciclo_out
 from app.ciclos.service import ciclo_do_professor
 from app.core.db import get_db
 from app.core.errors import AppError
-from app.models import Ciclo, Disciplina, Turma
+from app.models import Ciclo, ColetaQTI, Disciplina, LinkQTI, Turma
 from app.relatorios.routes import _ciclo_payload
 
 router = APIRouter()
@@ -20,6 +21,28 @@ router = APIRouter()
 def _owned(db: Session, model, obj_id: uuid.UUID, professor_id: uuid.UUID):
     obj = db.get(model, obj_id)
     return obj if obj is not None and obj.deleted_at is None and obj.professor_id == professor_id else None
+
+
+def _links_vivos_por_ciclo(db: Session, ciclo_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[dict]]:
+    # "Vivo" replica exatamente o filtro de app.qti.links.link_valido (menos o token, que
+    # nunca sai daqui): sem isso um link expirado ou revogado continuaria oferecendo a ação
+    # de revogar por engano. Uma lista, não "o link ativo": gerar_link cria um token novo a
+    # cada chamada, então dois cliques deixam dois links vivos na mesma coleta.
+    if not ciclo_ids:
+        return {}
+    agora = dt.datetime.now(timezone.utc)
+    linhas = db.execute(
+        select(LinkQTI, ColetaQTI.ciclo_id, ColetaQTI.coletado_em)
+        .join(ColetaQTI, ColetaQTI.id == LinkQTI.coleta_id)
+        .where(ColetaQTI.ciclo_id.in_(ciclo_ids), ColetaQTI.deleted_at.is_(None),
+               LinkQTI.deleted_at.is_(None), LinkQTI.revogado_em.is_(None), LinkQTI.expira_em > agora)
+    ).all()
+    resultado: dict[uuid.UUID, list[dict]] = {cid: [] for cid in ciclo_ids}
+    for link, ciclo_id, coletado_em in linhas:
+        resultado[ciclo_id].append({"id": str(link.id), "expira_em": link.expira_em.isoformat(),
+                                    "limite_respostas": link.limite_respostas,
+                                    "coletado_em": coletado_em.isoformat()})
+    return resultado
 
 
 @router.get("/ciclos")
@@ -31,7 +54,8 @@ def list_ciclos(actor: Actor = Depends(current_actor), db: Session = Depends(get
         .order_by(Ciclo.iniciado_em.desc())).all()
     audit(db, actor, "ciclo", None, "read")
     db.commit()
-    return [_ciclo_payload(c, t, d) for c, t, d in rows]
+    links_por_ciclo = _links_vivos_por_ciclo(db, [c.id for c, t, d in rows])
+    return [{**_ciclo_payload(c, t, d), "links_qti": links_por_ciclo[c.id]} for c, t, d in rows]
 
 
 @router.post("/ciclos", status_code=201)

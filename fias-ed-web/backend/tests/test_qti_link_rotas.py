@@ -1,4 +1,6 @@
 import datetime as dt
+import json
+import uuid
 
 import pytest
 from sqlalchemy import select
@@ -138,3 +140,52 @@ def test_revogar_derruba_o_link(db, client, ciclo):
 def test_revogar_link_de_outro_professor_da_404(db, client, ciclo, link_de_outro):
     login(client, "professora-ciclo")
     assert client.post(f"/api/qti/links/{link_de_outro.id}/revogar").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Task 6 (w3b): sem o `id` do link na resposta de gerar_link, e sem `links_qti`
+# em GET /ciclos, a rota de revogar existe mas nenhuma tela tem como chamá-la.
+# ---------------------------------------------------------------------------
+
+
+def test_gerar_link_devolve_id_de_um_link_que_existe_no_banco(db, client, ciclo):
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/link",
+                    json={"n_estudantes": 30, "dias": 7, "coletado_em": "2026-09-01"})
+    link_id = r.json()["id"]
+    assert db.get(LinkQTI, uuid.UUID(link_id)) is not None
+
+
+def test_get_ciclos_traz_links_qti_vivo_e_fica_vazio_depois_de_revogar(db, client, ciclo):
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/link",
+                    json={"n_estudantes": 30, "dias": 7, "coletado_em": "2026-09-01"})
+    link_id = r.json()["id"]
+
+    item = next(c for c in client.get("/api/ciclos").json() if c["id"] == str(ciclo.id))
+    assert item["links_qti"] == [{"id": link_id, "expira_em": r.json()["expira_em"],
+                                  "limite_respostas": 33, "coletado_em": "2026-09-01"}]
+
+    assert client.post(f"/api/qti/links/{link_id}/revogar").status_code == 204
+
+    # É este que prova que "vivo" significa vivo: o mesmo ciclo, revogado, some da lista.
+    item_depois = next(c for c in client.get("/api/ciclos").json() if c["id"] == str(ciclo.id))
+    assert item_depois["links_qti"] == []
+
+
+def test_get_ciclos_nunca_expoe_token_nem_token_hash(client, ciclo):
+    login(client, "professora-ciclo")
+    client.post(f"/api/ciclos/{ciclo.id}/qti/link",
+                json={"n_estudantes": 30, "dias": 7, "coletado_em": "2026-09-01"})
+    r = client.get("/api/ciclos")
+    # Varre o JSON serializado inteiro, não só as chaves do primeiro nível: "token" é
+    # substring tanto de "token" quanto de "token_hash".
+    assert "token" not in json.dumps(r.json()).lower()
+
+
+def test_relatorio_do_ciclo_nao_ganha_links_qti(client, ciclo):
+    login(client, "professora-ciclo")
+    client.post(f"/api/ciclos/{ciclo.id}/qti/link",
+                json={"n_estudantes": 30, "dias": 7, "coletado_em": "2026-09-01"})
+    r = client.get(f"/api/ciclos/{ciclo.id}/relatorio")
+    assert "links_qti" not in r.json()["ciclo"]

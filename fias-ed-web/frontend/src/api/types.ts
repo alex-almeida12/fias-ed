@@ -169,6 +169,29 @@ export interface Ciclo {
   encerrado_em: string | null;
 }
 
+// Um link vivo do questionário nativo, como GET /ciclos os lista (nunca o token nem o hash —
+// só o que identifica o link para poder revogá-lo). Tipo próprio, não um campo opcional em
+// Ciclo: só a listagem carrega isto, o relatório do ciclo (que reaproveita Ciclo) não.
+export interface LinkQtiVivo {
+  id: string;
+  expira_em: string;
+  limite_respostas: number;
+  coletado_em: string;
+}
+
+export interface CicloNaLista extends Ciclo {
+  links_qti: LinkQtiVivo[];
+}
+
+// Resposta de POST /ciclos/{id}/qti/link: o token só viaja dentro de `url`, e só nesta
+// resposta — nem o banco consegue reconstruí-lo depois.
+export interface LinkQtiGerado {
+  id: string;
+  url: string;
+  expira_em: string;
+  limite_respostas: number;
+}
+
 export interface TrajetoriaItem {
   aula_id: string;
   lesson_date: string;
