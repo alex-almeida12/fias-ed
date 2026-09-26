@@ -74,6 +74,50 @@ def test_gerar_dois_links_na_mesma_data_reusa_a_coleta(db, client, ciclo):
     assert db.query(LinkQTI).count() == 2
 
 
+def test_gerar_link_com_turma_de_50_usa_aritmetica_inteira(db, client, ciclo):
+    """30 esconde o erro de arredondamento: 30 * 1.10 e 30 * 11 / 10 coincidem.
+    50 é onde os dois divergem (50 * 1.10 == 55.00000000000001 em ponto
+    flutuante, e math.ceil disso dá 56; a aritmética inteira dá 55)."""
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/link",
+                    json={"n_estudantes": 50, "dias": 7, "coletado_em": "2026-09-01"})
+    assert r.status_code == 201
+    assert r.json()["limite_respostas"] == 55
+
+
+def test_gerar_link_reusa_coleta_nativa_ja_existente_na_data(db, client, ciclo):
+    coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=dt.date(2026, 9, 1), origem="COLETA_NATIVA",
+                       response_count=0, displayable=False, qti_config_version="1.0.0",
+                       cabecalho_recebido=None)
+    db.add(coleta)
+    db.commit()
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/link",
+                    json={"n_estudantes": 30, "dias": 7, "coletado_em": "2026-09-01"})
+    assert r.status_code == 201
+    assert db.query(ColetaQTI).count() == 1
+    assert db.query(ColetaQTI).one().id == coleta.id
+
+
+def test_gerar_link_recusa_quando_ja_existe_coleta_importada_na_data(db, client, ciclo):
+    """`coleta_nativa_do_dia` não filtra por origem na consulta: se o que
+    encontra na data é uma coleta importada (que tem respostas de verdade),
+    recusa em vez de substituir — ao contrário da reimportação, gerar um
+    link não traz dado nenhum que justifique apagar trabalho existente."""
+    coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=dt.date(2026, 9, 1), origem="IMPORTACAO_EXTERNA",
+                       response_count=12, displayable=True, qti_config_version="1.0.0",
+                       cabecalho_recebido="response_id,q1")
+    db.add(coleta)
+    db.commit()
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/link",
+                    json={"n_estudantes": 30, "dias": 7, "coletado_em": "2026-09-01"})
+    assert r.status_code == 409
+    assert r.json()["error_code"] == "COLETA_JA_EXISTE"
+    assert db.query(ColetaQTI).count() == 1
+    assert db.query(LinkQTI).count() == 0
+
+
 def test_gerar_link_em_ciclo_de_outro_professor_da_404(db, client, ciclo, ciclo_de_outro):
     login(client, "professora-ciclo")
     r = client.post(f"/api/ciclos/{ciclo_de_outro.id}/qti/link",

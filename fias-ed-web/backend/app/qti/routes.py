@@ -59,7 +59,7 @@ def gerar_link(ciclo_id: uuid.UUID, body: LinkIn, request: Request,
     # O token viaja só nesta resposta. Não entra em log nem em nenhuma outra
     # rota: `log_event` tem allowlist de campos e não o aceitaria, mas a regra
     # aqui é anterior a ela — não se registra credencial.
-    return {"url": f"{request.base_url}responder/{token}".replace("//responder", "/responder"),
+    return {"url": f"{request.base_url}responder/{token}",
             "expira_em": link.expira_em.isoformat(),
             "limite_respostas": link.limite_respostas}
 

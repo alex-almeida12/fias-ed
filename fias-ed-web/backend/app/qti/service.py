@@ -53,15 +53,28 @@ def coleta_nativa_do_dia(db: Session, ciclo: Ciclo, data: dt.date) -> ColetaQTI:
     """A coleta nativa daquela data, criada se ainda não existir. Gerar um
     segundo link para o mesmo dia reusa a coleta: duas coletas vivas na mesma
     data fariam a triangulação escolher arbitrariamente qual vale, que é o
-    mesmo defeito que a reimportação já evita do outro lado."""
+    mesmo defeito que a reimportação já evita do outro lado.
+
+    A consulta NÃO filtra por origem — é o que encontra que decide. Se já
+    existe uma coleta viva na data e ela é nativa, reusa (mesmo motivo de
+    sempre). Se é importada, recusa: gerar um link não traz dado nenhum, e
+    apagar uma coleta importada (que tem respostas de verdade) só porque
+    alguém clicou em "gerar link" destruiria trabalho por um gesto que não
+    pede isso — ao contrário de reimportar, que traz dado novo e substituir
+    é razoável. Por isso o sentido inverso (`importar_relatorio`) segue sem
+    filtrar por origem: as duas funções olham a mesma linha, cada uma decide
+    o que fazer com o que acha."""
     existente = db.execute(
         select(ColetaQTI).where(ColetaQTI.ciclo_id == ciclo.id,
                                 ColetaQTI.coletado_em == data,
-                                ColetaQTI.origem == "COLETA_NATIVA",
                                 ColetaQTI.deleted_at.is_(None))
     ).scalars().first()
     if existente is not None:
-        return existente
+        if existente.origem == "COLETA_NATIVA":
+            return existente
+        raise AppError(409, "COLETA_JA_EXISTE",
+                       "Já existe um relatório importado para esta data. Use outra data, "
+                       "ou apague a coleta importada antes de gerar o link.")
     cfg = load_rules("qti_config")
     coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=data, origem="COLETA_NATIVA",
                        response_count=0, displayable=False,
