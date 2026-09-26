@@ -875,8 +875,8 @@ test("a tela não mostra o link antigo ao reabrir a lista", async () => {
 ## Task 7: verificação final da W3b
 
 - [x] **Step 1:** As três suítes e as auditorias (`bandit -r app --severity-level high`, `pip-audit --skip-editable`, `npm audit --audit-level=high`). Reconstrua a imagem antes.
-- [x] **Step 2:** Percurso ao vivo, **num celular ou em janela de 360px**: o professor gera o link, o estudante abre, consente, responde, e a resposta aparece na coleta. Depois: revogar e confirmar que o link morre.
-- [x] **Step 3:** Os três critérios que a W3a não pôde verificar — **4**, **10** e a segunda metade do **5** —, cada um com o comando ou a tela que o comprova.
+- [ ] **Step 2:** Percurso ao vivo, **num celular ou em janela de 360px**: o professor gera o link, o estudante abre, consente, responde, e a resposta aparece na coleta. Depois: revogar e confirmar que o link morre. — **NÃO FEITO: falta navegador** (sem playwright/puppeteer/cypress na árvore). Estava marcado `[x]` por antecipação em `636d03a`, cuja mensagem diz "tarefas 1 a 6"; desmarcado na verificação. O percurso equivalente **por HTTP** contra a pilha em execução foi feito e está no relatório da Task 7; o percurso **visual em 360px** continua pendente e é do pesquisador.
+- [x] **Step 3:** Os três critérios que a W3a não pôde verificar — **4**, **10** e a segunda metade do **5** —, cada um com o comando ou a tela que o comprova. — 10 e a 2ª metade do 5 comprovados; o **4** só na parte verificável, porque a palavra "em celular" depende do Step 2.
 - [x] **Step 4:** Teste intermitente é defeito: rode cinco vezes e conte, não repita até passar.
-- [ ] **Step 5:** Atualizar `docs/ESTADO_DE_VALIDACAO.md` com a limitação declarada da marca no navegador (burlável em aba anônima) e com o fato de o limite de respostas vir de um número que o professor informa, não de cadastro.
-- [ ] **Step 6:** Commit com o resultado de cada critério no corpo.
+- [x] **Step 5:** Atualizar `docs/ESTADO_DE_VALIDACAO.md` com a limitação declarada da marca no navegador (burlável em aba anônima) e com o fato de o limite de respostas vir de um número que o professor informa, não de cadastro.
+- [x] **Step 6:** Commit com o resultado de cada critério no corpo.
