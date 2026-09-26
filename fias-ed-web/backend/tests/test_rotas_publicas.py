@@ -2,8 +2,11 @@
 caminho feliz: é que o limite não é furado, que resposta incompleta não entra,
 e que nada sobre o professor ou a turma vaza para quem abre o link."""
 import pytest
+from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
 
-from app.models import ConsentimentoQTI, RespostaQTI
+from app.core.db import SessionLocal, get_engine
+from app.models import ConsentimentoQTI, LinkQTI, RespostaQTI
 from app.qti.links import criar_link
 
 RESPOSTAS = {str(i): 4 for i in range(1, 25)}
@@ -81,13 +84,20 @@ def test_o_limite_de_respostas_e_respeitado(db, client_publico, coleta_nativa):
     assert db.query(RespostaQTI).count() == 2
 
 
-def test_o_limite_nao_e_furado_por_dois_envios_ao_mesmo_tempo(db, client_publico, coleta_nativa):
-    """Review Focus 2: duas pessoas enviam com uma vaga restante. Sem a
-    contagem sob a mesma transação do INSERT, as duas passam pela verificação
-    antes de qualquer uma gravar, e o limite vira sugestão.
+def test_o_limite_e_respeitado_em_envios_sucessivos(db, client_publico, coleta_nativa):
+    """Renomeado (era `test_o_limite_nao_e_furado_por_dois_envios_ao_mesmo_tempo`):
+    o nome antigo prometia concorrência que este teste não prova. O
+    `TestClient` é síncrono — cada `post()` completa inteiro (grava e comita)
+    antes do próximo começar — então não há aqui duas requisições realmente
+    simultâneas em nenhum momento; cada tentativa sempre vê o commit da
+    anterior. O que isto prova de fato é mais estreito, mas ainda vale: que a
+    contagem não escorrega ao longo de vários envios sucessivos, mesmo depois
+    de o limite já ter sido atingido (não é só "a próxima falha", é "todas as
+    seguintes continuam falhando").
 
-    O teste simula a corrida gravando a penúltima resposta por fora, entre a
-    leitura e a escrita da requisição em curso."""
+    Quem prova que a trava serializa concorrência de verdade é
+    `test_for_update_no_link_serializa_duas_sessoes`, logo abaixo — sem HTTP,
+    com duas sessões de banco reais."""
     token = _token(db, coleta_nativa, n=1)   # limite 2
     client_publico.post(f"/publico/qti/{token}/consentir", json={"documento_versao": "1.0.0"})
     client_publico.post(f"/publico/qti/{token}/responder", json={"respostas": RESPOSTAS})
@@ -98,6 +108,51 @@ def test_o_limite_nao_e_furado_por_dois_envios_ao_mesmo_tempo(db, client_publico
         client_publico.post(f"/publico/qti/{token}/consentir", json={"documento_versao": "1.0.0"})
         client_publico.post(f"/publico/qti/{token}/responder", json={"respostas": RESPOSTAS})
     assert db.query(RespostaQTI).count() == 2
+
+
+def test_for_update_no_link_serializa_duas_sessoes(db, coleta_nativa):
+    """Review Focus 2, provado na camada onde a garantia realmente vive.
+
+    Nenhum teste que passe pelo `TestClient` cria concorrência de verdade —
+    ele é síncrono, então duas chamadas HTTP nunca disputam a mesma linha ao
+    mesmo tempo; a de cima sempre comita antes da de baixo começar. Por isso
+    este teste não usa `client_publico` nem HTTP: abre duas sessões de banco
+    reais (duas conexões de verdade) e verifica a primitiva que
+    `app/publico/routes.py` usa (`SELECT ... FOR UPDATE` sobre `LinkQTI`) do
+    jeito que ela tem que se comportar sob disputa — é a garantia que o
+    endpoint depende dela ter, não um substituto para testar o endpoint.
+
+    Sessão A trava a linha do link e segura a transação aberta (sem comitar).
+    Sessão B, com um `lock_timeout` curto, tenta a mesma trava na mesma
+    linha: se `FOR UPDATE` está de fato bloqueando, B tem que estourar o
+    timeout e falhar — não silenciosamente ter sucesso. Depois A libera (comita)
+    e a mesma tentativa de B, numa transação nova, tem que suceder sem espera
+    nenhuma."""
+    link, _ = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    link_id = link.id
+
+    # Sessão A: trava a linha e não comita — é o que held-a-lock significa.
+    db.execute(select(LinkQTI).where(LinkQTI.id == link_id).with_for_update())
+
+    # Sessão B: outra conexão de verdade com o banco, não um segundo uso da mesma.
+    db_b = SessionLocal(bind=get_engine())
+    try:
+        db_b.execute(text("SET LOCAL lock_timeout = '500ms'"))
+        with pytest.raises(OperationalError):
+            db_b.execute(select(LinkQTI).where(LinkQTI.id == link_id).with_for_update())
+        # A transação de B abortou com o erro do Postgres; precisa de rollback
+        # antes de reusar a conexão para qualquer outro comando.
+        db_b.rollback()
+
+        # Sessão A libera a trava...
+        db.commit()
+
+        # ...e agora a mesma consulta em B, numa transação nova, não espera nada.
+        travado = db_b.execute(select(LinkQTI).where(LinkQTI.id == link_id).with_for_update()).scalar_one()
+        assert travado.id == link_id
+        db_b.commit()
+    finally:
+        db_b.close()
 
 
 def test_a_coleta_passa_a_ser_exibivel_na_decima_resposta(db, client_publico, coleta_nativa):
