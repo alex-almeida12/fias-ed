@@ -173,6 +173,54 @@ def test_get_ciclos_traz_links_qti_vivo_e_fica_vazio_depois_de_revogar(db, clien
     assert item_depois["links_qti"] == []
 
 
+def test_get_ciclos_omite_link_com_expira_em_no_passado(db, client, ciclo):
+    """Mesma simetria de test_..._fica_vazio_depois_de_revogar, para o filtro de expiração:
+    sem ele, um link vencido continuaria oferecendo 'Revogar' na tela — o professor acharia
+    que o questionário está aberto quando os estudantes já recebem LINK_INVALIDO."""
+    login(client, "professora-ciclo")
+    coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=dt.date(2026, 9, 1), origem="COLETA_NATIVA",
+                       response_count=0, displayable=False, qti_config_version="1.0.0",
+                       cabecalho_recebido=None)
+    db.add(coleta)
+    db.flush()
+    link, _token = criar_link(db, coleta, n_estudantes=30, dias=7)
+    link.expira_em = dt.datetime(2020, 1, 1, tzinfo=dt.timezone.utc)
+    db.commit()
+
+    item = next(c for c in client.get("/api/ciclos").json() if c["id"] == str(ciclo.id))
+    assert item["links_qti"] == []
+
+
+def test_get_ciclos_omite_link_com_deleted_at_preenchido(db, client, ciclo):
+    login(client, "professora-ciclo")
+    coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=dt.date(2026, 9, 1), origem="COLETA_NATIVA",
+                       response_count=0, displayable=False, qti_config_version="1.0.0",
+                       cabecalho_recebido=None)
+    db.add(coleta)
+    db.flush()
+    link, _token = criar_link(db, coleta, n_estudantes=30, dias=7)
+    link.deleted_at = dt.datetime.now(dt.timezone.utc)
+    db.commit()
+
+    item = next(c for c in client.get("/api/ciclos").json() if c["id"] == str(ciclo.id))
+    assert item["links_qti"] == []
+
+
+def test_get_ciclos_omite_link_vivo_de_coleta_apagada(db, client, ciclo):
+    login(client, "professora-ciclo")
+    coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=dt.date(2026, 9, 1), origem="COLETA_NATIVA",
+                       response_count=0, displayable=False, qti_config_version="1.0.0",
+                       cabecalho_recebido=None)
+    db.add(coleta)
+    db.flush()
+    link, _token = criar_link(db, coleta, n_estudantes=30, dias=7)
+    coleta.deleted_at = dt.datetime.now(dt.timezone.utc)
+    db.commit()
+
+    item = next(c for c in client.get("/api/ciclos").json() if c["id"] == str(ciclo.id))
+    assert item["links_qti"] == []
+
+
 def test_get_ciclos_nunca_expoe_token_nem_token_hash(client, ciclo):
     login(client, "professora-ciclo")
     client.post(f"/api/ciclos/{ciclo.id}/qti/link",
