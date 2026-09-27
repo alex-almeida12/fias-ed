@@ -19,6 +19,7 @@ services:
     build:
       context: ./deploy
       dockerfile: db.Dockerfile
+    image: fias-ed-web-db:local
     user: "70:70"
     environment:
       POSTGRES_USER: postgres
@@ -132,6 +133,31 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  # A única porta que os celulares alcançam (docs/deploy-local.md). Mesma imagem do
+  # `web`, publicando só a 8081 — o servidor que serve só as rotas do estudante.
+  # Profile "coleta": não sobe com `docker compose up`; quem abre é
+  # deploy/subir-coleta.sh, no IP da rede da sala. Sem o script, FIAS_ED_LAN_IP cai
+  # em 127.0.0.1 — o padrão é não expor nada.
+  # restart "no": depois de reiniciar o computador, a porta da sala não reabre
+  # sozinha; e, se o IP da sala tiver sumido, só este serviço falha — o `web` do
+  # professor continua de pé.
+  web-lan:
+    <<: *hardening
+    image: fias-ed-web-web:local
+    restart: "no"
+    profiles: ["coleta"]
+    ports:
+      - "${FIAS_ED_LAN_IP:-127.0.0.1}:${FIAS_ED_LAN_PORT:-8081}:8081"
+    networks: [edge]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/"]
       interval: 10s
       timeout: 3s
       retries: 10
