@@ -205,6 +205,16 @@ test("o diálogo de gerar manda os três campos no corpo", async () => {
   expect(corpo).toEqual({ n_estudantes: 30, dias: 14, coletado_em: "2026-09-20" });
 });
 
+test("o diálogo de gerar avisa que um novo link desativa o anterior da mesma data", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/ciclos": () => jsonResponse([ACOMPANHAMENTO]),
+  });
+  renderApp("/ciclos");
+  await userEvent.click(await screen.findByRole("button", { name: /gerar link/i }));
+  expect(within(screen.getByRole("dialog")).getByText(/desativa o anterior/i)).toBeInTheDocument();
+});
+
 test("ciclo com link vivo mostra a ação de revogar", async () => {
   mockApi({
     "GET /api/auth/me": () => jsonResponse(PROFESSORA),

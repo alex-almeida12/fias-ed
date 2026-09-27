@@ -1,6 +1,12 @@
 import datetime as dt
-from datetime import timezone
+import threading
+from datetime import date, timezone
 
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+
+from app.core.db import SessionLocal, get_engine
 from app.models import Base, ColetaQTI, LinkQTI
 from app.qti.links import criar_link, link_valido, revogar
 
@@ -86,3 +92,72 @@ def test_link_qti_e_a_base_nao_definem_repr_nem_str_proprios():
     for classe in (LinkQTI, Base):
         assert "__repr__" not in classe.__dict__
         assert "__str__" not in classe.__dict__
+
+
+def test_criar_um_segundo_link_revoga_o_primeiro(db, coleta_nativa):
+    primeiro, token1 = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    segundo, token2 = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    assert link_valido(db, token1) is None
+    assert link_valido(db, token2).id == segundo.id
+
+
+def test_criar_link_nao_revoga_o_de_outra_coleta(db, ciclo, coleta_nativa):
+    outra = ColetaQTI(ciclo_id=ciclo.id, coletado_em=date(2026, 10, 1), origem="COLETA_NATIVA",
+                      response_count=0, displayable=False, qti_config_version="1.0.0")
+    db.add(outra)
+    db.commit()
+    _, token_da_outra = criar_link(db, outra, n_estudantes=30, dias=7)
+    criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    assert link_valido(db, token_da_outra) is not None
+
+
+def test_o_banco_recusa_dois_links_vivos_na_mesma_coleta(db, coleta_nativa):
+    """A garantia não pode depender só de criar_link: a restrição é do banco."""
+    agora = dt.datetime.now(dt.timezone.utc)
+    for sufixo in ("a", "b"):
+        db.add(LinkQTI(coleta_id=coleta_nativa.id, token_hash=sufixo * 64,
+                       expira_em=agora + dt.timedelta(days=7), limite_respostas=33))
+    with pytest.raises(IntegrityError):
+        db.commit()
+    db.rollback()
+
+
+def test_um_link_revogado_nao_impede_outro_vivo(db, coleta_nativa):
+    """O índice é parcial: revogado ou apagado não conta."""
+    agora = dt.datetime.now(dt.timezone.utc)
+    db.add(LinkQTI(coleta_id=coleta_nativa.id, token_hash="a" * 64, revogado_em=agora,
+                   expira_em=agora + dt.timedelta(days=7), limite_respostas=33))
+    db.add(LinkQTI(coleta_id=coleta_nativa.id, token_hash="b" * 64,
+                   expira_em=agora + dt.timedelta(days=7), limite_respostas=33))
+    db.commit()
+
+
+def test_criar_link_espera_quem_esta_criando_outro_para_a_mesma_coleta(db, coleta_nativa):
+    """Dois cliques em "gerar link" disputam a coleta. Quem chega depois tem de esperar o
+    primeiro terminar — senão não enxerga o link que ele criou, não o revoga, e o banco
+    recusa o segundo link vivo com erro 500.
+
+    A outra sessão trava a coleta com FOR NO KEY UPDATE, de propósito: esse modo conflita
+    com o FOR UPDATE de criar_link, mas NÃO com o FOR KEY SHARE que a chave estrangeira do
+    INSERT em link_qti pede. Então só um criar_link que trave a coleta de verdade espera —
+    sem a trava, ele passaria direto e este teste cairia."""
+    segurando = SessionLocal(bind=get_engine())
+    segurando.execute(text("SELECT 1 FROM coleta_qti WHERE id = :id FOR NO KEY UPDATE"),
+                      {"id": coleta_nativa.id})
+    resultado = {}
+
+    def gerar():
+        with SessionLocal(bind=get_engine()) as s:
+            coleta = s.get(ColetaQTI, coleta_nativa.id)
+            resultado["link"], _ = criar_link(s, coleta, n_estudantes=30, dias=7)
+
+    t = threading.Thread(target=gerar)
+    t.start()
+    t.join(timeout=1.0)
+    try:
+        assert t.is_alive(), "criar_link não esperou a trava da coleta"
+    finally:
+        segurando.commit()
+        segurando.close()
+        t.join(timeout=10)
+    assert "link" in resultado

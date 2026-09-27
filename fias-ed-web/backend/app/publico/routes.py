@@ -5,8 +5,10 @@ para que ninguém acrescente uma rota autenticada aqui por engano, nem o
 contrário. Nada que identifique o professor ou a turma sai daqui: quem abre o
 link vê as 24 perguntas e a escala, e mais nada.
 """
+import datetime as dt
 import hashlib
 import hmac
+from datetime import timezone
 
 from fastapi import APIRouter, Depends, Request, Response
 from fias_ed_engine.qti import IncompleteResponseError, QtiImportError, aggregate, score_response
@@ -144,10 +146,20 @@ def responder(token: str, body: ResponderIn, request: Request, db: Session = Dep
     except (IncompleteResponseError, QtiImportError) as exc:
         raise AppError(422, "QTI_RESPOSTA_INVALIDA", str(exc)) from exc
 
-    # O limite é conferido sob FOR UPDATE do LinkQTI, na mesma transação do
-    # INSERT: sem isso, dois envios com uma vaga restante passam os dois pela
-    # contagem antes de qualquer um gravar, e o limite vira sugestão.
-    link_travado = db.execute(select(LinkQTI).where(LinkQTI.id == link.id).with_for_update()).scalar_one()
+    # O limite é conferido sob FOR UPDATE do LinkQTI, na mesma transação do INSERT.
+    # Com um link vivo por coleta (migração 0011), todo envio vivo disputa esta mesma
+    # linha. `populate_existing` é obrigatório: sem ele o SELECT devolve o objeto que
+    # `link_valido` já carregou nesta sessão, com os atributos de antes.
+    link_travado = db.execute(select(LinkQTI).where(LinkQTI.id == link.id)
+                              .with_for_update()
+                              .execution_options(populate_existing=True)).scalar_one()
+    # Revalida com a trava na mão: entre `link_valido` e aqui o professor pode ter
+    # gerado outro link para a mesma data — o que revoga este — ou revogado à mão.
+    agora = dt.datetime.now(timezone.utc)
+    if (link_travado.revogado_em is not None or link_travado.deleted_at is not None
+            or link_travado.expira_em <= agora):
+        db.rollback()
+        raise _link_invalido()
     atual = db.scalar(select(func.count()).select_from(RespostaQTI)
                       .where(RespostaQTI.coleta_id == link_travado.coleta_id, RespostaQTI.deleted_at.is_(None)))
     if atual >= link_travado.limite_respostas:

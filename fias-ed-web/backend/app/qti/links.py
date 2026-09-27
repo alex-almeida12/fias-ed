@@ -11,7 +11,7 @@ import math
 import secrets
 from datetime import timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models import ColetaQTI, LinkQTI
@@ -27,11 +27,21 @@ def _hash(token: str) -> str:
 
 
 def criar_link(db: Session, coleta: ColetaQTI, *, n_estudantes: int, dias: int) -> tuple[LinkQTI, str]:
+    agora = dt.datetime.now(timezone.utc)
+    # Um link vivo por coleta (índice uq_link_qti_um_vivo_por_coleta, migração 0011).
+    # A trava na coleta serializa dois pedidos simultâneos: quem chega depois espera,
+    # enxerga o link que o primeiro criou e o revoga — em vez de esbarrar no índice.
+    db.execute(select(ColetaQTI.id).where(ColetaQTI.id == coleta.id).with_for_update())
+    db.execute(update(LinkQTI)
+               .where(LinkQTI.coleta_id == coleta.id,
+                      LinkQTI.revogado_em.is_(None),
+                      LinkQTI.deleted_at.is_(None))
+               .values(revogado_em=agora))
     token = secrets.token_urlsafe(32)
     link = LinkQTI(
         coleta_id=coleta.id,
         token_hash=_hash(token),
-        expira_em=dt.datetime.now(timezone.utc) + dt.timedelta(days=dias),
+        expira_em=agora + dt.timedelta(days=dias),
         # `LIMITE_FOLGA` documenta a intenção (10% de folga), mas o cálculo
         # não passa por ela em ponto flutuante: `n * 1.10` sofre erro de
         # arredondamento binário (50 * 1.10 == 55.00000000000001 em Python),

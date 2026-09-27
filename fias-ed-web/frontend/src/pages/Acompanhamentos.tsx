@@ -193,6 +193,7 @@ export function Acompanhamentos() {
             <Button variant="tertiary" onClick={() => setGerandoPara(null)}>Cancelar</Button>
             <Button onClick={() => void gerarLink()} disabled={!prontoGerar || gerando}>Gerar</Button>
           </>}>
+          <p>Gerar um novo link para a mesma data desativa o anterior: o QR code que estiver projetado deixa de funcionar.</p>
           <div className="form-grid">
             <TextField label="Quantos estudantes tem a turma?" type="number" min={1} max={200} required
               value={nEstudantes} onChange={(e) => setNEstudantes(e.target.value)} />

@@ -10,7 +10,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal, get_engine
-from app.models import ConsentimentoQTI, LinkQTI, RespostaQTI
+from app.models import ColetaQTI, ConsentimentoQTI, LinkQTI, RespostaQTI
 from app.publico.routes import COOKIE_CONSENTIMENTO, _valor_consentimento
 from app.qti.links import criar_link, revogar
 
@@ -53,12 +53,19 @@ def test_link_invalido_expirado_e_revogado_dao_a_mesma_resposta_nas_tres_rotas(d
     mensagem de erro mudar."""
     token_inexistente = "token-que-nao-existe-de-jeito-nenhum"
 
+    # Ordem importa desde a migração 0011 (um link vivo por coleta): criar um segundo
+    # link revoga o primeiro que ainda estivesse vivo na mesma coleta. Por isso o que
+    # vai ser revogado nasce primeiro (e já revogado antes do próximo criar_link), e só
+    # depois nasce o que vai ficar só expirado — se a ordem fosse a inversa, criar
+    # link_revogado revogaria link_expirado de brinde, e o teste pararia de provar que
+    # um link SÓ expirado (sem também estar revogado) dá a mesma resposta.
+    link_revogado, token_revogado = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    revogar(db, link_revogado)
+
     link_expirado, token_expirado = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
     link_expirado.expira_em = dt.datetime.now(timezone.utc) - dt.timedelta(seconds=1)
     db.commit()
-
-    link_revogado, token_revogado = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
-    revogar(db, link_revogado)
+    assert link_expirado.revogado_em is None
 
     rotas = (
         ("GET", "/publico/qti/{token}", None),
@@ -251,13 +258,23 @@ def test_cookie_forjado_com_o_link_id_cru_e_recusado(db, client_publico, coleta_
     assert db.query(RespostaQTI).count() == 0
 
 
-def test_o_valor_de_consentimento_de_um_link_nao_vale_para_outro(db, client_publico, coleta_nativa):
+def test_o_valor_de_consentimento_de_um_link_nao_vale_para_outro(db, client_publico, ciclo, coleta_nativa):
     """O que impede o HMAC de virar uma senha universal: ele é uma função do
     par (link.id, link.token_hash), não só do id. Consentir no link A e
     tentar usar o valor resultante no link B tem que ser recusado do mesmo
-    jeito que o cookie cru era."""
+    jeito que o cookie cru era.
+
+    `link_b` fica numa segunda coleta do mesmo ciclo (outra data): desde a
+    migração 0011 (um link vivo por coleta), os dois não poderiam continuar
+    vivos na mesma coleta — criar_link(coleta_nativa, ...) para o link_b
+    revogaria o link_a antes de o teste chegar a exercitar a propriedade do
+    HMAC que importa aqui."""
     link_a, token_a = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
-    link_b, token_b = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    outra_coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=dt.date(2026, 10, 1), origem="COLETA_NATIVA",
+                             response_count=0, displayable=False, qti_config_version="1.0.0")
+    db.add(outra_coleta)
+    db.commit()
+    link_b, token_b = criar_link(db, outra_coleta, n_estudantes=30, dias=7)
 
     client_publico.post(f"/publico/qti/{token_a}/consentir", json={"documento_versao": "1.0.0"})
     valor_de_a = _valor_consentimento(link_a)
@@ -300,12 +317,25 @@ def test_o_hmac_depende_do_token_hash_e_nao_so_do_id():
     assert _valor_consentimento(link_1) != _valor_consentimento(link_2)
 
 
-def test_um_navegador_com_dois_links_consentidos_responde_aos_dois(db, client_publico, coleta_nativa):
+def test_um_navegador_com_dois_links_consentidos_responde_aos_dois(db, client_publico, ciclo, coleta_nativa):
     """A lista de valores no cookie não pode ter virado campo único: um
     estudante que responde a dois questionários no mesmo navegador precisa
-    continuar conseguindo consentir e responder aos dois."""
+    continuar conseguindo consentir e responder aos dois.
+
+    Achado além do brief original desta tarefa (não estava na lista de testes
+    afetados do pré-voo): `token_b` era da mesma `coleta_nativa` de `token_a`.
+    Desde a migração 0011 (um link vivo por coleta), gerar o link de `token_b`
+    revogava o de `token_a` — o segundo `assert` deste teste (responder por
+    `token_a`) passava a dar 404 em vez de 201. `token_b` agora é de uma
+    segunda coleta do mesmo ciclo (outra data), para os dois links
+    continuarem vivos ao mesmo tempo, que é o cenário que o teste quer
+    provar."""
     token_a = _token(db, coleta_nativa)
-    token_b = _token(db, coleta_nativa)
+    outra_coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=dt.date(2026, 10, 2), origem="COLETA_NATIVA",
+                             response_count=0, displayable=False, qti_config_version="1.0.0")
+    db.add(outra_coleta)
+    db.commit()
+    token_b = _token(db, outra_coleta)
 
     client_publico.post(f"/publico/qti/{token_a}/consentir", json={"documento_versao": "1.0.0"})
     client_publico.post(f"/publico/qti/{token_b}/consentir", json={"documento_versao": "1.0.0"})
@@ -343,3 +373,38 @@ def test_em_https_o_cookie_de_consentimento_e_secure(db, client_publico, coleta_
     _, token = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
     r = client_publico.post(f"/publico/qti/{token}/consentir", json={"documento_versao": "1.0.0"})
     assert "secure" in _atributos_do_cookie(r.headers["set-cookie"])
+
+
+def test_o_limite_segue_o_link_mais_recente(db, client_publico, coleta_nativa):
+    _, token_antigo = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)   # teto 33
+    _, token_novo = criar_link(db, coleta_nativa, n_estudantes=2, dias=7)      # teto 3
+    assert client_publico.get(f"/publico/qti/{token_antigo}").status_code == 404
+    assert client_publico.post(f"/publico/qti/{token_novo}/consentir",
+                               json={"documento_versao": "1.0.0"}).status_code == 201
+    codigos = [client_publico.post(f"/publico/qti/{token_novo}/responder",
+                                   json={"respostas": RESPOSTAS}).status_code for _ in range(4)]
+    assert codigos == [201, 201, 201, 409]
+
+
+def test_link_substituido_entre_a_validacao_e_a_trava_nao_grava(db, client_publico, coleta_nativa,
+                                                                monkeypatch):
+    """A janela que a revalidação fecha: `link_valido` viu o link vivo e, antes de a
+    trava ser tomada, o professor gerou outro — o que revoga este. Sem revalidar com a
+    trava na mão, a resposta entraria por um link já desativado, em paralelo com as do
+    link novo."""
+    _, token = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    assert client_publico.post(f"/publico/qti/{token}/consentir",
+                               json={"documento_versao": "1.0.0"}).status_code == 201
+    import app.publico.routes as rotas
+    original = rotas.link_valido
+
+    def valido_e_logo_substituido(sessao, tok):
+        vivo = original(sessao, tok)
+        with SessionLocal(bind=get_engine()) as outra:
+            criar_link(outra, outra.get(ColetaQTI, coleta_nativa.id), n_estudantes=30, dias=7)
+        return vivo
+
+    monkeypatch.setattr(rotas, "link_valido", valido_e_logo_substituido)
+    r = client_publico.post(f"/publico/qti/{token}/responder", json={"respostas": RESPOSTAS})
+    assert r.status_code == 404
+    assert db.query(RespostaQTI).count() == 0

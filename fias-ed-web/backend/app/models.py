@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime, timezone
 
 from sqlalchemy import (BigInteger, Boolean, Date, DateTime, Enum, Float, ForeignKey, Index, Integer,
-                        JSON, MetaData, String, literal_column)
+                        JSON, MetaData, String, literal_column, text)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -317,6 +317,10 @@ class LinkQTI(Base):
     cadeia (coleta → ciclo → professor); perder qual instalação gerou cada
     link, num sistema de uso local e single-user, é custo aceito."""
     __tablename__ = "link_qti"
+    __table_args__ = (
+        Index("uq_link_qti_um_vivo_por_coleta", "coleta_id", unique=True,
+              postgresql_where=text("revogado_em IS NULL AND deleted_at IS NULL")),
+    )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow,

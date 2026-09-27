@@ -26,8 +26,9 @@ def _owned(db: Session, model, obj_id: uuid.UUID, professor_id: uuid.UUID):
 def _links_vivos_por_ciclo(db: Session, ciclo_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[dict]]:
     # "Vivo" replica exatamente o filtro de app.qti.links.link_valido (menos o token, que
     # nunca sai daqui): sem isso um link expirado ou revogado continuaria oferecendo a ação
-    # de revogar por engano. Uma lista, não "o link ativo": gerar_link cria um token novo a
-    # cada chamada, então dois cliques deixam dois links vivos na mesma coleta.
+    # de revogar por engano. Uma lista, não "o link ativo": um acompanhamento tem várias
+    # datas de coleta, e cada uma tem no máximo um link vivo (índice
+    # uq_link_qti_um_vivo_por_coleta, migração 0011) — a lista soma esses links, um por data.
     if not ciclo_ids:
         return {}
     agora = dt.datetime.now(timezone.utc)
