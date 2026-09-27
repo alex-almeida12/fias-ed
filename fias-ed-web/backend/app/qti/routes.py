@@ -1,7 +1,7 @@
 import datetime as dt
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fias_ed_engine.rules import load_rules
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.audit import audit
 from app.auth.deps import Actor, current_actor
 from app.ciclos.service import ciclo_do_professor
+from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import AppError
 from app.core.messages import error_message
@@ -49,7 +50,7 @@ class LinkIn(BaseModel):
 
 
 @router.post("/ciclos/{ciclo_id}/qti/link", status_code=201)
-def gerar_link(ciclo_id: uuid.UUID, body: LinkIn, request: Request,
+def gerar_link(ciclo_id: uuid.UUID, body: LinkIn,
                actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
     ciclo = ciclo_do_professor(db, actor, ciclo_id)
     coleta = coleta_nativa_do_dia(db, ciclo, body.coletado_em)
@@ -59,8 +60,9 @@ def gerar_link(ciclo_id: uuid.UUID, body: LinkIn, request: Request,
     # O token viaja só nesta resposta. Não entra em log nem em nenhuma outra
     # rota: `log_event` tem allowlist de campos e não o aceitaria, mas a regra
     # aqui é anterior a ela — não se registra credencial.
+    base = get_settings().public_url.rstrip("/")
     return {"id": str(link.id),
-            "url": f"{request.base_url}responder/{token}",
+            "url": f"{base}/responder/{token}",
             "expira_em": link.expira_em.isoformat(),
             "limite_respostas": link.limite_respostas}
 

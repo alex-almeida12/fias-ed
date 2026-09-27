@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.errors import AppError
 from app.models import ColetaQTI, ConsentimentoQTI, LinkQTI, RespostaQTI, ResultadoQTI, utcnow
@@ -38,9 +39,18 @@ router = APIRouter()
 # de responder a seguir, exatamente como pedido no design ("o consentimento
 # fica na sessão do navegador, não no banco ligado à resposta"). Path
 # restrito a /publico para não se misturar com o cookie de sessão do
-# professor.
+# professor. A flag `secure` não é fixa: acompanha o esquema de `public_url`
+# (ver `_cookie_kwargs`), porque na sala, sem TLS, ela é `http://IP:8081`.
 COOKIE_CONSENTIMENTO = "fias_qti_consentimento"
-_COOKIE_KWARGS = {"httponly": True, "secure": True, "samesite": "strict", "path": "/publico"}
+
+
+def _cookie_kwargs() -> dict:
+    # `Secure` segue o esquema da URL pública. Na sala, sem TLS, ela é http://IP:8081,
+    # e os navegadores descartam cookie Secure vindo de http fora de localhost — o
+    # estudante aceitaria o convite e levaria 409 em todo envio. Se um dia houver TLS,
+    # a URL passa a https e o Secure volta sozinho.
+    seguro = get_settings().public_url.startswith("https://")
+    return {"httponly": True, "secure": seguro, "samesite": "strict", "path": "/publico"}
 
 
 def _valor_consentimento(link: LinkQTI) -> str:
@@ -67,7 +77,7 @@ def _consentiu_na_sessao(request: Request, link: LinkQTI) -> bool:
 def _marcar_consentimento_na_sessao(request: Request, response: Response, link: LinkQTI) -> None:
     atuais = {v for v in request.cookies.get(COOKIE_CONSENTIMENTO, "").split(",") if v}
     atuais.add(_valor_consentimento(link))
-    response.set_cookie(COOKIE_CONSENTIMENTO, ",".join(atuais), **_COOKIE_KWARGS)
+    response.set_cookie(COOKIE_CONSENTIMENTO, ",".join(atuais), **_cookie_kwargs())
 
 
 def _registrar_consentimento(db: Session, coleta_id, documento_versao: str) -> None:

@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     audio_store: Path = Path("/data/audio")
     shared_dir: Path = Path("/opt/fias-ed-shared")
     device_id: str = "fias-ed-web"
+    # Endereço que vai dentro do link do estudante. Na sala, deploy/subir-coleta.sh o
+    # define como http://<IP da rede>:8081 (FIAS_ED_PUBLIC_URL no host). O padrão serve
+    # a quem usa tudo nesta máquina.
+    public_url: str = "http://localhost:8080"
     max_upload_bytes: int = 1_610_612_736
     min_audio_seconds: int = 60
     max_audio_seconds: int = 9_000

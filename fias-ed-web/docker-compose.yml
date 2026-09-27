@@ -13,6 +13,20 @@ x-api-image: &api-image
     target: prod
   image: fias-ed-web-api:local
 
+x-api-env: &api-env
+  DATABASE_URL: postgresql+psycopg://fias_ed_app:${FIAS_ED_APP_PASSWORD}@db:5432/fias_ed_web
+  DEVICE_ID: ${DEVICE_ID:-fias-ed-web}
+  MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-1610612736}
+  MIN_AUDIO_SECONDS: ${MIN_AUDIO_SECONDS:-60}
+  MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-9000}
+  MODELS_DIR: /models
+  ASR_SIZE: ${ASR_SIZE:-small}
+  # Em execução nada sai para a rede atrás de peso. As três classes de modelo
+  # já carregam com local_files_only; isto aqui é a segunda tranca, para o
+  # caso de uma dependência resolver consultar o Hub por conta própria.
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+
 services:
   db:
     <<: *hardening
@@ -52,19 +66,10 @@ services:
 
   api:
     <<: [*hardening, *api-image]
-    environment: &api-env
-      DATABASE_URL: postgresql+psycopg://fias_ed_app:${FIAS_ED_APP_PASSWORD}@db:5432/fias_ed_web
-      DEVICE_ID: ${DEVICE_ID:-fias-ed-web}
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-1610612736}
-      MIN_AUDIO_SECONDS: ${MIN_AUDIO_SECONDS:-60}
-      MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-9000}
-      MODELS_DIR: /models
-      ASR_SIZE: ${ASR_SIZE:-small}
-      # Em execução nada sai para a rede atrás de peso. As três classes de modelo
-      # já carregam com local_files_only; isto aqui é a segunda tranca, para o
-      # caso de uma dependência resolver consultar o Hub por conta própria.
-      HF_HUB_OFFLINE: "1"
-      TRANSFORMERS_OFFLINE: "1"
+    environment:
+      <<: *api-env
+      # Endereço que vai dentro do link do estudante; deploy/subir-coleta.sh o define na sala.
+      PUBLIC_URL: ${FIAS_ED_PUBLIC_URL:-http://localhost:8080}
     volumes:
       - audio_store:/data/audio
       - models:/models:ro

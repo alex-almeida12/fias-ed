@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.exc import OperationalError
 
+from app.core.config import get_settings
 from app.core.db import SessionLocal, get_engine
 from app.models import ConsentimentoQTI, LinkQTI, RespostaQTI
 from app.publico.routes import COOKIE_CONSENTIMENTO, _valor_consentimento
@@ -314,3 +315,31 @@ def test_um_navegador_com_dois_links_consentidos_responde_aos_dois(db, client_pu
     assert client_publico.post(f"/publico/qti/{token_b}/responder",
                                json={"respostas": RESPOSTAS}).status_code == 201
     assert db.query(RespostaQTI).count() == 2
+
+
+def _atributos_do_cookie(set_cookie: str) -> list[str]:
+    return [parte.strip().lower() for parte in set_cookie.split(";")]
+
+
+def test_em_http_o_cookie_de_consentimento_nao_e_secure(db, client_publico, coleta_nativa, monkeypatch):
+    """Na sala, sem TLS, a URL pública é http://IP:8081. Os navegadores descartam cookie
+    Secure vindo de http fora de localhost, e o estudante receberia 409 em todo envio."""
+    monkeypatch.setenv("PUBLIC_URL", "http://192.168.137.1:8081")
+    get_settings.cache_clear()
+    _, token = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    r = client_publico.post(f"/publico/qti/{token}/consentir", json={"documento_versao": "1.0.0"})
+    assert r.status_code == 201
+    atributos = _atributos_do_cookie(r.headers["set-cookie"])
+    assert atributos[0].startswith("fias_qti_consentimento=")
+    assert "secure" not in atributos
+    assert "httponly" in atributos
+    assert "samesite=strict" in atributos
+    assert "path=/publico" in atributos
+
+
+def test_em_https_o_cookie_de_consentimento_e_secure(db, client_publico, coleta_nativa, monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "https://fias.exemplo")
+    get_settings.cache_clear()
+    _, token = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    r = client_publico.post(f"/publico/qti/{token}/consentir", json={"documento_versao": "1.0.0"})
+    assert "secure" in _atributos_do_cookie(r.headers["set-cookie"])

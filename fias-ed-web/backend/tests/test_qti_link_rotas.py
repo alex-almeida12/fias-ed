@@ -5,6 +5,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.models import Ciclo, ColetaQTI, Disciplina, Escola, LinkQTI, Turma
 from app.qti.links import criar_link, link_valido
 from tests.helpers import login, make_user
@@ -54,6 +55,29 @@ def test_gerar_link_devolve_a_url_uma_unica_vez(db, client, ciclo):
     assert r.json()["limite_respostas"] == 33
     token = url.rsplit("/", 1)[-1]
     assert db.scalar(select(LinkQTI)).token_hash != token
+
+
+def test_a_url_do_link_vem_da_url_publica_configurada(db, client, ciclo, monkeypatch):
+    """O professor gera o link em localhost:8080; o estudante abre em IP:8081. A URL
+    não pode sair do cabeçalho da requisição do professor — sai da configuração."""
+    monkeypatch.setenv("PUBLIC_URL", "http://192.168.137.1:8081")
+    get_settings.cache_clear()
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/link",
+                    json={"n_estudantes": 30, "dias": 7, "coletado_em": "2026-09-01"})
+    assert r.status_code == 201
+    url = r.json()["url"]
+    assert url.startswith("http://192.168.137.1:8081/responder/")
+    assert "testserver" not in url
+
+
+def test_sem_configuracao_o_link_aponta_para_esta_maquina(db, client, ciclo, monkeypatch):
+    monkeypatch.delenv("PUBLIC_URL", raising=False)
+    get_settings.cache_clear()
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/link",
+                    json={"n_estudantes": 30, "dias": 7, "coletado_em": "2026-09-01"})
+    assert r.json()["url"].startswith("http://localhost:8080/responder/")
 
 
 def test_gerar_link_cria_a_coleta_nativa_se_nao_houver(db, client, ciclo):
