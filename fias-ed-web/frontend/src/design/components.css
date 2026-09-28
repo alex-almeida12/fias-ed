@@ -55,6 +55,12 @@
 .dialog { background: var(--color-white); border-radius: var(--radius-md); padding: var(--space-6); max-width: 32rem; width: 100%;
   box-shadow: 0 8px 24px rgb(47 65 86 / 0.2); }
 .dialog__actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-5); flex-wrap: wrap; }
+/* Variante "grande" do diálogo (Task 5, conserto 1): 32rem dá ~448px de área útil —
+   pequeno demais para o QR "para projetar" (min(80vh, 90vw) em .qr--projetar, Task 5),
+   que precisa ser lido a alguns metros de distância. Só a largura/altura mudam, em
+   unidade de viewport para acompanhar o tamanho real da tela que projeta; o resto
+   (fundo, raio, sombra, respiro interno) continua herdado de .dialog. */
+.dialog--projecao { max-width: 94vw; max-height: 94vh; overflow-y: auto; }
 
 /* Estado vazio */
 .empty { background: var(--color-surface-alt); border-radius: var(--radius-md); padding: var(--space-7) var(--space-5); text-align: center; }

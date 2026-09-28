@@ -212,7 +212,7 @@ export function Acompanhamentos() {
         </Dialog>
       )}
       {projetando && linkGerado && (
-        <Dialog title="Link para os estudantes" onClose={() => setProjetando(false)}
+        <Dialog title="Link para os estudantes" onClose={() => setProjetando(false)} tamanho="projecao"
           actions={<Button variant="tertiary" onClick={() => setProjetando(false)}>Fechar</Button>}>
           <QrCode valor={linkGerado.url} rotulo="QR code do link para os estudantes" className="qr qr--projetar" />
           <p>Para quem não conseguir ler o código: {linkGerado.url}</p>

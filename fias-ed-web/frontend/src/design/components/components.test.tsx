@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -50,6 +52,41 @@ test("Dialog mantém o foco ao digitar e chama a versão mais recente do onClose
   expect(input).toHaveFocus();
   await userEvent.keyboard("{Escape}");
   expect(chamadas).toEqual(["abcde"]);
+});
+
+// Task 5, conserto 1: o diálogo padrão trava a caixa em 32rem — bom para texto de
+// confirmação, pequeno demais para o QR "para projetar". A variante muda só a classe do
+// elemento com role="dialog"; o padrão (usado por encerrar, revogar, gerar link, excluir
+// conta/aula) precisa continuar exatamente igual, sem saber que a variante existe.
+test("Dialog só leva a classe da variante de projeção quando `tamanho='projecao'` é pedido", () => {
+  const { rerender } = render(<Dialog title="T" onClose={() => {}} actions={<Button>Ok</Button>}>x</Dialog>);
+  expect(screen.getByRole("dialog")).not.toHaveClass("dialog--projecao");
+  rerender(
+    <Dialog title="T" onClose={() => {}} actions={<Button>Ok</Button>} tamanho="projecao">x</Dialog>,
+  );
+  expect(screen.getByRole("dialog")).toHaveClass("dialog--projecao");
+});
+
+// A prova geométrica de verdade (o QR realmente grande na tela) é visual — jsdom não faz
+// layout. O que dá para provar por aqui, lendo o CSS de verdade (mesmo raciocínio de
+// contraste-telas.test.ts/FaixaDeTempo.test.ts): a variante existe e não herda o teto de
+// 32rem do diálogo padrão, usando unidade de viewport — um rem fixo maior continuaria sem
+// acompanhar o tamanho real da tela que está projetando.
+test("a variante de projeção do diálogo não herda o teto de largura do diálogo padrão", () => {
+  const ler = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+  const COMPONENTES = ler("../components.css");
+  function declaracao(seletor: string, propriedade: string): string {
+    const abre = COMPONENTES.indexOf(`${seletor} {`);
+    expect(abre, `regra ${seletor} não existe em components.css`).toBeGreaterThan(-1);
+    const corpo = COMPONENTES.slice(abre + seletor.length + 2, COMPONENTES.indexOf("}", abre));
+    const par = corpo.split(";").find((d) => d.trim().startsWith(`${propriedade}:`));
+    expect(par, `${seletor} não declara ${propriedade}`).toBeDefined();
+    return par!.slice(par!.indexOf(":") + 1).trim();
+  }
+  const padrao = declaracao(".dialog", "max-width");
+  const projecao = declaracao(".dialog--projecao", "max-width");
+  expect(projecao).not.toBe(padrao);
+  expect(projecao).toMatch(/v[wh]/);
 });
 
 test("Banner de erro é alerta", () => {

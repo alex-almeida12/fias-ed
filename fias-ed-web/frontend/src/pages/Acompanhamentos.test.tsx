@@ -179,12 +179,25 @@ test("gerar o link mostra o QR code, que decodifica para a url devolvida", async
   expect(lerQr(qr as unknown as SVGSVGElement)).toBe("http://x/responder/tok123");
 });
 
-test("mostrar para projetar abre o QR grande num diálogo", async () => {
+test("mostrar para projetar abre o QR grande num diálogo, na variante de projeção", async () => {
   await gerarLink();
   await userEvent.click(screen.getByRole("button", { name: /mostrar para projetar/i }));
   const dialogo = screen.getByRole("dialog");
   const qr = within(dialogo).getByRole("img", { name: /qr code do link/i });
   expect(lerQr(qr as unknown as SVGSVGElement)).toBe("http://x/responder/tok123");
+  // O diálogo padrão trava em 32rem (bom para confirmação de texto), pequeno demais para
+  // um QR pensado para ser lido a alguns metros de distância — este precisa da variante.
+  expect(dialogo).toHaveClass("dialog--projecao");
+});
+
+test("o diálogo de gerar link, na mesma tela, continua com o tamanho padrão", async () => {
+  mockApi({
+    "GET /api/auth/me": () => jsonResponse(PROFESSORA),
+    "GET /api/ciclos": () => jsonResponse([ACOMPANHAMENTO]),
+  });
+  renderApp("/ciclos");
+  await userEvent.click(await screen.findByRole("button", { name: /gerar link/i }));
+  expect(screen.getByRole("dialog")).not.toHaveClass("dialog--projecao");
 });
 
 test("a tela não mostra o link antigo ao reabrir a lista", async () => {
