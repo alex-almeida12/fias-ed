@@ -13,12 +13,27 @@ x-api-image: &api-image
     target: prod
   image: fias-ed-web-api:local
 
+x-api-env: &api-env
+  DATABASE_URL: postgresql+psycopg://fias_ed_app:${FIAS_ED_APP_PASSWORD}@db:5432/fias_ed_web
+  DEVICE_ID: ${DEVICE_ID:-fias-ed-web}
+  MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-1610612736}
+  MIN_AUDIO_SECONDS: ${MIN_AUDIO_SECONDS:-60}
+  MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-9000}
+  MODELS_DIR: /models
+  ASR_SIZE: ${ASR_SIZE:-small}
+  # Em execução nada sai para a rede atrás de peso. As três classes de modelo
+  # já carregam com local_files_only; isto aqui é a segunda tranca, para o
+  # caso de uma dependência resolver consultar o Hub por conta própria.
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+
 services:
   db:
     <<: *hardening
     build:
       context: ./deploy
       dockerfile: db.Dockerfile
+    image: fias-ed-web-db:local
     user: "70:70"
     environment:
       POSTGRES_USER: postgres
@@ -51,14 +66,13 @@ services:
 
   api:
     <<: [*hardening, *api-image]
-    environment: &api-env
-      DATABASE_URL: postgresql+psycopg://fias_ed_app:${FIAS_ED_APP_PASSWORD}@db:5432/fias_ed_web
-      DEVICE_ID: ${DEVICE_ID:-fias-ed-web}
-      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-1610612736}
-      MIN_AUDIO_SECONDS: ${MIN_AUDIO_SECONDS:-60}
-      MAX_AUDIO_SECONDS: ${MAX_AUDIO_SECONDS:-9000}
+    environment:
+      <<: *api-env
+      # Endereço que vai dentro do link do estudante; deploy/subir-coleta.sh o define na sala.
+      PUBLIC_URL: ${FIAS_ED_PUBLIC_URL:-http://localhost:8080}
     volumes:
       - audio_store:/data/audio
+      - models:/models:ro
     networks: [fias_net, edge]
     depends_on:
       migrate:
@@ -75,6 +89,7 @@ services:
     environment: *api-env
     volumes:
       - audio_store:/data/audio
+      - models:/models:ro
     networks: [fias_net]
     depends_on:
       migrate:
@@ -84,6 +99,30 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  # Execução única, à mão, na instalação (veja "Modelos" no README). É o único
+  # serviço que sai para a rede atrás de peso — daí ficar atrás de um profile:
+  # `docker compose up` não o levanta.
+  setup-models:
+    <<: *api-image
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    restart: "no"
+    profiles: ["setup"]
+    command: ["python", "/app/scripts/setup_models.py"]
+    environment:
+      FIAS_ED_MODELS_DIR: /models
+      FIAS_ED_EXPERIMENTS_DIR: /experimentos
+      FIAS_ED_ASR_SIZE: ${ASR_SIZE:-small}
+      # Sem `:?` de propósito: o compose interpola o arquivo inteiro mesmo para
+      # quem só vai subir o produto, e um `:?` aqui quebraria o `up` de todo
+      # mundo que não tem token. Quem valida é o próprio script.
+      HUGGINGFACE_TOKEN: ${HUGGINGFACE_TOKEN:-}
+    volumes:
+      - models:/models
+      # Somente leitura: os pesos do BERTimbau saem daqui e nada volta para lá.
+      - ${FIAS_ED_EXPERIMENTS_DIR:-./deploy}:/experimentos:ro
+    networks: [edge]
 
   web:
     <<: *hardening
@@ -103,6 +142,31 @@ services:
       timeout: 3s
       retries: 10
 
+  # A única porta que os celulares alcançam (docs/deploy-local.md). Mesma imagem do
+  # `web`, publicando só a 8081 — o servidor que serve só as rotas do estudante.
+  # Profile "coleta": não sobe com `docker compose up`; quem abre é
+  # deploy/subir-coleta.sh, no IP da rede da sala. Sem o script, FIAS_ED_LAN_IP cai
+  # em 127.0.0.1 — o padrão é não expor nada.
+  # restart "no": depois de reiniciar o computador, a porta da sala não reabre
+  # sozinha; e, se o IP da sala tiver sumido, só este serviço falha — o `web` do
+  # professor continua de pé.
+  web-lan:
+    <<: *hardening
+    image: fias-ed-web-web:local
+    restart: "no"
+    profiles: ["coleta"]
+    ports:
+      - "${FIAS_ED_LAN_IP:-127.0.0.1}:${FIAS_ED_LAN_PORT:-8081}:8081"
+    networks: [edge]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
 networks:
   fias_net:
     internal: true
@@ -111,3 +175,4 @@ networks:
 volumes:
   pgdata:
   audio_store:
+  models:

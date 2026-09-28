@@ -1,5 +1,5 @@
 {
-  "rules_version": "1.1.0",
+  "rules_version": "1.2.0",
   "recommendations": [
     {"recommendation_id": "PED_CHECK_UNDERSTANDING", "tier1_dimension": "Ensino explícito (modelagem)", "text": "Considere intercalar os momentos de exposição com pausas curtas em que os estudantes expliquem com as próprias palavras o que acabaram de ouvir.", "source_reference": "Redigido a partir da dimensão Tier 1 'Ensino explícito (modelagem)', CAP4 tab:art2-fias-tier1", "validation_status": "draft_pending_researcher_review"},
     {"recommendation_id": "PED_WAIT_TIME", "tier1_dimension": "Ensino explícito (modelagem)", "text": "Você pode experimentar aguardar alguns segundos a mais depois de uma pergunta antes de retomar a explicação, dando tempo para que mais estudantes elaborem uma resposta.", "source_reference": "Redigido a partir da dimensão Tier 1 'Ensino explícito (modelagem)', CAP4 tab:art2-fias-tier1", "validation_status": "draft_pending_researcher_review"},
@@ -24,5 +24,65 @@
     {"pair_id": "TRI_TENSION", "fias": {"categories": [7]}, "qti_octants": ["oc7", "oc6"],
      "reflection_question": "Observe a proporção de intervalos de crítica ou afirmação de autoridade nesta aula. Como ela se relaciona com a forma como os estudantes percebem irritação ou insatisfação?",
      "source_reference": "CAP4 subsec:art2-triangulacao l.350-371. Pareamento operacional proposto no spec §6.", "validation_status": "PENDING_SCIENTIFIC_VALIDATION"}
-  ]
+  ],
+  "recommendation_qualification": {
+    "qti_bands": {
+      "low_below": 2.33,
+      "high_above": 3.67,
+      "source_reference": "engineering_decision: tercos do intervalo teorico da escala Likert 1-5; a literatura do QTI interpreta por tipologia de perfis e comparacao relativa, sem faixas absolutas (ver secao 4.4 de docs/ESTADO_DE_VALIDACAO.md)",
+      "validation_status": "engineering_decision"
+    },
+    "map": [
+      {
+        "rule_id": "MTSS_NO_PRAISE",
+        "pair_id": "TRI_WARMTH",
+        "octants": ["oc2", "oc3"],
+        "agrees_when": "low",
+        "divergence_question": "O áudio registra pouco elogio verbal; os estudantes percebem proximidade — o que, além da fala, pode explicar essa diferença?",
+        "source_reference": "fato compartilhado: categoria 2 em MTSS_NO_PRAISE e em TRI_WARMTH.fias.categories",
+        "validation_status": "engineering_decision"
+      },
+      {
+        "rule_id": "MTSS_NO_IDEA_UPTAKE",
+        "pair_id": "TRI_WARMTH",
+        "octants": ["oc2", "oc3"],
+        "agrees_when": "low",
+        "divergence_question": "O áudio registra pouco elogio verbal; os estudantes percebem proximidade — o que, além da fala, pode explicar essa diferença?",
+        "source_reference": "fato compartilhado: categoria 3 em MTSS_NO_IDEA_UPTAKE e em TRI_WARMTH.fias.categories",
+        "validation_status": "engineering_decision"
+      },
+      {
+        "rule_id": "MTSS_REACTIVE_MANAGEMENT_PRESENT",
+        "pair_id": "TRI_TENSION",
+        "octants": ["oc7", "oc6"],
+        "agrees_when": "high",
+        "source_reference": "fato compartilhado: categoria 7 em MTSS_REACTIVE_MANAGEMENT_PRESENT e em TRI_TENSION.fias.categories",
+        "validation_status": "engineering_decision"
+      },
+      {
+        "rule_id": "MTSS_NO_STUDENT_INITIATIVE",
+        "pair_id": "TRI_STUDENT_VOICE",
+        "octants": ["oc4"],
+        "agrees_when": "low",
+        "source_reference": "fato compartilhado: categoria 9 em MTSS_NO_STUDENT_INITIATIVE, via PIR = cat9/(cat8+cat9), e em TRI_STUDENT_VOICE.fias.index",
+        "validation_status": "engineering_decision"
+      },
+      {
+        "rule_id": "MTSS_STUDENT_INITIATIVE_PRESENT",
+        "pair_id": "TRI_STUDENT_VOICE",
+        "octants": ["oc4"],
+        "agrees_when": "high",
+        "source_reference": "fato compartilhado: categoria 9 em MTSS_STUDENT_INITIATIVE_PRESENT, via PIR = cat9/(cat8+cat9), e em TRI_STUDENT_VOICE.fias.index",
+        "validation_status": "engineering_decision"
+      },
+      {
+        "rule_id": "MTSS_DIRECT_OVER_INDIRECT",
+        "pair_id": "TRI_INFLUENCE",
+        "octants": ["oc8"],
+        "agrees_when": "high",
+        "source_reference": "fato compartilhado: indice ID_RATIO, identico em MTSS_DIRECT_OVER_INDIRECT e em TRI_INFLUENCE.fias.index; oc1 Lideranca excluido por efeito de teto (docs/ESTADO_DE_VALIDACAO.md secao 4.4)",
+        "validation_status": "engineering_decision"
+      }
+    ]
+  }
 }

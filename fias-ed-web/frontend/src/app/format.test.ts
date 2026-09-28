@@ -1,11 +1,18 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { formatBytes, formatDate, formatDuration, localDateInput } from "./format";
+import { formatBytes, formatDate, formatDuration, formatTimestamp, localDateInput } from "./format";
 
 test("formatDate", () => expect(formatDate("2026-09-22")).toBe("22/09/2026"));
 test("formatDuration", () => {
   expect(formatDuration(65_000)).toBe("1 min");
   expect(formatDuration(45 * 60_000)).toBe("45 min");
   expect(formatDuration(3_900_000)).toBe("1h05");
+});
+// Task 8: nome acessível de cada trecho de áudio ("Trecho da voz 1 em 0:04").
+test("formatTimestamp", () => {
+  expect(formatTimestamp(0)).toBe("0:00");
+  expect(formatTimestamp(4_000)).toBe("0:04");
+  expect(formatTimestamp(65_000)).toBe("1:05");
+  expect(formatTimestamp(600_000)).toBe("10:00");
 });
 test("formatBytes", () => {
   expect(formatBytes(1_610_612_736)).toBe("1,5 GB");

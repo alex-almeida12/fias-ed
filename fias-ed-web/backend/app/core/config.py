@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     audio_store: Path = Path("/data/audio")
     shared_dir: Path = Path("/opt/fias-ed-shared")
     device_id: str = "fias-ed-web"
+    # Endereço que vai dentro do link do estudante. Na sala, deploy/subir-coleta.sh o
+    # define como http://<IP da rede>:8081 (FIAS_ED_PUBLIC_URL no host). O padrão serve
+    # a quem usa tudo nesta máquina.
+    public_url: str = "http://localhost:8080"
     max_upload_bytes: int = 1_610_612_736
     min_audio_seconds: int = 60
     max_audio_seconds: int = 9_000
@@ -22,6 +26,13 @@ class Settings(BaseSettings):
     job_poll_seconds: float = 2.0
     job_stale_minutes: int = 30
     job_max_attempts: int = 3
+    models_dir: str = "/models"
+    models_registry_rel: str = "scientific-config/models.json"
+    asr_size: str = "small"
+    asr_model_id: str = "faster-whisper-small"
+    diar_model_id: str = "pyannote-speaker-diarization-3.1"
+    clf_model_id: str = "fias-bertimbau-ptbr-frente3"
+    usar_modelos_falsos: bool = False
 
 
 @lru_cache

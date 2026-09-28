@@ -1,0 +1,86 @@
+import datetime as dt
+import uuid
+from datetime import timezone
+
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.audit import audit
+from app.auth.deps import Actor, current_actor
+from app.ciclos.schemas import CicloIn, ciclo_out
+from app.ciclos.service import ciclo_do_professor
+from app.core.db import get_db
+from app.core.errors import AppError
+from app.models import Ciclo, ColetaQTI, Disciplina, LinkQTI, Turma
+from app.relatorios.routes import _ciclo_payload
+
+router = APIRouter()
+
+
+def _owned(db: Session, model, obj_id: uuid.UUID, professor_id: uuid.UUID):
+    obj = db.get(model, obj_id)
+    return obj if obj is not None and obj.deleted_at is None and obj.professor_id == professor_id else None
+
+
+def _links_vivos_por_ciclo(db: Session, ciclo_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[dict]]:
+    # "Vivo" replica exatamente o filtro de app.qti.links.link_valido (menos o token, que
+    # nunca sai daqui): sem isso um link expirado ou revogado continuaria oferecendo a ação
+    # de revogar por engano. Uma lista, não "o link ativo": um acompanhamento tem várias
+    # datas de coleta, e cada uma tem no máximo um link vivo (índice
+    # uq_link_qti_um_vivo_por_coleta, migração 0011) — a lista soma esses links, um por data.
+    if not ciclo_ids:
+        return {}
+    agora = dt.datetime.now(timezone.utc)
+    linhas = db.execute(
+        select(LinkQTI, ColetaQTI.ciclo_id, ColetaQTI.coletado_em)
+        .join(ColetaQTI, ColetaQTI.id == LinkQTI.coleta_id)
+        .where(ColetaQTI.ciclo_id.in_(ciclo_ids), ColetaQTI.deleted_at.is_(None),
+               LinkQTI.deleted_at.is_(None), LinkQTI.revogado_em.is_(None), LinkQTI.expira_em > agora)
+    ).all()
+    resultado: dict[uuid.UUID, list[dict]] = {cid: [] for cid in ciclo_ids}
+    for link, ciclo_id, coletado_em in linhas:
+        resultado[ciclo_id].append({"id": str(link.id), "expira_em": link.expira_em.isoformat(),
+                                    "limite_respostas": link.limite_respostas,
+                                    "coletado_em": coletado_em.isoformat()})
+    return resultado
+
+
+@router.get("/ciclos")
+def list_ciclos(actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(Ciclo, Turma, Disciplina)
+        .join(Turma, Turma.id == Ciclo.turma_id).join(Disciplina, Disciplina.id == Ciclo.disciplina_id)
+        .where(Ciclo.professor_id == actor.effective_professor_id, Ciclo.deleted_at.is_(None))
+        .order_by(Ciclo.iniciado_em.desc())).all()
+    audit(db, actor, "ciclo", None, "read")
+    db.commit()
+    links_por_ciclo = _links_vivos_por_ciclo(db, [c.id for c, t, d in rows])
+    return [{**_ciclo_payload(c, t, d), "links_qti": links_por_ciclo[c.id]} for c, t, d in rows]
+
+
+@router.post("/ciclos", status_code=201)
+def criar_ciclo(body: CicloIn, actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
+    professor_id = actor.effective_professor_id
+    if _owned(db, Turma, body.turma_id, professor_id) is None:
+        raise AppError(422, "TURMA_INVALIDA", "Escolha uma das suas turmas.")
+    if _owned(db, Disciplina, body.disciplina_id, professor_id) is None:
+        raise AppError(422, "DISCIPLINA_INVALIDA", "Escolha uma das suas disciplinas.")
+    c = Ciclo(turma_id=body.turma_id, disciplina_id=body.disciplina_id, professor_id=professor_id,
+              n_aulas_previstas=body.n_aulas_previstas, iniciado_em=body.iniciado_em)
+    db.add(c)
+    db.flush()
+    audit(db, actor, "ciclo", c.id, "create")
+    db.commit()
+    db.refresh(c)
+    return ciclo_out(c)
+
+
+@router.post("/ciclos/{ciclo_id}/encerrar")
+def encerrar_ciclo(ciclo_id: uuid.UUID, actor: Actor = Depends(current_actor), db: Session = Depends(get_db)):
+    c = ciclo_do_professor(db, actor, ciclo_id)
+    c.encerrado_em = dt.date.today()
+    audit(db, actor, "ciclo", c.id, "update")
+    db.commit()
+    db.refresh(c)
+    return ciclo_out(c)

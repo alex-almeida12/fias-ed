@@ -59,7 +59,8 @@ test("agir como professor a partir da lista de aulas", async () => {
     "POST /api/admin/agir-como": () => jsonResponse({ ...ADMIN, acting_as: { id: "p1", display_name: "Ana Souza" } }),
     "GET /api/aulas/a1": () => jsonResponse({ id: "a1", lesson_date: "2026-09-22", status: "AUDIO_VALIDATED",
       turma: { id: "t1", name: "9º B" }, disciplina: { id: "d1", name: "Ciências" }, note: null, error_code: null,
-      error_message: null, audio: null, upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null }),
+      error_message: null, audio: null, upload_pendente: null, job_ativo: false, alterada_pelo_admin_em: null,
+      acompanhamento: null }),
   });
   renderApp("/admin/aulas");
   await userEvent.click(await screen.findByRole("button", { name: "Agir como Ana Souza" }));
@@ -117,10 +118,10 @@ test("juntar escolas duplicadas", async () => {
     },
   });
   renderApp("/admin/escolas");
-  const row = (await screen.findByText("E. São José")).closest("tr")!;
+  const row = (await screen.findByDisplayValue("E. São José")).closest("tr")!;
   await userEvent.selectOptions(within(row).getByLabelText("Juntar com"), "e1");
   await userEvent.click(within(row).getByRole("button", { name: "Juntar" }));
-  await waitFor(() => expect(screen.queryByText("E. São José")).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByDisplayValue("E. São José")).not.toBeInTheDocument());
 });
 
 // Ruling P8: a tela admin de Escolas deve permitir editar a região, incluindo limpá-la.
@@ -135,7 +136,7 @@ test("editar a região de uma escola", async () => {
     },
   });
   renderApp("/admin/escolas");
-  const row = (await screen.findByText("Escola São José")).closest("tr")!;
+  const row = (await screen.findByDisplayValue("Escola São José")).closest("tr")!;
   await userEvent.selectOptions(within(row).getByLabelText("Região"), "Nordeste");
   await userEvent.click(within(row).getByRole("button", { name: "Salvar" }));
   await waitFor(() => expect(within(row).getByLabelText("Região")).toHaveValue("Nordeste"));
@@ -200,11 +201,11 @@ test("erro ao juntar escolas mostra aviso", async () => {
     "POST /api/admin/escolas/e2/juntar": () => jsonResponse({ error_code: "ERRO", message: "Não foi possível juntar as escolas." }, 500),
   });
   renderApp("/admin/escolas");
-  const row = (await screen.findByText("E. São José")).closest("tr")!;
+  const row = (await screen.findByDisplayValue("E. São José")).closest("tr")!;
   await userEvent.selectOptions(within(row).getByLabelText("Juntar com"), "e1");
   await userEvent.click(within(row).getByRole("button", { name: "Juntar" }));
   expect(await within(row).findByRole("alert")).toHaveTextContent("Não foi possível juntar as escolas.");
-  expect(screen.getByText("E. São José")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("E. São José")).toBeInTheDocument();
 });
 
 // Ruling P15 (revisão): carregar deve limpar o erro anterior a cada tentativa — uma falha ao
@@ -224,7 +225,7 @@ test("escolas: falha ao recarregar mostra aviso, e um recarregamento seguinte be
     "PATCH /api/admin/escolas/e1": () => jsonResponse(escola),
   });
   renderApp("/admin/escolas");
-  const row = (await screen.findByText("Escola São José")).closest("tr")!;
+  const row = (await screen.findByDisplayValue("Escola São José")).closest("tr")!;
   await userEvent.click(within(row).getByRole("button", { name: "Salvar" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Falha ao listar escolas.");
   await userEvent.click(within(row).getByRole("button", { name: "Salvar" }));

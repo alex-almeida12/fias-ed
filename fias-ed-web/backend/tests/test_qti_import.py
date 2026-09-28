@@ -1,0 +1,229 @@
+"""Importação do relatório do avalie-seu-professor (Task 5).
+
+Os dois testes de versão declarada do plano original saíram desta suíte: fui
+conferir no avalie-seu-professor e ele não declara versão nenhuma no arquivo
+que exporta hoje (nem cabeçalho de comentário, nem coluna dedicada). Inventar
+um formato de versão que o outro sistema não produz faria a importação
+recusar todos os arquivos reais. A decisão e o porquê estão documentados em
+app/qti/service.py, no ponto onde a checagem de versão deixou de existir.
+"""
+import datetime as dt
+
+from fias_ed_engine.rules import load_rules
+from sqlalchemy import event
+from sqlalchemy.orm import Session
+
+from app.core.db import SessionLocal, get_engine
+from app.models import AcessoAdmin, Ciclo, ColetaQTI, Disciplina, Escola, RespostaQTI, Turma
+from tests.helpers import login, make_user
+
+CABECALHO = "response_id," + ",".join(f"q{i}" for i in range(1, 25))
+
+
+def _csv(n_linhas, valor=4):
+    linhas = [CABECALHO]
+    for i in range(n_linhas):
+        linhas.append(f"r{i}," + ",".join([str(valor)] * 24))
+    return "\n".join(linhas) + "\n"
+
+
+def test_importa_e_persiste_as_respostas_item_a_item(db, client, ciclo):
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    coleta = db.query(ColetaQTI).one()
+    assert coleta.response_count == 12 and coleta.displayable is True
+    assert coleta.origem == "IMPORTACAO_EXTERNA"
+    assert db.query(RespostaQTI).filter_by(coleta_id=coleta.id).count() == 12
+
+
+def test_arquivo_sem_nenhuma_resposta_e_recusado(db, client, ciclo):
+    """Review Focus 3: exportação de turma que não respondeu."""
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", CABECALHO + "\n", "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 422
+    assert "nenhuma resposta" in r.json()["message"].lower()
+    assert db.query(ColetaQTI).count() == 0
+
+
+def test_valor_adulterado_recusa_o_arquivo_inteiro(db, client, ciclo):
+    login(client, "professora-ciclo")
+    linhas = _csv(12).splitlines()
+    linhas[3] = linhas[3].replace(",4,", ",9,", 1)   # fora da escala 1..5
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", "\n".join(linhas), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 422 and "linha 4" in r.json()["message"].lower()
+    assert db.query(ColetaQTI).count() == 0
+
+
+def test_reimportar_na_mesma_data_substitui_em_vez_de_duplicar(db, client, ciclo):
+    """Review Focus 1: o professor clica duas vezes (ou importa de novo depois de um
+    ajuste na planilha). Os dois envios têm de ser aceitos (201, 201) — conteúdos
+    DIFERENTES (12 respostas, depois 15), para que o teste prove substituição, não só
+    ausência de duplicata: um regressão que passasse a recusar toda reimportação (ex.:
+    tratando a segunda chamada como corrida) passaria por um teste que só olhasse o
+    estado final com o mesmo conteúdo duas vezes — foi exatamente o ponto cego que a
+    mutação 1 da Task 4 revelou."""
+    login(client, "professora-ciclo")
+    r1 = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                     files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                     data={"coletado_em": "2026-03-01"})
+    assert r1.status_code == 201
+    r2 = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                     files={"arquivo": ("export.csv", _csv(15), "text/csv")},
+                     data={"coletado_em": "2026-03-01"})
+    assert r2.status_code == 201
+
+    vivas = db.query(ColetaQTI).filter(ColetaQTI.deleted_at.is_(None)).all()
+    assert len(vivas) == 1
+    assert vivas[0].response_count == 15
+    assert db.query(RespostaQTI).filter_by(coleta_id=vivas[0].id).count() == 15
+
+    apagadas = db.query(ColetaQTI).filter(ColetaQTI.deleted_at.isnot(None)).all()
+    assert len(apagadas) == 1
+    assert apagadas[0].response_count == 12
+
+
+def test_importacao_que_perde_a_corrida_devolve_409_e_nao_500(db, client, ciclo):
+    disparou = []
+
+    def outra_importacao_chega_antes(sessao, contexto, instancias):
+        # Só no flush que vai inserir a coleta. A rota faz outros flushes antes (a
+        # sessão do professor atualiza `last_seen_at`); disparar num deles criaria a
+        # coleta concorrente cedo demais, a importação a acharia como "anterior", e o
+        # teste passaria sem corrida nenhuma.
+        if disparou or not any(isinstance(o, ColetaQTI) for o in sessao.new):
+            return
+        disparou.append(True)
+        with SessionLocal(bind=get_engine()) as outra:
+            outra.add(ColetaQTI(ciclo_id=ciclo.id, coletado_em=dt.date(2026, 9, 1),
+                                origem="IMPORTACAO_EXTERNA", response_count=12, displayable=True,
+                                qti_config_version="1.0.0"))
+            outra.commit()
+
+    login(client, "professora-ciclo")
+    # A rota usa a própria sessão, não a `db` do teste: escute na classe Session —
+    # depois do login, e removendo no fim para não vazar para os outros testes.
+    event.listen(Session, "before_flush", outra_importacao_chega_antes)
+    try:
+        r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                        data={"coletado_em": "2026-09-01"},
+                        files={"arquivo": ("export.csv", _csv(12), "text/csv")})
+    finally:
+        event.remove(Session, "before_flush", outra_importacao_chega_antes)
+    assert disparou, "a corrida não foi montada: o flush da coleta não aconteceu"
+    assert r.status_code == 409
+    assert r.json()["error_code"] == "COLETA_CONCORRENTE"
+
+
+def test_menos_de_dez_respostas_nao_e_erro_mas_nao_e_exibivel(db, client, ciclo):
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", _csv(4), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    assert db.query(ColetaQTI).one().displayable is False
+
+
+def test_importar_qti_com_ciclo_de_outro_professor_devolve_404(db, client, ciclo):
+    """O brief mostrava `current_professor`/`actor.professor_id`, que não existem no
+    projeto. O padrão real (app/ciclos/routes.py) é `current_actor` +
+    `effective_professor_id`, com validação de posse do ciclo — sem ela, um professor
+    autenticado poderia importar um relatório para o ciclo de outro."""
+    outro = make_user(db, "outro-professor-qti")
+    escola = Escola(name="Outra Escola", name_key="outra escola qti")
+    db.add(escola)
+    db.flush()
+    turma = Turma(escola_id=escola.id, professor_id=outro.id, name="7º Ano A")
+    disciplina = Disciplina(professor_id=outro.id, name="História")
+    db.add_all([turma, disciplina])
+    db.flush()
+    ciclo_do_outro = Ciclo(turma_id=turma.id, disciplina_id=disciplina.id, professor_id=outro.id,
+                          n_aulas_previstas=8, iniciado_em=dt.date(2026, 3, 1))
+    db.add(ciclo_do_outro)
+    db.commit()
+
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo_do_outro.id}/qti/importar",
+                    files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 404
+    assert db.query(ColetaQTI).count() == 0
+
+
+def test_importacao_via_agir_como_e_auditada(client_factory, db, ciclo, professor):
+    """Conserto 1: é o dado mais sensível da fatia (percepção dos estudantes sobre o
+    professor); sem audit(), seria a única escrita do sistema sem rastro de quem a fez.
+    O recurso auditado é a coleta (não o ciclo): resource_id só existe depois que a
+    coleta é criada, e "ciclo"/"create" já é usado para a criação do ciclo em si."""
+    make_user(db, "admin-qti", role="ADMIN_LOCAL")
+    admin = client_factory()
+    login(admin, "admin-qti")
+    admin.post("/api/admin/agir-como", json={"professor_id": str(professor.id)})
+
+    r = admin.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                   files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                   data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    coleta_id = r.json()["id"]
+    row = db.query(AcessoAdmin).filter_by(resource="coleta_qti", action="create").one()
+    assert str(row.resource_id) == coleta_id
+
+
+def test_importacao_na_propria_conta_nao_e_auditada(db, client, ciclo):
+    """Prova que o conserto usa audit() (que é no-op fora de 'agir como'), não um
+    record() direto que gravaria também para o professor operando na própria conta."""
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    assert db.query(AcessoAdmin).count() == 0
+
+
+def test_arquivo_fora_de_utf8_devolve_422(db, client, ciclo):
+    login(client, "professora-ciclo")
+    conteudo = "seção".encode("cp1252")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", conteudo, "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 422
+    assert r.json()["error_code"] == "QTI_ARQUIVO_ILEGIVEL"
+    assert db.query(ColetaQTI).count() == 0
+
+
+def test_a_resposta_traz_o_minimo_de_respostas_vindo_do_motor(client, ciclo):
+    """Com a configuração de verdade, o número certo chega à tela — o React monta a
+    frase com o que recebe daqui.
+
+    Sozinho este teste NÃO prova que o valor veio do motor: um 10 escrito à mão na
+    rota passaria por ele, porque o motor também diz 10 hoje. Quem prova a origem é
+    o teste seguinte. Não apague um achando que o outro cobre: este cobre o valor
+    real de produção, aquele cobre a origem, e nenhum dos dois cobre os dois."""
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    assert r.json()["min_responses"] == load_rules("qti_config")["instrument"]["min_responses"]
+
+
+def test_o_minimo_e_lido_do_motor_a_cada_pedido_e_nao_fixado_na_rota(client, ciclo, monkeypatch):
+    """Comparar a resposta com load_rules não basta: hoje o motor diz 10, então um 10
+    escrito à mão na rota passaria naquele teste. Aqui a configuração é trocada por uma
+    que diz 7 — só passa se a rota realmente consultar o motor ao responder.
+
+    O monkeypatch atinge só o nome importado em app.qti.routes; o service importa
+    load_rules no próprio espaço e continua pontuando com a configuração de verdade."""
+    monkeypatch.setattr("app.qti.routes.load_rules", lambda _nome: {"instrument": {"min_responses": 7}})
+    login(client, "professora-ciclo")
+    r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                    files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                    data={"coletado_em": "2026-03-01"})
+    assert r.status_code == 201
+    assert r.json()["min_responses"] == 7

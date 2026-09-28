@@ -30,8 +30,14 @@
 
 /* Campos */
 .field { display: flex; flex-direction: column; gap: var(--space-1); margin-bottom: var(--space-4); }
-.field__label { font-family: var(--type-label-font); font-size: var(--type-label-size); font-weight: var(--type-label-weight); }
-.field__input { min-height: 44px; padding: var(--space-2) var(--space-3); border: var(--border-hairline) solid var(--color-muted);
+.field__label { font-family: var(--type-label-font); font-size: var(--type-label-size); font-weight: var(--type-label-weight);
+  line-height: var(--type-label-line); }
+/* Sem `width: 100%` o Chrome dimensiona um <select> pela opção mais larga (medido
+   em navegador: Turma/Disciplina do NovoCiclo, com nome de escola longo, estourava
+   a tela em 360px) e o <input type="file"> pelo texto nativo do controle. Ambos são
+   filhos de um flex column (`.field`), que já teria esticado os dois — a intrínseca
+   do próprio controle é o que ignorava isso. */
+.field__input { width: 100%; min-height: 44px; padding: var(--space-2) var(--space-3); border: var(--border-hairline) solid var(--color-muted);
   border-radius: var(--radius-sm); font: inherit; color: var(--color-text); background: var(--color-white); }
 .field__input[aria-invalid="true"] { border-color: var(--color-error); }
 .field__error { margin: 0; color: var(--color-error); font-size: var(--type-caption-size); }
@@ -49,6 +55,12 @@
 .dialog { background: var(--color-white); border-radius: var(--radius-md); padding: var(--space-6); max-width: 32rem; width: 100%;
   box-shadow: 0 8px 24px rgb(47 65 86 / 0.2); }
 .dialog__actions { display: flex; justify-content: flex-end; gap: var(--space-3); margin-top: var(--space-5); flex-wrap: wrap; }
+/* Variante "grande" do diálogo (Task 5, conserto 1): 32rem dá ~448px de área útil —
+   pequeno demais para o QR "para projetar" (min(80vh, 90vw) em .qr--projetar, Task 5),
+   que precisa ser lido a alguns metros de distância. Só a largura/altura mudam, em
+   unidade de viewport para acompanhar o tamanho real da tela que projeta; o resto
+   (fundo, raio, sombra, respiro interno) continua herdado de .dialog. */
+.dialog--projecao { max-width: 94vw; max-height: 94vh; overflow-y: auto; }
 
 /* Estado vazio */
 .empty { background: var(--color-surface-alt); border-radius: var(--radius-md); padding: var(--space-7) var(--space-5); text-align: center; }
@@ -96,8 +108,25 @@
   .list__item { flex-direction: column; align-items: flex-start; gap: var(--space-2); }
 }
 .meta { color: var(--color-text-muted); font-size: var(--type-caption-size); }
+/* Trechos de áudio dentro de um item de lista (Task 8: "qual destas vozes é
+   você?"). Mesmo raciocínio de .audio-area audio: o controle é nativo do
+   navegador, mas o bloco em volta segue a medida e o ritmo vertical do resto. */
+.list__item audio { display: block; width: 100%; max-width: 24rem; margin-top: var(--space-2); }
 .table { width: 100%; border-collapse: collapse; }
 .table th, .table td { text-align: left; padding: var(--space-3) var(--space-2); border-bottom: var(--border-hairline) solid var(--color-border); }
+/* Tabela de texto mantém o alinhamento vertical ao meio: a linha de texto casa com
+   o rótulo de um botão de 44px, que é centrado na própria altura.
+
+   Tabela cujas células são campos de formulário (ex.: Escolas) alinha pelo topo —
+   ao meio, cada coluna se centraria pela própria altura e os campos de uma mesma
+   linha não se alinhariam entre si. */
+.table--campos th, .table--campos td { vertical-align: top; }
+.table--campos td > .field:last-child { margin-bottom: 0; }
+/* Célula que só tem ação, sem rótulo acima: desce exatamente uma linha de rótulo
+   mais o intervalo do .field, para o botão ficar alinhado aos campos vizinhos e
+   não aos rótulos deles. O valor sai dos tokens, não é medida solta. Só vale nesta
+   variante: numa tabela de texto, a ação alinha com o texto e não leva recuo. */
+.table--campos td > .btn:first-child { margin-top: calc(var(--type-label-size) * var(--type-label-line) + var(--space-1)); }
 
 /* Home */
 .home { display: grid; gap: var(--space-7); max-width: 72rem; margin: 0 auto; padding: var(--space-7) var(--space-4); }
@@ -117,3 +146,152 @@
    mas dá para alinhá-lo à medida do bloco em vez de deixá-lo flutuando. */
 .audio-area audio { display: block; width: 100%; max-width: 32rem; margin-bottom: var(--space-3); }
 progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--color-teal); }
+
+/* Revisão da transcrição (Task 10). Cada trecho é uma linha de leitura, não um
+   card: mesma linha de 1px em Papel Milimetrado que separa os itens de `.list`,
+   sem fundo próprio — centenas de trechos com fundo bege virariam ruído, e bege
+   é reservado para "aqui se lê e se reflete" (blocos únicos), não para item
+   repetido em lista.
+
+   A Regra da Medida vale sobretudo aqui, que é a tela de leitura mais longa do
+   produto. Sem limite, num monitor de 1280px o campo de texto de cada trecho
+   chegava a 1112px — 120 caracteres por linha, quase o dobro dos 68 que o
+   sistema fixa para texto corrido, e justamente a largura que o DESIGN.md dá
+   como exemplo de linha ilegível. O limite fica na coluna inteira, não só no
+   campo: com o campo estreito e a linha do horário larga, o botão de falante
+   ficava a meia tela de distância do texto a que pertence. É o mesmo 68ch de
+   `p`, não um valor novo. */
+.segmentos { border-top: var(--border-hairline) solid var(--color-border); max-width: 68ch; }
+.segmento { padding: var(--space-4) var(--space-1); border-bottom: var(--border-hairline) solid var(--color-border);
+  display: flex; flex-direction: column; gap: var(--space-2); }
+.segmento__cabecalho { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.segmento__cabecalho .meta { margin: 0; }
+/* O controle nativo de áudio não pode dominar a linha do horário e do botão de
+   falante numa tela onde ele se repete dezenas de vezes por bloco. */
+.segmento__cabecalho audio { height: 32px; max-width: 16rem; flex: 1 1 auto; }
+/* O rótulo do campo de texto existe para leitor de tela (a Regra do Rótulo Sempre
+   Visível continua valendo — o rótulo existe), mas fica escondido visualmente
+   porque o horário ao lado já cumpre esse papel para quem vê a tela. */
+.segmento .field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.segmento .field { margin-bottom: 0; }
+
+/* Navegação entre blocos de cinco minutos: mesmo par de botões secundários com
+   uma legenda de contagem entre eles — sem inventar um componente novo de
+   paginação. A largura é a mesma da coluna de trechos logo abaixo: a navegação é
+   dela, não da página — sem o limite, "Próximos 5 minutos" ficava a meia tela dos
+   trechos que ele pagina, encostado no botão de concluir a revisão. */
+.bloco-nav { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  flex-wrap: wrap; margin: var(--space-5) 0; max-width: 68ch; }
+
+/* Padrões de interação (Task 13). A faixa de tempo é um SVG com viewBox
+   proporcional à duração da aula (preserveAspectRatio="none") — a largura de
+   cada trecho é geometria SVG (atributo `width`, não `style`), então nenhum
+   valor de dado entra por atributo `style` inline (proibido no design system).
+   As quatro cores são as que tokens.json já reserva para os grupos FIAS. */
+.faixa-tempo { width: 100%; height: 28px; display: block; border-radius: var(--radius-sm); }
+/* As quatro cores de grupo não se separam sozinhas: indireta (teal) contra
+   direta (navy) dá 2,32:1 e estudante (sky) contra silêncio (bege) dá 1,27:1 —
+   as duas abaixo dos 3:1 que o WCAG 1.4.11 exige de uma fronteira gráfica que
+   carrega informação, e são as duas adjacências mais comuns numa aula real.
+   Nenhum separador de cor única cobre as quatro cores ao mesmo tempo (branco
+   falha contra sky e bege; navy falha contra teal e contra si mesmo) — por
+   isso o contorno é por grupo: os dois grupos escuros (indireta/teal,
+   direta/navy) recebem contorno branco (4,50:1 e 10,44:1) e os dois claros
+   (estudante/sky, silêncio/bege) recebem contorno navy (7,22:1 e 9,16:1).
+   Assim toda fronteira entre dois grupos quaisquer tem pelo menos um lado com
+   contorno que contrasta com os dois vizinhos. Os seis pares continuam todos
+   possíveis depois que FaixaDeTempo resume a aula em trechos de tempo (o
+   dominante de um trecho pode ser qualquer grupo, e o do trecho seguinte
+   também), então o raciocínio acima vale inteiro, sem adjacência nova a
+   verificar — o que muda é que agora todo retângulo tem pelo menos 4px, e o
+   contorno de 1px deixa 2px de preenchimento visível em vez de engolir o
+   bloco.
+   O viewBox está em milissegundos (eixo x) contra uma unidade só (eixo y):
+   vector-effect mantém a espessura em pixels de tela de verdade, em vez de
+   esticar com essa escala não uniforme. */
+.faixa-tempo__seg { stroke-width: var(--border-hairline); vector-effect: non-scaling-stroke; }
+/* Quando a faixa mostra o grupo dominante de cada trecho de tempo em vez do
+   grupo de cada instante, ela precisa dizer isso: esta é a frase que conta ao
+   professor a que pedaço de aula cada cor se refere. Medida de leitura curta,
+   como o resto do texto corrido do produto. */
+.faixa-tempo__nota { margin: var(--space-2) 0 0; max-width: 68ch;
+  font-size: var(--type-caption-size); color: var(--color-text-muted); }
+.faixa-tempo__seg--indireta { fill: var(--color-fias-indirect); stroke: var(--color-white); }
+.faixa-tempo__seg--direta { fill: var(--color-fias-direct); stroke: var(--color-white); }
+.faixa-tempo__seg--estudante { fill: var(--color-fias-student); stroke: var(--color-navy); }
+.faixa-tempo__seg--silencio { fill: var(--color-fias-silence); stroke: var(--color-navy); }
+/* Legenda textual ao lado das cores: cor nunca é o único portador de
+   significado (DESIGN.md) — o aria-label do svg já descreve a distribuição em
+   palavras, esta legenda repete a associação cor→grupo para quem enxerga. */
+.faixa-tempo-legenda { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: flex; gap: var(--space-4); flex-wrap: wrap; }
+.faixa-tempo-legenda__item { display: flex; align-items: center; gap: var(--space-1); font-size: var(--type-caption-size); color: var(--color-text-muted); }
+/* O mesmo contorno por grupo da faixa, pela mesma razão e com um motivo a
+   mais: contra a superfície branca, sky dá 1,45:1 e bege dá 1,14:1 — sem
+   contorno, dois dos quatro quadradinhos simplesmente não existem para quem
+   olha. Com ele, os quatro se veem e a legenda continua descrevendo o que
+   está desenhado na faixa, contorno inclusive. */
+.faixa-tempo-legenda__marca { width: 12px; height: 12px; border-radius: var(--radius-sm); display: inline-block;
+  border: var(--border-hairline) solid transparent; }
+.faixa-tempo-legenda__marca--indireta { background: var(--color-fias-indirect); border-color: var(--color-white); }
+.faixa-tempo-legenda__marca--direta { background: var(--color-fias-direct); border-color: var(--color-white); }
+.faixa-tempo-legenda__marca--estudante { background: var(--color-fias-student); border-color: var(--color-navy); }
+.faixa-tempo-legenda__marca--silencio { background: var(--color-fias-silence); border-color: var(--color-navy); }
+
+/* Observações: cada uma é um item de lista com o texto e, abaixo, os trechos
+   reais que a sustentam — a evidência nunca fica escondida atrás de um clique. */
+.observacao { flex-direction: column; align-items: flex-start; }
+.observacao__evidencias { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.observacao__evidencias .meta { margin: 0; }
+.observacao__evidencias blockquote { margin: 0; padding-left: var(--space-3); border-left: var(--border-hairline) solid var(--color-border);
+  quotes: "\201C" "\201D"; }
+.observacao__evidencias blockquote::before { content: open-quote; }
+.observacao__evidencias blockquote::after { content: close-quote; }
+
+/* Índices: nome por extenso, o que medem, e o valor — nunca um limiar ao lado. */
+.indice { align-items: flex-start; gap: var(--space-4); }
+.indice__valor { font-weight: 700; white-space: nowrap; }
+
+/* Cartões de índice (Task 19): o topo do relatório da aula, leitura de trinta
+   segundos — nome, valor em destaque e um resumo curto por baixo, um cartão
+   por índice. Sem cor nem fundo próprios: texto e fundo continuam sendo os da
+   página (o par que a Task 15 já mede em "Texto corrido sobre a página"), e a
+   borda é só geometria — separa um cartão do outro, não carrega significado
+   (nenhuma cor semântica, regra do brief). */
+.indices-cartoes { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.indice-cartao { border: var(--border-hairline) solid var(--color-border); border-radius: var(--radius-md);
+  padding: var(--space-5) var(--space-4); text-align: center; }
+.indice-cartao__valor { font-size: var(--type-h1-size); font-weight: 700; margin: var(--space-2) 0; }
+.indice-cartao__resumo { margin: 0; }
+
+/* Questionário QTI (Task 5, `Responder`): a escala de 1 a 5 por pergunta, na
+   tela de celular do estudante. Cada opção segue a Regra do Alvo de 44px como
+   o resto do produto — não é concessão ao toque, é o piso do sistema — e a
+   fileira de opções quebra em vez de encolher (Regra do Ar/`flex-wrap`), como
+   todo agrupamento horizontal do produto em tela estreita. */
+.likert { border: 0; padding: 0; margin: 0 0 var(--space-6); }
+.likert__legenda { padding: 0; margin: 0 0 var(--space-3); font-family: var(--type-body-font);
+  font-size: var(--type-body-size); color: var(--color-text); }
+.likert__escala { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.likert__rotulo { flex: 1 1 8rem; font-size: var(--type-caption-size); color: var(--color-text-muted); }
+.likert__opcoes { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.likert__opcao { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 44px; min-height: 44px;
+  padding: var(--space-2) var(--space-3); border: var(--border-hairline) solid var(--color-muted);
+  border-radius: var(--radius-sm); cursor: pointer; }
+.likert__opcao input { width: 20px; height: 20px; margin: 0; accent-color: var(--color-action-secondary); cursor: pointer; }
+
+/* QR code do link do questionário (Task 5): SVG puro, módulo a módulo, para caber na
+   CSP (nada de canvas/data: URL). --color-navy sobre --color-white é o mesmo par que
+   já mede 10,44:1 em contraste-telas.test.ts ("navy x branco") — de sobra para o piso
+   de 3:1 que um elemento gráfico exige (WCAG 1.4.11), e o produto não tem tema escuro
+   para inverter. */
+.qr { display: block; width: 100%; max-width: 16rem; height: auto; }
+.qr--projetar { max-width: min(80vh, 90vw); margin-inline: auto; }
+.qr__fundo { fill: var(--color-white); }
+.qr__modulos { fill: var(--color-navy); }
+
+/* A matriz de transições é o único conteúdo do produto que não quebra em linha:
+   são 10 colunas numéricas, e esconder ou truncar coluna seria perder dado. Em
+   360px ela mede 400px dentro de uma coluna de 328px e empurrava o scroll
+   horizontal para o documento inteiro. Aqui a rolagem fica presa à tabela. */
+.tabela-rolante { overflow-x: auto; }

@@ -14,6 +14,14 @@ export function formatDuration(ms: number): string {
   return `${hours}h${String(minutes % 60).padStart(2, "0")}`;
 }
 
+/** "m:ss" para o nome acessível de um trecho de áudio (Task 8: "Trecho da voz 1 em 1:05"). */
+export function formatTimestamp(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 export function formatBytes(n: number): string {
   const gb = n / 1024 ** 3;
   const value = gb >= 1 ? gb : n / 1024 ** 2;

@@ -31,6 +31,16 @@ export interface AudioInfo {
   sample_rate: number;
 }
 
+export type Posicao = "primeira" | "primeira_e_ultima" | "meio" | "ultima" | "fora";
+
+export interface AulaAcompanhamento {
+  id: string;
+  turma: { id: string; name: string };
+  disciplina: { id: string; name: string };
+  n_aulas_previstas: number;
+  posicao: Posicao;
+}
+
 export interface Aula extends AulaResumo {
   note: string | null;
   error_code: string | null;
@@ -39,7 +49,177 @@ export interface Aula extends AulaResumo {
   upload_pendente: { original_filename: string; size_bytes: number } | null;
   job_ativo: boolean;
   alterada_pelo_admin_em: string | null;
+  acompanhamento: AulaAcompanhamento | null;
 }
+
+export interface VozAmostra { inicio_ms: number; fim_ms: number }
+
+export interface Voz {
+  rotulo: string;
+  tempo_total_ms: number;
+  n_segmentos: number;
+  amostras: VozAmostra[];
+}
+
+export type Papel = "PROFESSOR" | "ALUNO";
+
+export interface Segmento {
+  id: string;
+  start_ms: number;
+  end_ms: number;
+  texto: string;
+  papel: Papel;
+  version: number;
+  revisado: boolean;
+}
+
+export interface TranscricaoBloco {
+  bloco: number;
+  blocos: number;
+  segmentos: Segmento[];
+}
+
+export type FiasGrupo = "indireta" | "direta" | "estudante" | "silêncio";
+
+export interface FaixaIntervalo {
+  inicio_ms: number;
+  fim_ms: number;
+  grupo: FiasGrupo;
+}
+
+export interface Evidencia {
+  segmento_id: string;
+  inicio_ms: number;
+  trecho: string;
+}
+
+export interface Observacao {
+  texto: string;
+  evidencias: Evidencia[];
+}
+
+export interface Indice {
+  codigo: string;
+  nome: string;
+  valor: number | null;
+  descricao: string;
+  resumo: string;
+}
+
+export interface Padroes {
+  faixa: FaixaIntervalo[];
+  observacoes: Observacao[];
+  matriz: number[][];
+  indices: Indice[];
+}
+
+export type QtiAgreement = "agree" | "disagree" | "inconclusive" | "unpaired" | "no_qti";
+
+export interface TriangulacaoQtiValor { octant: string; label: string; value: number | null }
+
+export interface TriangulacaoPar {
+  pair_id: string;
+  fias: { kind: string; ref: string | number[]; value: number | null };
+  qti_values: TriangulacaoQtiValor[];
+  qti_available: boolean;
+  reflection_question: string;
+  source_reference: string;
+  validation_status: string;
+}
+
+export interface InterpretacaoMTSS {
+  rule_id: string;
+  tier1_dimension: string;
+  framing: string;
+  interpretation: string;
+  evidence: Record<string, unknown>;
+  evidence_segment_categories: number[];
+  source_reference: string;
+  validation_status: string;
+  rules_version: string;
+  qti_agreement: QtiAgreement;
+  qti_evidence: Record<string, unknown> | null;
+  divergence_question: string | null;
+  evidencias: Evidencia[];
+}
+
+export interface RecomendacaoMTSS {
+  recommendation_id: string;
+  rule_id: string;
+  text: string;
+  validation_status: string;
+  source_reference: string;
+  qti_agreement: QtiAgreement;
+}
+
+export interface Relatorio {
+  aula: Aula;
+  indices: Indice[];
+  triangulacao: TriangulacaoPar[];
+  interpretacoes: InterpretacaoMTSS[];
+  recomendacoes: RecomendacaoMTSS[];
+}
+
+export interface Ciclo {
+  id: string;
+  turma: { id: string; name: string };
+  disciplina: { id: string; name: string };
+  n_aulas_previstas: number;
+  iniciado_em: string;
+  encerrado_em: string | null;
+}
+
+// Um link vivo do questionário nativo, como GET /ciclos os lista (nunca o token nem o hash —
+// só o que identifica o link para poder revogá-lo). Tipo próprio, não um campo opcional em
+// Ciclo: só a listagem carrega isto, o relatório do ciclo (que reaproveita Ciclo) não.
+export interface LinkQtiVivo {
+  id: string;
+  expira_em: string;
+  limite_respostas: number;
+  coletado_em: string;
+}
+
+export interface CicloNaLista extends Ciclo {
+  links_qti: LinkQtiVivo[];
+}
+
+// Resposta de POST /ciclos/{id}/qti/link: o token só viaja dentro de `url`, e só nesta
+// resposta — nem o banco consegue reconstruí-lo depois.
+export interface LinkQtiGerado {
+  id: string;
+  url: string;
+  expira_em: string;
+  limite_respostas: number;
+}
+
+export interface TrajetoriaItem {
+  aula_id: string;
+  lesson_date: string;
+  status: string;
+  indices: Indice[];
+}
+
+export interface OctanteValor { octant: string; label: string; value: number }
+
+export interface Coleta {
+  id: string;
+  coletado_em: string;
+  origem: string;
+  response_count: number;
+  displayable: boolean;
+  octantes: OctanteValor[];
+}
+
+export interface CicloRelatorio {
+  ciclo: Ciclo;
+  n_aulas_realizadas: number;
+  trajetoria: TrajetoriaItem[];
+  coletas: Coleta[];
+}
+
+export interface QtiItem { order: number; text: string }
+export interface QtiEscala { min: number; max: number; min_label: string; max_label: string }
+export interface QtiQuestionario { stem: string; itens: QtiItem[]; escala: QtiEscala }
 
 export interface Conta {
   id: string;

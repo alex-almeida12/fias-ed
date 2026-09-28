@@ -1,8 +1,19 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
-type Props = { title: string; children: ReactNode; actions: ReactNode; onClose: () => void };
+type Props = {
+  title: string;
+  children: ReactNode;
+  actions: ReactNode;
+  onClose: () => void;
+  // Variante "grande" (Task 5, conserto 1): o tamanho padrão trava a caixa em 32rem —
+  // bom para texto de confirmação, pequeno demais para o QR "para projetar" (lido a
+  // alguns metros de distância). Só quem pede `tamanho="projecao"` ganha a classe
+  // extra; os demais diálogos do produto (encerrar, revogar, gerar link, excluir
+  // conta/aula) nem sabem que a variante existe.
+  tamanho?: "padrao" | "projecao";
+};
 
-export function Dialog({ title, children, actions, onClose }: Props) {
+export function Dialog({ title, children, actions, onClose, tamanho = "padrao" }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
@@ -30,7 +41,8 @@ export function Dialog({ title, children, actions, onClose }: Props) {
 
   return (
     <div className="dialog-backdrop">
-      <div className="dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} ref={ref}>
+      <div className={tamanho === "projecao" ? "dialog dialog--projecao" : "dialog"} role="dialog"
+        aria-modal="true" aria-labelledby={titleId} tabIndex={-1} ref={ref}>
         <h2 id={titleId}>{title}</h2>
         <div>{children}</div>
         <div className="dialog__actions">{actions}</div>

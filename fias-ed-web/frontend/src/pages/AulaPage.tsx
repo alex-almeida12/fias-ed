@@ -1,16 +1,37 @@
 import { useCallback, useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router";
 import { api, ApiError, sendAndProcess } from "../api/client";
 import type { Aula } from "../api/types";
 import { AudioPicker } from "../app/AudioPicker";
 import { formatBytes, formatDate, formatDateTime, formatDuration } from "../app/format";
-import { JOB_MESSAGE } from "../app/status";
+import { progressMessage } from "../app/status";
 import { Banner } from "../design/components/Banner";
 import { Button } from "../design/components/Button";
 import { Dialog } from "../design/components/Dialog";
 import { StatusBadge } from "../design/components/StatusBadge";
 
 const PODE_TROCAR = new Set(["DRAFT", "AUDIO_IMPORTED", "AUDIO_VALIDATED", "ERROR"]);
+
+// Task 17: a espera do questionário significa coisas diferentes conforme a posição da
+// aula no acompanhamento — primeira, última ou (com uma aula só até agora) as duas.
+// "meio"/"fora" não deviam chegar aqui (app.pipeline.estados só para em WAITING_QTI
+// nas pontas do ciclo), mas o texto abaixo cobre o caso de forma defensiva.
+function textoAguardandoQti(posicao: string, turma: string): string {
+  switch (posicao) {
+    case "primeira":
+      return `Esta é a primeira aula do acompanhamento de ${turma}. O relatório fica disponível ` +
+        "quando a turma responder ao questionário.";
+    case "ultima":
+      return `Esta é a última aula do acompanhamento de ${turma}. O relatório fica disponível quando ` +
+        "a turma responder ao questionário desta vez, fechando a trajetória.";
+    case "primeira_e_ultima":
+      return `Esta é, até agora, a única aula do acompanhamento de ${turma}. O relatório fica ` +
+        "disponível quando a turma responder ao questionário.";
+    default:
+      return `Esta aula do acompanhamento de ${turma} está esperando a turma responder ao ` +
+        "questionário. O relatório fica disponível quando a resposta chegar.";
+  }
+}
 
 export function AulaPage() {
   const { id = "" } = useParams();
@@ -81,6 +102,11 @@ export function AulaPage() {
 
   if (!aula) return error ? <Banner kind="error">{error}</Banner> : <p role="status">Carregando…</p>;
 
+  // O sistema não decide sozinho qual voz é a do professor (§48): aula pronta para
+  // essa escolha leva direto para a tela dela, em vez de ficar parada aqui.
+  if (aula.status === "READY_FOR_SPEAKER_REVIEW") return <Navigate to={`/aulas/${id}/vozes`} replace />;
+
+  const progresso = progressMessage(aula.status, aula.job_ativo);
   const podeEnviar = !aula.job_ativo && PODE_TROCAR.has(aula.status);
   const mostrarEnvio = podeEnviar && (aula.status === "DRAFT" || aula.status === "ERROR" || trocando);
 
@@ -90,6 +116,15 @@ export function AulaPage() {
         <div>
           <h1>Aula de {formatDate(aula.lesson_date)}</h1>
           <p className="meta">{aula.turma.name} · {aula.disciplina.name}</p>
+          {/* Task 17: sempre visível, em qualquer estado — a aula sem acompanhamento é caso
+             legítimo (aula avulsa), não erro, então o texto não soa como alarme. */}
+          <p className="meta">
+            {aula.acompanhamento ? (
+              <>Acompanhamento: {aula.acompanhamento.turma.name} · {aula.acompanhamento.disciplina.name}
+                {" · "}
+                <Link to={`/ciclos/${aula.acompanhamento.id}/relatorio`}>Ver o acompanhamento</Link></>
+            ) : "Fora de qualquer acompanhamento"}
+          </p>
         </div>
         <StatusBadge status={aula.status} />
       </div>
@@ -97,10 +132,30 @@ export function AulaPage() {
       {aula.alterada_pelo_admin_em && (
         <Banner>Alterada pelo administrador em {formatDateTime(aula.alterada_pelo_admin_em)}.</Banner>
       )}
-      {aula.job_ativo && <Banner>{JOB_MESSAGE}</Banner>}
+      {progresso && <Banner>{progresso}</Banner>}
+      {/* Task 17: o professor não fez nada de errado — o beco sem saída da Task 17 era não
+         ter aviso nem ação aqui. kind="info" (não "error") e a mensagem já leva à saída. */}
+      {aula.status === "WAITING_QTI" && aula.acompanhamento && (
+        <Banner kind="info">
+          <p>{textoAguardandoQti(aula.acompanhamento.posicao, aula.acompanhamento.turma.name)}</p>
+          <p><Link to={`/ciclos/${aula.acompanhamento.id}/qti`}>Enviar o relatório do questionário</Link></p>
+        </Banner>
+      )}
       {aula.status === "ERROR" && aula.error_message && <Banner kind="error">{aula.error_message}</Banner>}
       {error && <Banner kind="error">{error}</Banner>}
       {aula.note && <p>{aula.note}</p>}
+
+      {/* Toda aula parada esperando o professor mostra aqui a porta por onde ele continua:
+         sem isto a tela informa o estado e deixa a pessoa sem saber o que fazer. */}
+      {aula.status === "READY_FOR_TRANSCRIPT_REVIEW" && (
+        <p><Link className="btn btn--primary" to={`/aulas/${id}/transcricao`}>Revisar a transcrição</Link></p>
+      )}
+      {aula.status === "FIAS_COMPLETED" && (
+        <p><Link className="btn btn--primary" to={`/aulas/${id}/padroes`}>Ver padrões de interação</Link></p>
+      )}
+      {aula.status === "REPORT_READY" && (
+        <p><Link className="btn btn--primary" to={`/aulas/${id}/relatorio`}>Ver relatório da aula</Link></p>
+      )}
 
       {aula.audio && (
         <section className="audio-area" aria-labelledby="audio-original">

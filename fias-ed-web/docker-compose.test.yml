@@ -26,8 +26,18 @@ services:
       DATABASE_URL: postgresql+psycopg://fias_ed_app:test-app@db-test:5432/fias_ed_web_test
       MIGRATOR_DATABASE_URL: postgresql+psycopg://fias_ed_migrator:test-migrator@db-test:5432/fias_ed_web_test
       AUDIO_STORE: /tmp/audio
+      # /models fica vazio aqui de propósito: a suíte padrão tem de rodar sem
+      # peso nenhum. Os testes `lento` recebem o volume na linha de comando
+      # (veja "Modelos" no README), e não por padrão.
+      MODELS_DIR: /models
+      ASR_SIZE: ${ASR_SIZE:-small}
+      # Os testes `lento` carregam os modelos reais exatamente como o produto:
+      # offline. Se um deles só passar com rede, o que ele prova não vale nada.
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
     volumes:
       - ./backend:/app
+      - ./scripts:/app/scripts:ro
     depends_on:
       db-test:
         condition: service_healthy

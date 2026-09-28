@@ -36,7 +36,21 @@ def error_message(code: str | None) -> str | None:
         "AUDIO_TOO_LARGE": (f"O arquivo passa de {format_size(s.max_upload_bytes)}. Tente exportar o "
                             "áudio em MP3 ou M4A, que ocupam menos espaço."),
         "AUDIO_LOCKED": "A análise desta aula já começou. Para usar outro áudio, crie uma nova aula.",
+        "AUDIO_PREPARO_FALHOU": "Não conseguimos preparar este áudio para análise. Tente enviar o arquivo de novo.",
+        "AUDIO_SEM_FALA": "Não conseguimos identificar fala neste áudio. Confira se o arquivo é mesmo o da aula.",
+        "DIARIZACAO_FALHOU": ("Não conseguimos separar as vozes deste áudio. "
+                              "Tente enviar uma gravação com menos ruído."),
         "JOB_FAILED": ("Algo deu errado ao preparar sua aula. Tente processar novamente; "
                        "se continuar, avise o administrador."),
+        "SEGMENTO_DESATUALIZADO": ("Este trecho foi alterado em outra aba. Recarregue a página "
+                                   "para ver a versão atual."),
+        "QTI_SEM_RESPOSTAS": ("O arquivo não traz nenhuma resposta. Confira se a turma respondeu "
+                              "antes de exportar."),
+        "QTI_ARQUIVO_ILEGIVEL": ("Não conseguimos ler este arquivo. Exporte o relatório de novo, "
+                                "sem abrir e salvar no Excel antes."),
+        "QTI_ARQUIVO_GRANDE": ("Este arquivo é grande demais para um relatório de questionário. "
+                              "Confira se é o arquivo certo."),
+        "COLETA_CONCORRENTE": ("Outra importação para esta data terminou agora. Recarregue a página "
+                              "e confira qual relatório ficou."),
     }
     return messages.get(code, "Algo deu errado. Tente novamente.")

@@ -52,13 +52,300 @@ Todos os comandos rodam dentro de `fias-ed-web/`.
      printf '%s\n%s\n' "$PW" "$PW" | docker compose run -T --rm api python -m app.cli create-admin --username <usuario> --display-name "<Nome>"
      unset PW
      ```
-5. Abra **http://localhost:8080** (use `localhost`, não o IP: o cookie de
+5. Popule o diretório de modelos (veja **Modelos**, logo abaixo). Sem isso a
+   entrada de áudio funciona, mas o processamento da aula para no primeiro
+   passo que precisa de modelo.
+6. Abra **http://localhost:8080** (use `localhost`, não o IP: o cookie de
    sessão é `Secure` e o navegador só o aceita em HTTP puro para `localhost`).
 
 O projeto Compose se chama `fias-ed-web` e o banco `fias_ed_web` (os volumes
 ficam como `fias-ed-web_pgdata` e `fias-ed-web_audio_store`). O nome
 `fias-ed` não é usado de propósito: pode existir outro projeto com esse nome
 na mesma máquina.
+
+### Modelos
+
+Os três modelos ficam no volume `fias-ed-web_models`, montado em `/models`.
+Eles **não** estão no Git (pesam cerca de 1 GB) e não são baixados quando o
+sistema sobe: `api` e `worker` montam `/models` **somente leitura** e rodam com
+`HF_HUB_OFFLINE=1` e `TRANSFORMERS_OFFLINE=1`. Em execução, nada sai para a
+rede atrás de peso — se faltar um arquivo, o serviço recusa em vez de baixar.
+
+| Modelo | Para quê | De onde vem |
+|---|---|---|
+| `faster-whisper-small` | Transformar áudio em texto | Hugging Face |
+| `pyannote/speaker-diarization-3.1` | Separar as vozes da sala | Hugging Face |
+| BERTimbau FIAS (Frente 3) | Classificação FIAS das falas | `artigos selecionados/experimentos/` |
+
+Quem popula o volume é `scripts/setup_models.py`, uma vez, na instalação.
+Cada repositório é baixado numa revisão fixada no próprio script, para que
+duas máquinas instaladas em semanas diferentes fiquem com os mesmos pesos.
+
+**Antes de rodar o setup**, três coisas:
+
+1. Crie um token de **leitura** em <https://huggingface.co/settings/tokens>.
+2. Abra as duas páginas abaixo **logado na conta dona do token** e aceite as
+   condições de uso de cada uma. Sem isso o download volta `403`, e o script
+   diz exatamente isso:
+   - <https://huggingface.co/pyannote/speaker-diarization-3.1>
+   - <https://huggingface.co/pyannote/segmentation-3.0>
+3. Preencha no `.env`:
+   ```
+   HUGGINGFACE_TOKEN=<o token>
+   FIAS_ED_EXPERIMENTS_DIR=../../artigos selecionados/experimentos
+   ```
+   O `.env` é ignorado pelo Git. **O token nunca entra em arquivo versionado,
+   em log nem em mensagem de erro** — nem o `.env.example`, que traz só o nome
+   da variável.
+
+Depois:
+
+```bash
+docker compose --profile setup run --rm setup-models
+```
+
+O script termina com `MODELOS OK`, e só com os três modelos prontos. Cada um
+tenta por conta própria: se um falhar, os outros ainda são instalados e o fim
+da saída nomeia quem ficou faltando e por quê — o download do pyannote precisa
+de rede e de licença aceita, a cópia do BERTimbau não precisa de nenhuma das
+duas, e não faz sentido a segunda ficar refém da primeira. Rodar de novo
+aproveita o que já está em disco.
+
+Ele é o único serviço do Compose que usa
+rede para buscar peso, e por isso fica atrás do profile `setup`: um
+`docker compose up` não o levanta. Ele lê o diretório dos experimentos
+**somente leitura** e nunca escreve lá.
+
+Os testes que carregam os modelos de verdade são marcados `lento` e ficam
+**fora** da suíte padrão (que roda sem peso e sem GPU). Para rodar só eles,
+com o volume dos modelos:
+
+```bash
+docker compose -f docker-compose.test.yml run --rm -v fias-ed-web_models:/models:ro api-test pytest -q -m lento
+```
+
+### Escolha do modelo de ASR
+
+O tamanho do Whisper está em `ASR_SIZE` no `.env` (`small`). A escolha foi
+medida, não chutada — `scripts/medir_asr.py` mede tempo e pico de memória dos
+três tamanhos, com **os mesmos parâmetros do produto** (CPU, `int8`,
+`language="pt"`, `temperature=0.0`, `vad_filter=True`):
+
+```bash
+docker compose -f docker-compose.test.yml run --rm \
+    -v fias-ed-web_models:/models:ro api-test python /app/scripts/medir_asr.py
+```
+
+Máquina de referência: o container do projeto, **16 CPUs e 15,5 GB de RAM**,
+**sem GPU** (o `torch` instalado é o `+cpu`, e `app/ml/asr_whisper.py` fixa
+`device="cpu"`). Não há VRAM em jogo: o orçamento é de RAM. O áudio é fala
+sintetizada pelo libflite, o mesmo recurso das fixtures dos testes `lento`; um
+tom puro não serviria, porque o VAD do Whisper o descarta inteiro e a medição
+viraria o custo do VAD.
+
+**Medido** (uma execução por célula; repetindo a célula decisiva — `small` em
+10 min — deu 99,5 s contra 100,2 s, 0,7% de diferença, e a mesma contagem de
+segmentos):
+
+| Modelo | Duração do áudio | Carga do modelo | Transcrição | s por min de áudio | Pico de memória | Segmentos |
+|---|---|---|---|---|---|---|
+| tiny | 2,5 min | 0,2 s | 4,5 s | 1,8 | 0,43 GB | 38 |
+| tiny | 5 min | 0,2 s | 9,8 s | 2,0 | 0,52 GB | 90 |
+| tiny | 10 min | 0,2 s | 14,7 s | 1,5 | 0,78 GB | 25 |
+| base | 2,5 min | 0,2 s | 5,3 s | 2,1 | 0,49 GB | 6 |
+| base | 5 min | 0,2 s | 8,6 s | 1,7 | 0,57 GB | 11 |
+| base | 10 min | 0,2 s | 29,8 s | 3,0 | 0,87 GB | 51 |
+| small | 2,5 min | 0,6 s | 29,2 s | 11,7 | 1,07 GB | 13 |
+| small | 5 min | 0,5 s | 51,6 s | 10,3 | 1,08 GB | 18 |
+| small | 10 min | 0,5 s | 100,2 s | 10,0 | 1,14 GB | 70 |
+
+**Linearidade, verificada e não suposta.** O custo por minuto *não* se mantém
+constante dentro de uma mesma chamada: variou 1,33× no `tiny`, 1,72× no `base`
+e 1,16× no `small` entre 2,5 e 10 min. A causa provável é o áudio sintético —
+o texto se repete e o Whisper condiciona a decodificação no que já transcreveu,
+o que muda a quantidade de segmentos (a coluna "Segmentos" oscila junto com o
+tempo). **Por isso a projeção abaixo não usa regra de três sobre a duração.**
+Ela usa o fato de que o produto corta o áudio em chunks de 10 min
+(`JANELA_PADRAO_MS` em `app/audio/prepare.py`) e chama o ASR uma vez por chunk,
+do zero: uma aula de 90 min é o chunk de 10 min — medido — repetido 9 vezes,
+com uma carga de modelo só.
+
+**Extrapolado** (9 × o chunk de 10 min medido; os números desta tabela **não**
+foram medidos numa aula de 90 min):
+
+| Modelo | Tempo numa aula de 90 min | Em múltiplos da duração do áudio | Pico de memória (medido, do chunk de 10 min) |
+|---|---|---|---|
+| tiny | ~2 min | 0,02× | 0,78 GB |
+| base | ~4 min | 0,05× | 0,87 GB |
+| small | ~15 min | 0,17× | 1,14 GB |
+
+O pico de memória não é extrapolado: como o chunk de 10 min é o maior pedaço
+que o ASR vê em produção, o pico medido nele é o pico de produção. Ele cresce
+com a duração *dentro* de uma chamada (0,43 → 0,78 GB no `tiny` entre 2,5 e
+10 min), e é justamente por isso que o número que vale é o do chunk inteiro.
+
+**Critério:** o **maior** tamanho cujo tempo numa aula de 90 min fique abaixo
+de 2× a duração do áudio e cujo pico de memória caiba com folga na máquina de
+referência, lembrando que o `pyannote` roda em seguida.
+
+**Escolhido: `small`** (`ASR_SIZE=small`). É o maior dos três, fica em 0,17× a
+duração do áudio — bem abaixo do teto de 2× — e o pico de 1,14 GB ocupa 7% dos
+15,5 GB da máquina. Os dois menores são mais baratos, mas não há motivo para
+gastar o tamanho de modelo quando o maior cabe com folga dessa ordem. A
+conta com a diarização somada está fechada em "Custo da diarização", logo
+abaixo: 0,77x a duração do áudio e 16% da memória.
+
+Três ressalvas, para o que está escrito aqui não valer mais do que vale:
+
+- **Não há medição de acerto.** WER e DER exigiriam áudio real de aula com
+  transcrição e diarização de referência, que o projeto não tem. Os dois
+  seguem `PENDING_SCIENTIFIC_VALIDATION`. A fala do libflite tem pronúncia
+  inglesa: serve para medir tempo de processamento, não para medir acerto.
+- **O orçamento de memória do `pyannote` deixou de ser desconhecido.** Era o
+  buraco desta seção enquanto os repositórios dele eram *gated* e os pesos não
+  estavam nesta máquina. Estão, e a medição está em "Custo da diarização",
+  abaixo: ele cabe com folga, mas custa 3,6x o tempo do ASR — é a diarização, e
+  não o tamanho do Whisper, que manda no relógio de uma aula.
+- **`tiny` e `base` estão no registro pela procedência, não pela adoção.** As
+  seis linhas deles acima continuam reproduzíveis: a revisão fixada dos pesos
+  que as produziram está em `fias-ed-shared/scientific-config/models.json`, nas
+  entradas `faster-whisper-tiny` e `faster-whisper-base` (`integrity.repos`),
+  que é também de onde `scripts/setup_models.py` lê o pino ao baixar. Essas
+  entradas dizem **qual peso foi medido**; elas não autorizam o uso, e trazem
+  `validation_status: PENDING_SCIENTIFIC_VALIDATION` para dizer isso.
+  `app/ml/asr_whisper.py` recusa carregar um modelo nesse estado, com a
+  mensagem explicando que ele existe para a procedência de uma medição, e
+  `FIAS_ED_ASR_SIZE=tiny` no setup completo para pelo mesmo motivo, antes de
+  tocar a rede. Adotar um dos dois exige validar o tamanho cientificamente
+  primeiro: aqui só o custo deles foi medido, nunca o acerto.
+
+Para baixar os pesos de um tamanho só (a medição precisa dos três em disco):
+
+```bash
+docker compose --profile setup run --rm -e FIAS_ED_ASR_SIZE=tiny \
+    setup-models python /app/scripts/setup_models.py --somente-asr
+```
+
+`--somente-asr` aceita `tiny` e `base`: medir é justamente o que se faz com um
+peso que ninguém adotou, e foi assim que a tabela acima nasceu. Ele avisa, antes
+de baixar, que o tamanho não é adotável. O mesmo comando **sem** `--somente-asr`
+para com a razão — ali o que se pede é o modelo que o produto vai carregar, e
+esse continua sendo o `small`.
+
+### Custo da diarização
+
+O `pyannote` roda **depois** do ASR, no mesmo worker, e até aqui o custo dele
+era desconhecido: os repositórios são *gated* no Hugging Face e os pesos não
+estavam nesta máquina. Agora estão, e `scripts/medir_diarizacao.py` mede com o
+mesmo método de `medir_asr.py` — biblioteca padrão, `resource.getrusage`, um
+processo por célula, fala do libflite (cinco vozes):
+
+```bash
+docker compose -f docker-compose.test.yml run --rm \
+    -v fias-ed-web_models:/models:ro api-test python /app/scripts/medir_diarizacao.py
+```
+
+**A diferença que muda a conta:** o ASR vê o áudio em pedaços de 10 min
+(`JANELA_PADRAO_MS` em `app/audio/prepare.py`), então o pico dele é o do maior
+pedaço e não cresce com a aula. A diarização **não é cortada** —
+`handle_diarize` entrega o arquivo de trabalho inteiro ao pipeline. Numa aula
+de 90 min o pyannote recebe 90 min de uma vez. Por isso a linha de 90 min
+abaixo é **medida**, e não extrapolada de um ponto curto.
+
+**Medido** (uma execução por célula):
+
+| Duração do áudio | Carga do pipeline | Diarização | s por min de áudio | Pico de memória | Turnos | Vozes |
+|---|---|---|---|---|---|---|
+| 2,5 min | 6,2 s | 86,2 s | 34,5 | 2,41 GB | 49 | 5 |
+| 5 min | 7,3 s | 192,9 s | 38,6 | 2,41 GB | 99 | 5 |
+| 10 min | 9,1 s | 473,8 s | 47,4 | 2,43 GB | 203 | 5 |
+| 30 min | 5,7 s | 1036,8 s | 34,6 | 2,52 GB | 583 | 5 |
+| **90 min** | 7,0 s | **3226,1 s** | 35,8 | **2,58 GB** | 1741 | 5 |
+
+**O pico quase não cresce com a duração:** 2,41 → 2,58 GB, 1,07x para 36x de
+áudio. Quase tudo é o pipeline carregado — 0,64 GB sem áudio nenhum — mais o
+que ele aloca por janela; o arquivo inteiro não fica em memória. É o oposto do
+ASR, cujo pico sobe de 0,43 para 0,78 GB entre 2,5 e 10 min.
+
+**O tempo é ruidoso, e isto fica escrito para não valer mais do que vale.** A
+mesma célula de 10 min deu 473,8 s sozinha e 342,3 s logo depois de um ASR no
+mesmo processo: 1,38x entre duas execuções do mesmo trabalho, contra os 0,7%
+de repetibilidade que o ASR mostrou. Os dois pontos longos, 30 e 90 min — os
+que menos sofrem com custo fixo — concordam em ~35 s/min, e é deles que sai o
+número da conta.
+
+**A conta fechada**, numa aula de 90 min, na máquina de referência (16 CPUs,
+15,5 GB, sem GPU):
+
+| Estágio | Tempo | Em múltiplos da duração do áudio | Pico de memória |
+|---|---|---|---|
+| ASR (`small`) | ~15 min (9 x o chunk de 10 min medido) | 0,17x | 1,14 GB (medido) |
+| Diarização | ~54 min (medido: 3226 s) | 0,60x | 2,58 GB (medido) |
+| **Os dois, em sequência** | **~69 min** | **0,77x** | **2,53 GB** (medido num processo só) |
+
+O pico dos dois juntos **não é a soma dos dois picos**, e também não é o maior
+deles: o worker é um processo só (`app/jobs/worker.py`), o objeto do Whisper
+morre no fim do handler e o alocador reaproveita o que já pediu ao sistema.
+Somar daria um limite superior grosseiro; tomar o máximo daria um otimista. O
+número acima vem de um processo que roda o ASR e a diarização em sequência, que
+é a forma do worker: **2,53 GB, 16% dos 15,5 GB**. Sobram 12,9 GB.
+
+**Cabe com folga, e a escolha do `small` continua de pé.** O critério era tempo
+abaixo de 2x a duração do áudio e memória com folga na máquina de referência:
+deu 0,77x e 16%. **Mas a diarização custa 3,6x o tempo do ASR.** Trocar `small`
+por `tiny` economizaria ~13 dos ~69 min e a diarização continuaria mandando no
+relógio — se um dia o tempo total precisar cair, é nela que se mexe, não no
+tamanho do Whisper.
+
+**Não há medição de acerto**, pelo mesmo motivo do ASR: DER exigiria áudio real
+de aula com diarização de referência, que o projeto não tem. A fala do libflite
+serve para medir custo de processamento, não acerto. DER segue
+`PENDING_SCIENTIFIC_VALIDATION`.
+
+### Custo da classificação FIAS
+
+O BERTimbau é o terceiro modelo do mesmo worker, e por muito tempo foi o único
+sem medição — o que fez a conta de memória do projeto errar por quase 2x. Numa
+aula de 46 min percorrida pela interface, o processo ia a 2,73 GB no fim da
+diarização e saltava para **4,75 GB** durante os ~46 s da classificação.
+
+A causa não era o modelo (são 0,46 GB carregado), e sim a falta de lote:
+`logits()` mandava os 381 segmentos da aula numa passagem só, e as ativações do
+BERT — sobretudo a matriz de atenção, `linhas x cabeças x 256 x 256` — crescem
+com o número de linhas do lote. O pico era função da duração da aula **e** do
+quanto a fala é picada, sem teto previsto. Hoje o lote é fixo
+(`TAMANHO_DO_LOTE` em `app/ml/clf_bertimbau.py`, 16), e
+`scripts/medir_classificacao.py` mede os dois lados com o método dos outros dois
+scripts (`resource.getrusage`, um processo por célula, modelo real):
+
+```bash
+docker compose -f docker-compose.test.yml run --rm \
+    -v fias-ed-web_models:/models:ro api-test python /app/scripts/medir_classificacao.py
+```
+
+**Medido** (uma execução por célula):
+
+| Segmentos | Lote | Classificação | Pico de memória | % da máquina |
+|---|---|---|---|---|
+| 381 | passagem única | 47,8 s | 4,23 GB | 27% |
+| 381 | 16 | 52,9 s | **1,07 GB** | 7% |
+| 762 | passagem única | 106,9 s | 7,65 GB | 49% |
+| 762 | 16 | 106,9 s | **1,07 GB** | 7% |
+
+Dobrar a aula dobrava a memória (4,23 → 7,65 GB) e agora não muda nada
+(1,07 → 1,07 GB, dos quais 0,46 GB são o modelo carregado). O tempo não piora
+fora do ruído de medição.
+
+**O lote não muda a categoria de nenhuma fala.** A entrada do modelo é idêntica
+linha a linha — com `padding: "max_length"` cada par ocupa 256 tokens
+independentemente de quem está no mesmo lote —, mas a saída não é bit a bit
+igual: o produto de matrizes em float32 escolhe a ordem de redução conforme a
+dimensão do lote. Medida a diferença, ela é de **1,9e-6** no pior dos 381
+segmentos, contra uma margem mínima de **0,231** entre o maior e o segundo maior
+logit; nenhuma das 381 categorias muda, e o mesmo vale em 762. Nenhum tamanho de
+lote reproduz os valores de outro tamanho — o que o §44 pede é que a **mesma**
+aula reprocessada dê o mesmo resultado, e isso o lote fixo garante bit a bit
+(`test_bertimbau_em_lote_e_reproduzivel`).
 
 ### Tamanho máximo do áudio
 
@@ -81,6 +368,8 @@ docker compose logs -f api worker
 `docker compose ps` deve mostrar `db`, `api`, `worker` e `web` como
 `healthy`, e `migrate` como `Exited (0)`: o `migrate` roda o Alembic uma vez e
 sai, por isso é o único serviço sem healthcheck.
+
+Coleta em sala, sem internet: [`docs/deploy-local.md`](../docs/deploy-local.md).
 
 ## 5. Testes
 
@@ -112,13 +401,63 @@ docker compose -f docker-compose.test.yml run --rm api-test pip-audit --skip-edi
 npm --prefix frontend audit --audit-level=high
 ```
 
-Última execução (2026-09-22):
+Última execução (2026-09-23):
 
 | Ferramenta | Resultado |
 |---|---|
-| bandit (severidade alta) | `No issues identified.` |
-| pip-audit | `No known vulnerabilities found` (os pacotes editáveis `fias-ed-engine` e `fias-ed-web-api` são pulados, como esperado) |
+| bandit (severidade alta) | `No issues identified.` (2 achados médios, 0 altos) |
+| pip-audit | `Found 8 known vulnerabilities in 1 package` — 5 CVEs distintas, todas no `transformers`; ver abaixo |
 | npm audit (alta ou crítica) | `found 0 vulnerabilities` |
+
+(O `pip-audit` imprime 8 linhas para 5 CVEs: três delas aparecem duas vezes,
+uma com a versão corrigida final e outra com a pré-lançamento. O `torch`, o
+`torchaudio` e o `pt_core_news_sm` saem como `Dependency not found on PyPI`:
+vêm do índice de wheels CPU do PyTorch e do release do spaCy, e não são
+auditados aqui.)
+
+### pip-audit: achados em aberto
+
+A execução de W1 dizia `No known vulnerabilities found`; aquele resultado valia
+para um conjunto de dependências que não existe mais — W2 trouxe `torch`,
+`transformers`, `faster-whisper` e `pyannote.audio`, e com eles 7 achados em 2
+pacotes. Os dois do `setuptools` foram corrigidos; os cinco do `transformers`
+continuam em aberto, por decisão.
+
+**`setuptools`: corrigido.** Ele nunca esteve no `pyproject.toml`. A imagem base
+não o traz; quem o puxava era o requisito `setuptools; python_version >= "3.12"`
+do `torch`, resolvido do índice de wheels CPU do PyTorch, que só hospeda até a
+78.1.0. O Dockerfile agora instala `setuptools>=78.1.1` do PyPI **antes** do
+`torch`, e a imagem ficou com a 84.0.0 — o que fecha tanto a CVE-2025-47273
+(**HIGH**, path traversal em `PackageIndex.download`, corrigida na 78.1.1)
+quanto a CVE-2026-59890 (MODERATE, corrigida na 83.0.0). Mexer no `requires` do
+`[build-system]` não resolveria: aquilo vale para o ambiente isolado de
+construção do pacote, não para o que fica instalado na imagem.
+
+**`transformers`: em aberto.** Continua na 4.57.6:
+
+| Pacote | Versão | ID | Severidade | O quê | Corrigido em |
+|---|---|---|---|---|---|
+| transformers | 4.57.6 | CVE-2025-14929 (PYSEC-2025-217) | **HIGH** (CVSS 7.8) | — | sem versão corrigida publicada |
+| transformers | 4.57.6 | CVE-2026-1839 (PYSEC-2026-2288) | MODERATE | Execução de código arbitrário na classe `Trainer` | 5.0.0 |
+| transformers | 4.57.6 | CVE-2026-4372 (PYSEC-2026-2289) | **HIGH** | Execução remota de código | 5.3.0 |
+| transformers | 4.57.6 | CVE-2026-5241 (PYSEC-2026-2290) | **HIGH** | Execução de código no carregamento do modelo (caminho do LightGlue) | 5.5.0 |
+| transformers | 4.57.6 | CVE-2026-9856 (PYSEC-2026-3929) | **HIGH** | Path traversal em `save_pretrained` → escrita de arquivo arbitrária | 5.10.0 |
+
+As correções exigem a série 5.x, uma troca de versão maior, e por isso não são
+uma atualização de rotina. A decisão foi ficar na 4.57.6 e registrar a
+exposição. Fica registrado, então, o que o produto de fato faz — o que reduz,
+mas não elimina, a exposição:
+
+- O produto **não treina** e **não chama `save_pretrained`**: `Trainer`
+  (CVE-2026-1839) e `save_pretrained` (CVE-2026-9856) não estão nos caminhos
+  de código usados.
+- O produto **carrega** modelo (`from_pretrained`), que é o caminho de
+  CVE-2026-4372 e CVE-2026-5241. Ele carrega só de `/models`, montado
+  somente leitura, com `local_files_only=True` e `HF_HUB_OFFLINE=1`, e depois
+  de `app/ml/registry.py` conferir SHA-256 de cada artefato e recusar o
+  diretório se houver `forbidden_files`. Nenhum peso vem da rede em execução.
+- Sobre a CVE-2025-14929 não há o que dizer: não há versão corrigida publicada
+  e o aviso não descreve o caminho afetado.
 
 ## 7. Backup e restauração
 
@@ -190,6 +529,12 @@ Nenhuma dependência envia telemetria.
 | psycopg 3 | LGPL-3.0 | driver PostgreSQL |
 | argon2-cffi | MIT | hash de senha Argon2id |
 | FFmpeg (ffprobe) | LGPL/GPL (pacote Debian) | leitura dos metadados do áudio |
+| PyTorch, torchaudio (wheels de CPU) | BSD-3 | base dos modelos; sem CUDA, o alvo é CPU |
+| Transformers | Apache-2.0 | carregamento do classificador |
+| faster-whisper, CTranslate2 | MIT | transcrição |
+| pyannote.audio | MIT | separação de vozes |
+| huggingface-hub | Apache-2.0 | download dos pesos, só na instalação |
+| spaCy, `pt_core_news_sm` | MIT, MIT + CC BY-SA 4.0 | pseudonimização de nomes |
 | PostgreSQL 16 | PostgreSQL License | banco de dados |
 | nginx (nginx-unprivileged) | BSD-2 | servidor web e proxy |
 | React, React DOM, React Router | MIT | interface |

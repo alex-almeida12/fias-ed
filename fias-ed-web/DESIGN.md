@@ -330,6 +330,16 @@ que fazia o status cair para a linha de baixo só em alguns itens, conforme o
 comprimento do texto. Tabelas (`.table`) usam a mesma linha de 1px e alinhamento
 à esquerda, sem zebra e sem borda externa.
 
+Há duas variantes de tabela, e a diferença é só de alinhamento vertical.
+**Tabela de texto** (`.table`, ex.: Contas) alinha ao meio: a linha de texto de
+uma célula casa com o rótulo de um botão de 44px, que é centrado na própria
+altura. **Tabela de formulário** (`.table .table--campos`, ex.: Escolas) alinha
+ao topo — ao meio, cada coluna se centraria pela própria altura e os campos de
+uma mesma linha não se alinhariam entre si. Nela, uma célula que só tem ação,
+sem rótulo acima, desce exatamente uma linha de rótulo mais o intervalo do
+campo (`calc(var(--type-label-size) * var(--type-label-line) + var(--space-1))`),
+para o botão alinhar com os campos vizinhos e não com os rótulos deles.
+
 ### Named Rules
 
 **A Regra do Alvo de 44px.** Todo elemento interativo — botão, campo, select,

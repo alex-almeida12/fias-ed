@@ -8,7 +8,9 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from app.core.config import get_settings
 from app.models import Base
 
-ENTITY_TABLES = ["professor", "escola", "turma", "disciplina", "aula", "audio", "processamento"]
+ENTITY_TABLES = ["professor", "escola", "turma", "disciplina", "aula", "audio", "processamento",
+                 "transcricao", "falante", "segmento", "classificacao_fias", "indicador_fias",
+                 "modelo_ia"]
 
 
 def load_schema(name: str):
@@ -48,7 +50,12 @@ def test_table_matches_shared_schema(table):
         col = cols[name]
         assert isinstance(col.type, expected_types(spec)), f"{table}.{name}: tipo {col.type!r}"
         if "enum" in spec:
-            assert set(col.type.enums) == set(spec["enum"]), f"{table}.{name}: enum difere"
+            # spec["enum"] pode incluir None quando o JSON Schema expressa nulidade
+            # dentro do próprio enum (ex.: indicador_fias.reason); a nulidade da coluna
+            # já é conferida abaixo por allows_null, então None nunca é um rótulo válido
+            # de sqlalchemy.Enum e é descartado aqui.
+            esperado = {v for v in spec["enum"] if v is not None}
+            assert set(col.type.enums) == esperado, f"{table}.{name}: enum difere"
         if "maxLength" in spec:
             assert col.type.length == spec["maxLength"], f"{table}.{name}: tamanho difere"
         if allows_null(spec):

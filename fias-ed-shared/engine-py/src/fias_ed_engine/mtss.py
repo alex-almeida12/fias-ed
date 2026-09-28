@@ -65,6 +65,65 @@ def recommendations(fired: list[dict], pedagogical: dict) -> list[dict]:
     return out
 
 
+def qualify(fired: list[dict], triangulation: list[dict], pedagogical: dict) -> list[dict]:
+    """Qualifica cada regra disparada à luz do QTI, sem alterar o que a disparou.
+
+    As regras continuam sendo decididas pelo FIAS. Isto só acrescenta a leitura
+    dos estudantes ao lado, e só onde regra e par de triangulação compartilham
+    um fato. O corte em faixas existe apenas do lado do QTI: do lado do FIAS a
+    própria condição da regra já classificou, com referência à literatura.
+    """
+    qual = pedagogical["recommendation_qualification"]
+    bands = qual["qti_bands"]
+    low_below, high_above = bands["low_below"], bands["high_above"]
+    by_rule = {m["rule_id"]: m for m in qual["map"]}
+    by_pair = {p["pair_id"]: p for p in triangulation}
+
+    out = []
+    for f in fired:
+        item = dict(f)
+        mapping = by_rule.get(f["rule_id"])
+        if mapping is None:
+            item["qti_agreement"] = "unpaired"
+            item["qti_evidence"] = None
+            item["divergence_question"] = None
+            out.append(item)
+            continue
+
+        pair = by_pair[mapping["pair_id"]]
+        if not pair["qti_available"]:
+            item["qti_agreement"] = "no_qti"
+            item["qti_evidence"] = None
+            item["divergence_question"] = None
+            out.append(item)
+            continue
+
+        octants = [q for q in pair["qti"] if q["octant"] in mapping["octants"]]
+        mean = sum(o["value"] for o in octants) / len(octants)
+        if mean < low_below:
+            band = "low"
+        elif mean > high_above:
+            band = "high"
+        else:
+            band = None  # faixa média: inconclusivo
+
+        if band is None:
+            agreement = "inconclusive"
+        elif band == mapping["agrees_when"]:
+            agreement = "agree"
+        else:
+            agreement = "disagree"
+
+        item["qti_agreement"] = agreement
+        item["qti_evidence"] = {"pair_id": mapping["pair_id"], "octants": octants, "mean": mean}
+        item["divergence_question"] = (
+            mapping.get("divergence_question", pair["reflection_question"])
+            if agreement == "disagree" else None
+        )
+        out.append(item)
+    return out
+
+
 def select_evidence_segments(segments: list[dict], category: int, limit: int = 3) -> list[dict]:
     """Escolhe até `limit` segmentos de evidência para uma categoria FIAS.
 

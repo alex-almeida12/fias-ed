@@ -50,8 +50,30 @@ def create_app() -> FastAPI:
     from app.aulas.routes import router as aulas_router
     app.include_router(aulas_router, prefix="/api")
 
+    from app.ciclos.routes import router as ciclos_router
+    app.include_router(ciclos_router, prefix="/api")
+
     from app.audio.routes import router as audio_router
     app.include_router(audio_router, prefix="/api")
+
+    from app.transcricao.routes import router as transcricao_router
+    app.include_router(transcricao_router, prefix="/api")
+
+    from app.fias.routes import router as fias_router
+    app.include_router(fias_router, prefix="/api")
+
+    from app.qti.routes import router as qti_router
+    app.include_router(qti_router, prefix="/api")
+
+    from app.relatorios.routes import router as relatorios_router
+    app.include_router(relatorios_router, prefix="/api")
+
+    # Sem prefixo /api e sem a dependência de sessão: as únicas três rotas
+    # públicas do sistema (§10 da spec). A ausência do prefixo é física, não
+    # cosmética — impede que uma futura rota autenticada de app.qti (que vive
+    # sob /api/qti) seja confundida com esta.
+    from app.publico.routes import router as publico_router
+    app.include_router(publico_router)
     return app
 
 
