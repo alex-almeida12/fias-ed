@@ -2,6 +2,8 @@
 caminho feliz: é que o limite não é furado, que resposta incompleta não entra,
 e que nada sobre o professor ou a turma vaza para quem abre o link."""
 import datetime as dt
+import threading
+import time
 from datetime import timezone
 
 import pytest
@@ -65,6 +67,15 @@ def test_link_invalido_expirado_e_revogado_dao_a_mesma_resposta_nas_tres_rotas(d
     link_expirado, token_expirado = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
     link_expirado.expira_em = dt.datetime.now(timezone.utc) - dt.timedelta(seconds=1)
     db.commit()
+    # `db.refresh` é o que faz esta asserção ler o banco de verdade, não o cache da
+    # sessão: o UPDATE em massa de `criar_link` (Core, não ORM) sincroniza os objetos já
+    # carregados por avaliação da cláusula WHERE em Python ("evaluate"), então mesmo sem
+    # o refresh a asserção já pegava a mutação da ordem antiga (achado da rodada de
+    # conserto 1) — mas por acidente de implementação do SQLAlchemy, não porque leu o
+    # banco. Sem o refresh, uma mudança nessa sincronização (ou numa cláusula WHERE que
+    # o "evaluate" não soubesse avaliar) faria a asserção passar mesmo com o banco
+    # dizendo outra coisa, em silêncio.
+    db.refresh(link_expirado)
     assert link_expirado.revogado_em is None
 
     rotas = (
@@ -408,3 +419,84 @@ def test_link_substituido_entre_a_validacao_e_a_trava_nao_grava(db, client_publi
     r = client_publico.post(f"/publico/qti/{token}/responder", json={"respostas": RESPOSTAS})
     assert r.status_code == 404
     assert db.query(RespostaQTI).count() == 0
+
+
+def test_responder_e_criar_link_nao_dao_deadlock_entre_si(db, client_publico, coleta_nativa, monkeypatch):
+    """Rodada de conserto 1 (revisão), achado Importante: `responder` travava só o LINK
+    (FOR UPDATE) e, no INSERT de `resposta_qti`, a FK pedia FOR KEY SHARE na COLETA;
+    `criar_link` trava a COLETA primeiro e, para revogar o link velho, precisa da linha
+    do LINK. Um envio entre a trava do link e o INSERT, cruzando com um professor gerando
+    outro link para a mesma data, travava os dois em ordem cruzada — o Postgres detecta o
+    ciclo em ~1s e aborta um dos dois lados (500 para o estudante, ou a geração do link
+    falha em silêncio para o professor). O conserto trava a coleta (FOR NO KEY UPDATE)
+    ANTES do link, na mesma ordem que `criar_link` já usa (coleta -> link): as duas
+    disputam a coleta no mesmo sentido, e quem chega depois só espera — sem ciclo.
+
+    Gancho determinístico, sem sleep: intercepta `dt.datetime.now()` no ponto exato entre
+    as duas travas (coleta + link) e o INSERT — trocando a referência do nome `dt` dentro
+    do módulo `app.publico.routes` por um objeto que delega para o `datetime` real e tem
+    o gancho embutido. `datetime.datetime` é tipo embutido e não aceita monkeypatch de
+    atributo direto (`TypeError: can't set attributes of built-in/extension type`); trocar
+    a referência do módulo, e só dentro de `app.publico.routes`, evita isso e não afeta
+    `app.qti.links` (import próprio, `dt` local àquele módulo), que a própria thread
+    concorrente deste teste chama de verdade.
+
+    Dentro do gancho, uma thread chama `criar_link` de verdade, numa sessão à parte, para
+    a mesma coleta; o teste espera, consultando `pg_stat_activity`
+    (`wait_event_type = 'Lock'`, com limite de tempo), até essa thread estar de fato
+    bloqueada — só então deixa `responder` prosseguir. Sem o conserto, o ciclo se forma
+    exatamente aqui: a thread bloqueia do mesmo jeito (ela sempre bloqueia — trava a
+    coleta ANTES de mexer no link), mas quando `responder` retoma e tenta o INSERT, quem
+    tem a coleta agora é a thread, e o Postgres fecha o ciclo."""
+    link_antigo, token_antigo = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    assert client_publico.post(f"/publico/qti/{token_antigo}/consentir",
+                               json={"documento_versao": "1.0.0"}).status_code == 201
+
+    import app.publico.routes as rotas
+    resultado: dict = {}
+
+    def _gerar_concorrente():
+        with SessionLocal(bind=get_engine()) as outra:
+            coleta = outra.get(ColetaQTI, coleta_nativa.id)
+            resultado["link_novo"], _ = criar_link(outra, coleta, n_estudantes=30, dias=7)
+
+    def _esperar_ate_bloquear():
+        monitor = SessionLocal(bind=get_engine())
+        try:
+            limite = time.monotonic() + 5.0
+            while time.monotonic() < limite:
+                bloqueadas = monitor.execute(text(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE wait_event_type = 'Lock' AND pid <> pg_backend_pid()")).scalar_one()
+                if bloqueadas > 0:
+                    return
+                time.sleep(0.05)
+            raise AssertionError("a thread concorrente nunca ficou bloqueada — a disputa não aconteceu")
+        finally:
+            monitor.close()
+
+    class _DatetimeComGancho:
+        @staticmethod
+        def now(tz=None):
+            resultado["thread"] = threading.Thread(target=_gerar_concorrente)
+            resultado["thread"].start()
+            _esperar_ate_bloquear()
+            return dt.datetime.now(tz)
+
+    class _DtComGancho:
+        datetime = _DatetimeComGancho
+
+    monkeypatch.setattr(rotas, "dt", _DtComGancho)
+    r = client_publico.post(f"/publico/qti/{token_antigo}/responder", json={"respostas": RESPOSTAS})
+
+    resultado["thread"].join(timeout=10)
+    assert not resultado["thread"].is_alive(), "a thread concorrente nunca terminou"
+    assert r.status_code == 201
+    assert "link_novo" in resultado, "criar_link concorrente falhou (deadlock do lado do professor)"
+
+    assert db.query(RespostaQTI).filter_by(coleta_id=coleta_nativa.id).count() == 1
+    db.refresh(link_antigo)
+    assert link_antigo.revogado_em is not None
+    ativos = db.query(LinkQTI).filter(LinkQTI.coleta_id == coleta_nativa.id,
+                                      LinkQTI.revogado_em.is_(None)).all()
+    assert [l.id for l in ativos] == [resultado["link_novo"].id]

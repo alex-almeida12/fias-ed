@@ -146,9 +146,21 @@ def responder(token: str, body: ResponderIn, request: Request, db: Session = Dep
     except (IncompleteResponseError, QtiImportError) as exc:
         raise AppError(422, "QTI_RESPOSTA_INVALIDA", str(exc)) from exc
 
+    # A trava segue SEMPRE a ordem coleta -> link, a mesma que `criar_link` usa (trava a
+    # coleta, depois mexe em link_qti). Sem essa ordem aqui: este envio travaria o LINK
+    # primeiro e só pediria a COLETA depois (a FK do INSERT em resposta_qti pede FOR KEY
+    # SHARE nela); um `criar_link` concorrente para a mesma data travaria a COLETA
+    # primeiro e só pediria a linha do LINK depois (para revogá-la) — cada transação
+    # esperando a que a outra segura, ciclo fechado. O Postgres detecta esse deadlock em
+    # ~1s e aborta um dos dois lados (500 para o estudante, ou a geração do link falha em
+    # silêncio para o professor). Achado da rodada de conserto 1 (revisão), regressão
+    # desta tarefa: antes de `criar_link` travar a coleta, esse ciclo não existia.
+    # FOR NO KEY UPDATE (key_share=True): conflita com o FOR UPDATE de `criar_link` e
+    # com outro envio vivo desta coleta, mas NÃO com o FOR KEY SHARE que a FK do INSERT
+    # de `consentir` (em consentimento_qti) pede — consentir continua livre.
+    db.execute(select(ColetaQTI.id).where(ColetaQTI.id == link.coleta_id).with_for_update(key_share=True))
     # O limite é conferido sob FOR UPDATE do LinkQTI, na mesma transação do INSERT.
-    # Com um link vivo por coleta (migração 0011), todo envio vivo disputa esta mesma
-    # linha. `populate_existing` é obrigatório: sem ele o SELECT devolve o objeto que
+    # `populate_existing` é obrigatório: sem ele o SELECT devolve o objeto que
     # `link_valido` já carregou nesta sessão, com os atributos de antes.
     link_travado = db.execute(select(LinkQTI).where(LinkQTI.id == link.id)
                               .with_for_update()

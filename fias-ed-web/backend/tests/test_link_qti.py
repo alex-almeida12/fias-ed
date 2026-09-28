@@ -137,12 +137,24 @@ def test_criar_link_espera_quem_esta_criando_outro_para_a_mesma_coleta(db, colet
     primeiro terminar — senão não enxerga o link que ele criou, não o revoga, e o banco
     recusa o segundo link vivo com erro 500.
 
-    A outra sessão trava a coleta com FOR NO KEY UPDATE, de propósito: esse modo conflita
-    com o FOR UPDATE de criar_link, mas NÃO com o FOR KEY SHARE que a chave estrangeira do
-    INSERT em link_qti pede. Então só um criar_link que trave a coleta de verdade espera —
-    sem a trava, ele passaria direto e este teste cairia."""
+    A outra sessão trava a coleta com FOR SHARE, de propósito (rodada de conserto 1: FOR
+    NO KEY UPDATE deixava passar uma mutação real — ver abaixo). FOR SHARE conflita com o
+    FOR UPDATE de `criar_link` (então a trava de verdade ainda derruba este teste se
+    sumir) e não conflita com o FOR KEY SHARE que a chave estrangeira do INSERT em
+    link_qti pede (então, sem a trava de `criar_link`, ele ainda passaria direto e este
+    teste ainda cairia) — as duas premissas do teste original se mantêm.
+
+    O que FOR SHARE prova a mais: dois cliques REAIS são duas chamadas de `criar_link`,
+    então o que importa é se a trava de `criar_link` conflita CONSIGO MESMA, não só
+    contra um FOR NO KEY UPDATE externo. `with_for_update(read=True)` (FOR SHARE) não
+    conflita com outro FOR SHARE — dois cliques concorrentes não se enfileirariam, os
+    dois passariam pela revogação ao mesmo tempo, e o segundo a comitar esbarraria no
+    índice único com IntegrityError (500), o mesmo defeito que a migração 0011 fecha.
+    Uma trava externa em FOR NO KEY UPDATE não pega essa mutação (FOR NO KEY UPDATE
+    conflita com FOR SHARE, então o teste continuaria verde por acidente); FOR SHARE
+    pega, porque replica o lado fraco do par (o próprio `criar_link` concorrente)."""
     segurando = SessionLocal(bind=get_engine())
-    segurando.execute(text("SELECT 1 FROM coleta_qti WHERE id = :id FOR NO KEY UPDATE"),
+    segurando.execute(text("SELECT 1 FROM coleta_qti WHERE id = :id FOR SHARE"),
                       {"id": coleta_nativa.id})
     resultado = {}
 
