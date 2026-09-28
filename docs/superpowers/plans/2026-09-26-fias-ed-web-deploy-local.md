@@ -77,7 +77,7 @@
 
 Não existe suíte que suba o nginx: a prova desta tarefa são comandos com a saída real colada no relatório.
 
-- [ ] **Step 1: Registrar o vazamento de hoje, antes de mexer**
+- [x] **Step 1: Registrar o vazamento de hoje, antes de mexer**
 
 Com o sistema no ar (`docker compose ps`):
 
@@ -88,7 +88,7 @@ docker compose logs web --tail 5 | grep TOKEN_ANTES_DA_TASK_1
 
 Esperado: uma linha com o token e um IP. Cole no relatório — é o "antes".
 
-- [ ] **Step 2: Escrever o `nginx.conf` novo**
+- [x] **Step 2: Escrever o `nginx.conf` novo**
 
 Substitua o arquivo inteiro por este. O servidor 8080 é o de hoje com duas mudanças (`error_log` em `/publico/`, e o `location /responder/` novo); o 8081 é novo.
 
@@ -262,7 +262,7 @@ server {
 
 **Confira o `dist/index.html` do build do frontend:** se ele referenciar algum arquivo na raiz (`/favicon.svg`, `/manifest.webmanifest`...), a tela do estudante pela 8081 precisa carregá-lo — acrescente um `location = /<arquivo>` com `try_files $uri =404;` para cada um e diga no relatório. O que está em `/assets/` já é servido.
 
-- [ ] **Step 3: Compose — o serviço `web-lan` e o nome da imagem do banco**
+- [x] **Step 3: Compose — o serviço `web-lan` e o nome da imagem do banco**
 
 No serviço `db`, logo depois do bloco `build:`, acrescente:
 
@@ -301,7 +301,7 @@ Depois do serviço `web`, acrescente:
 
 O `restart: "no"` vem **depois** do `<<: *hardening` e prevalece sobre o `unless-stopped` dele (chave explícita vence chave mesclada no YAML).
 
-- [ ] **Step 4: Construir e validar a configuração dentro da imagem**
+- [x] **Step 4: Construir e validar a configuração dentro da imagem**
 
 ```sh
 docker compose build web
@@ -310,7 +310,7 @@ docker run --rm --entrypoint nginx fias-ed-web-web:local -t
 
 Esperado: `nginx: configuration file /etc/nginx/nginx.conf test is successful`. Testar dentro da imagem evita montar arquivo do Windows no contêiner — foi montando assim que a W3b criou o diretório `deploy/nginx.conf;C`. Se esse diretório vazio ainda existir, apague-o (`rmdir "deploy/nginx.conf;C"`) e diga no relatório.
 
-- [ ] **Step 5: A matriz de rotas, com a 8081 presa em loopback para o teste**
+- [x] **Step 5: A matriz de rotas, com a 8081 presa em loopback para o teste**
 
 ```sh
 docker compose up -d --no-build web
@@ -327,7 +327,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/api/health       
 
 Carregue também um arquivo de `/assets/` pela 8081 (pegue o nome no `index.html` servido) e confira 200.
 
-- [ ] **Step 6: Nenhum token nem IP em log — inclusive com a API fora do ar**
+- [x] **Step 6: Nenhum token nem IP em log — inclusive com a API fora do ar**
 
 ```sh
 curl -s -o /dev/null http://127.0.0.1:8080/responder/TOKEN_DEPOIS_8080
@@ -342,7 +342,7 @@ docker compose --profile coleta logs web web-lan --since 10m | grep -c "TOKEN_"
 
 Esperado: `0`. Cole também `docker compose --profile coleta logs web-lan --since 10m | wc -l` — a 8081 não deve ter escrito nada que contenha endereço de cliente. Se o `grep` achar alguma linha, a tarefa não terminou.
 
-- [ ] **Step 6b: A API recriada não derruba o nginx**
+- [x] **Step 6b: A API recriada não derruba o nginx**
 
 ```sh
 docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$(docker compose ps -q api)"
@@ -355,7 +355,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8081/publico/qti/X    
 
 Cole os dois IPs. Se forem iguais, a prova não exercitou a troca: diga isso, e force-a — pare a API, suba um contêiner qualquer na rede `fias-ed-web_edge` para ocupar o IP antigo (`docker run -d --rm --name ocupa-ip --network fias-ed-web_edge fias-ed-web-web:local`), suba a API de novo, repita os dois `curl`, e remova o `ocupa-ip`.
 
-- [ ] **Step 7: Exposição e política de reinício**
+- [x] **Step 7: Exposição e política de reinício**
 
 ```sh
 docker compose --profile coleta ps --format '{{.Service}} {{.Ports}}'
@@ -364,7 +364,7 @@ docker inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$(docker compose -
 
 Esperado: só `web` (`127.0.0.1:8080->8080/tcp`) e `web-lan` (`127.0.0.1:8081->8081/tcp`) publicam porta; `db`, `api` e `worker` sem nenhuma. A política de `web-lan` é `no`.
 
-- [ ] **Step 8: Mutação — o log de acesso volta em `/responder/`**
+- [ ] **Step 8: Mutação — o log de acesso volta em `/responder/`** — não feito: o classificador de segurança bloqueou a reconstrução com o log reativado; evidência equivalente no relatório da Task 1 (ledger, Ruling 5)
 
 1. Apague a linha `access_log off;` do `location /responder/` do servidor 8080.
 2. `docker compose build web && docker compose up -d --no-build web`, depois `curl -s -o /dev/null http://127.0.0.1:8080/responder/TOKEN_MUTACAO` e `docker compose logs web --since 2m | grep -c TOKEN_MUTACAO` → tem de dar `1`.
@@ -372,7 +372,7 @@ Esperado: só `web` (`127.0.0.1:8080->8080/tcp`) e `web-lan` (`127.0.0.1:8081->8
 
 Três passos separados. Cole as saídas.
 
-- [ ] **Step 9: Fechar a 8081 e comitar**
+- [x] **Step 9: Fechar a 8081 e comitar**
 
 ```sh
 docker compose --profile coleta rm --stop --force web-lan
@@ -400,7 +400,7 @@ Mensagem: `feat(deploy): a porta dos celulares serve só o estudante, e nenhum l
 
 Por que: o professor gera o link em `localhost:8080`, e o estudante abre em `IP:8081`. `request.base_url` daria o endereço do professor. E um cookie `Secure` vindo de `http://` fora de localhost é descartado pelos navegadores atuais — na sala, sem TLS, o estudante aceitaria o convite e levaria 409 em todo envio.
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
 
 Em `test_qti_link_rotas.py` (acrescente `from app.core.config import get_settings` aos imports):
 
@@ -461,7 +461,7 @@ def test_em_https_o_cookie_de_consentimento_e_secure(db, client_publico, coleta_
 
 O fixture `app_instance` limpa o cache de `get_settings` ao nascer e ao morrer, então o `cache_clear()` dentro do teste só precisa vir depois do `setenv`.
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 ```sh
 docker compose -f docker-compose.test.yml build api-test
@@ -470,7 +470,7 @@ docker compose -f docker-compose.test.yml run --rm api-test pytest -q tests/test
 
 Esperado: os dois testes de URL falham (`https://testserver/...`), e o de http falha (`secure` presente).
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 `config.py`, dentro de `Settings`, depois de `device_id`:
 
@@ -538,7 +538,7 @@ e deixe:
 #   FIAS_ED_PUBLIC_URL  endereço que vai dentro do link do estudante (padrão http://localhost:8080)
 ```
 
-- [ ] **Step 4: Rodar e ver passar — e a suíte inteira**
+- [x] **Step 4: Rodar e ver passar — e a suíte inteira**
 
 ```sh
 docker compose -f docker-compose.test.yml build api-test
@@ -548,13 +548,13 @@ docker compose config --quiet && echo compose-ok
 
 Esperado: 554 passed (550 + 4), 6 deselected; `compose-ok`. Se algum teste antigo afirmar `https://testserver/responder/`, ele afirma o comportamento velho: atualize-o para a URL configurada e diga qual no relatório.
 
-- [ ] **Step 5: Mutações**
+- [x] **Step 5: Mutações**
 
 1. Volte `gerar_link` a usar `request.base_url` → `test_a_url_do_link_vem_da_url_publica_configurada` falha. Restaure.
 2. Fixe `seguro = True` → `test_em_http_o_cookie_de_consentimento_nao_e_secure` falha. Restaure.
 3. Fixe `seguro = False` → `test_em_https_o_cookie_de_consentimento_e_secure` falha. Restaure.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 `fix(publico): o link aponta para o endereço da sala, e o consentimento funciona sem TLS`
 
@@ -579,7 +579,7 @@ Esperado: 554 passed (550 + 4), 6 deselected; `compose-ok`. Se algum teste antig
 
 A correção torna esse estado impossível: com um único link vivo por coleta, todo envio vivo disputa a mesma linha, e a trava do link já é, na prática, a trava da coleta. Falta fechar uma janela: um envio que passou por `link_valido` com o link ainda vivo, e cujo link é substituído antes de ele pegar a trava. Por isso `responder` revalida o link **com a trava na mão**.
 
-- [ ] **Step 1: Testes que falham — `test_link_qti.py`**
+- [x] **Step 1: Testes que falham — `test_link_qti.py`**
 
 ```python
 import threading
@@ -663,7 +663,7 @@ def test_criar_link_espera_quem_esta_criando_outro_para_a_mesma_coleta(db, colet
 
 (`dt` e `pytest` o arquivo já importa; confira.)
 
-- [ ] **Step 2: Testes que falham — `test_rotas_publicas.py`**
+- [x] **Step 2: Testes que falham — `test_rotas_publicas.py`**
 
 `RESPOSTAS` é a constante que o arquivo já tem (`{str(i): 4 for i in range(1, 25)}`).
 
@@ -705,7 +705,7 @@ def test_link_substituido_entre_a_validacao_e_a_trava_nao_grava(db, client_publi
 
 **Armadilha que este segundo teste existe para pegar:** depois de `link_valido`, o objeto do link já está no mapa de identidade da sessão da rota. Um `select(LinkQTI)...with_for_update()` comum devolve **o mesmo objeto, com os atributos velhos** (`revogado_em = None`), mesmo que o banco já diga outra coisa. A revalidação só funciona com `.execution_options(populate_existing=True)`. Se você revalidar sem isso, este teste falha — é o teste funcionando.
 
-- [ ] **Step 3: Teste que falha — o aviso no diálogo**
+- [x] **Step 3: Teste que falha — o aviso no diálogo**
 
 Em `Acompanhamentos.test.tsx`, no molde dos testes do diálogo de gerar link que já existem:
 
@@ -721,11 +721,11 @@ test("o diálogo de gerar avisa que um novo link desativa o anterior da mesma da
 });
 ```
 
-- [ ] **Step 4: Rodar e ver falhar**
+- [x] **Step 4: Rodar e ver falhar**
 
 Backend e frontend, com a imagem de teste reconstruída. Esperado: os testes novos falham; o de "banco recusa" falha porque o `commit` passa.
 
-- [ ] **Step 5: A migração**
+- [x] **Step 5: A migração**
 
 `0011_um_link_vivo_por_coleta.py`, no estilo da `0010` (docstring longa com o porquê e a verificação feita):
 
@@ -794,7 +794,7 @@ No modelo, em `LinkQTI`, espelhe o índice (o padrão da `0010` foi espelhar a r
     )
 ```
 
-- [ ] **Step 6: `criar_link` e a revalidação**
+- [x] **Step 6: `criar_link` e a revalidação**
 
 `links.py` — trave a coleta, revogue, crie, numa transação só:
 
@@ -853,7 +853,7 @@ O resto (contagem, limite, INSERT) segue igual. `_link_invalido()` devolve a mes
 
 > Gerar um novo link para a mesma data desativa o anterior: o QR code que estiver projetado deixa de funcionar.
 
-- [ ] **Step 7: Rodar e ver passar**
+- [x] **Step 7: Rodar e ver passar**
 
 ```sh
 docker compose -f docker-compose.test.yml build api-test
@@ -866,14 +866,14 @@ O `rm -fsv db-test` é obrigatório aqui: a migração nova precisa rodar num ba
 
 **Testes que afirmam o comportamento velho** (dois links vivos na mesma coleta, a lista `links_qti` com dois itens na mesma data, o teto do link mais permissivo) vão falhar. Eles estão certos em falhar: atualize-os para a regra nova, **não os afrouxe**, e liste no relatório cada um que mudou e por quê.
 
-- [ ] **Step 8: Mutações**
+- [x] **Step 8: Mutações**
 
 1. Tire o `UPDATE` que revoga, em `criar_link` → `test_criar_um_segundo_link_revoga_o_primeiro` falha. Restaure.
 2. Tire a linha do `with_for_update()` sobre a coleta, em `criar_link` → `test_criar_link_espera_quem_esta_criando_outro_para_a_mesma_coleta` falha. Restaure.
 3. Tire o `populate_existing=True` (mantenha a revalidação) → `test_link_substituido_entre_a_validacao_e_a_trava_nao_grava` falha. Restaure.
 4. Tire o `postgresql_where` da migração, recrie o `db-test` → `test_um_link_revogado_nao_impede_outro_vivo` falha. Restaure e recrie de novo.
 
-- [ ] **Step 9: Aplicar no banco de desenvolvimento**
+- [x] **Step 9: Aplicar no banco de desenvolvimento**
 
 ```sh
 docker compose build api
@@ -884,7 +884,7 @@ docker compose up -d --no-build api worker
 
 Esperado: a saída do migrate mostra `0011: 2 link(s) excedente(s) revogado(s)` (ou o número que houver, com a explicação), e a versão é `0011`.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 `fix(qti): um link vivo por coleta, garantido pelo banco, e o envio revalida o link com a trava`
 
@@ -912,7 +912,7 @@ Esperado: a saída do migrate mostra `0011: 2 link(s) excedente(s) revogado(s)` 
 
 Com o índice, o `coleta_em` do segundo lado estoura antes de o teste começar. Apague os três e ponha no lugar os testes de que o banco recusa (Step 1). **O código de desempate (`coleta_vigente`, a ordenação da exportação) fica como está** — é defesa inofensiva, e tirá-lo é refatoração fora do escopo. O banco de dev tem hoje 14 coletas vivas e **nenhuma** violação (conferido em 2026-09-26).
 
-- [ ] **Step 1: Testes que falham — `test_coleta_nativa_modelo.py`**
+- [x] **Step 1: Testes que falham — `test_coleta_nativa_modelo.py`**
 
 ```python
 import datetime as dt
@@ -1012,15 +1012,15 @@ def test_importacao_que_perde_a_corrida_devolve_409_e_nao_500(db, client, ciclo)
 
 (`Session` de `sqlalchemy.orm`.)
 
-- [ ] **Step 2: Apagar os três testes de desempate**
+- [x] **Step 2: Apagar os três testes de desempate**
 
 Apague as três funções listadas acima. Não apague `coleta_em`, `coleta_vigente` nem nada fora dessas três funções.
 
-- [ ] **Step 3: Rodar e ver falhar**
+- [x] **Step 3: Rodar e ver falhar**
 
 Esperado: os dois testes de banco falham (o `commit` duplicado passa); o de corrida passa por acaso ou falha — sem o índice não há `IntegrityError` para tratar, então ele pode passar com **duas** coletas vivas: confira que a asserção `len(vivas) == 1` é a que cai.
 
-- [ ] **Step 4: A migração**
+- [x] **Step 4: A migração**
 
 `0012_uma_coleta_viva_por_data.py`, mesmo estilo da `0011`:
 
@@ -1078,7 +1078,7 @@ No modelo `ColetaQTI`, espelhe:
     )
 ```
 
-- [ ] **Step 5: Tratar a corrida nas duas funções**
+- [x] **Step 5: Tratar a corrida nas duas funções**
 
 `coleta_nativa_do_dia`: extraia a consulta e a decisão (reusar a nativa, recusar a importada) numa função interna, e envolva a criação num savepoint:
 
@@ -1136,7 +1136,7 @@ def coleta_nativa_do_dia(db: Session, ciclo: Ciclo, data: dt.date) -> ColetaQTI:
 
 O projeto centraliza mensagens em `app/core/messages.py`: registre `COLETA_CONCORRENTE` lá, no molde da entrada `QTI_SEM_RESPOSTAS`, e use `error_message("COLETA_CONCORRENTE")` no lugar do texto literal acima.
 
-- [ ] **Step 6: Rodar e ver passar**
+- [x] **Step 6: Rodar e ver passar**
 
 ```sh
 docker compose -f docker-compose.test.yml build api-test
@@ -1146,13 +1146,13 @@ docker compose -f docker-compose.test.yml run --rm api-test pytest -q
 
 Conte: 3 testes a menos (os de desempate) e os novos a mais. Diga o número de partida e o de chegada no relatório, com a conta.
 
-- [ ] **Step 7: Mutações**
+- [x] **Step 7: Mutações**
 
 1. Tire o `postgresql_where` da migração (recrie o `db-test`) → `test_uma_coleta_apagada_nao_impede_outra_na_mesma_data` e o teste de reimportação (`test_reimportar_na_mesma_data_substitui_em_vez_de_duplicar`) falham. Restaure e recrie.
 2. Tire o `try/except IntegrityError` de `coleta_nativa_do_dia` → `test_dois_pedidos_simultaneos_de_link_reusam_a_mesma_coleta` falha. Restaure.
 3. Tire o `try/except` de `importar_relatorio` → `test_importacao_que_perde_a_corrida_devolve_409_e_nao_500` falha com 500. Restaure.
 
-- [ ] **Step 8: Aplicar no banco de desenvolvimento**
+- [x] **Step 8: Aplicar no banco de desenvolvimento**
 
 ```sh
 docker compose build api && docker compose run --rm migrate
@@ -1160,7 +1160,7 @@ docker compose exec -T db psql -U postgres -d fias_ed_web -tAc "select version_n
 docker compose up -d --no-build api worker
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 `fix(qti): uma coleta viva por acompanhamento e data, e a corrida vira 409 em vez de 500`
 
@@ -1187,7 +1187,7 @@ docker compose up -d --no-build api worker
 - Teste: **`jsqr`** (Apache-2.0, sem dependências), só em `devDependencies` — o leitor independente que prova que o desenho decodifica.
 - `npm audit --audit-level=high` tem de continuar limpo. Registre a de execução em `THIRD_PARTY_LICENSES.md`, no formato das entradas que já existem.
 
-- [ ] **Step 1: O leitor de QR dos testes, em `test-utils.tsx`**
+- [x] **Step 1: O leitor de QR dos testes, em `test-utils.tsx`**
 
 ```tsx
 import jsQR from "jsqr";
@@ -1214,7 +1214,7 @@ export function lerQr(svg: SVGSVGElement): string | null {
 }
 ```
 
-- [ ] **Step 2: Testes que falham — `QrCode.test.tsx`**
+- [x] **Step 2: Testes que falham — `QrCode.test.tsx`**
 
 ```tsx
 import { render } from "@testing-library/react";
@@ -1235,7 +1235,7 @@ test("o QR tem nome acessível", () => {
 });
 ```
 
-- [ ] **Step 3: Testes que falham — `Acompanhamentos.test.tsx`**
+- [x] **Step 3: Testes que falham — `Acompanhamentos.test.tsx`**
 
 No molde do teste que já existe, "gerar o link mostra a url uma vez, com aviso de que não se recupera":
 
@@ -1278,11 +1278,11 @@ E, no teste que já existe "a tela não mostra o link antigo ao reabrir a lista"
   expect(screen.queryByRole("img", { name: /qr code/i })).not.toBeInTheDocument();
 ```
 
-- [ ] **Step 4: Rodar e ver falhar**
+- [x] **Step 4: Rodar e ver falhar**
 
 `cd frontend && npx vitest run` — os novos falham (componente e botão não existem).
 
-- [ ] **Step 5: Implementar**
+- [x] **Step 5: Implementar**
 
 ```sh
 cd frontend && npm install uqr && npm install -D jsqr
@@ -1333,16 +1333,16 @@ CSS, no arquivo de componentes do projeto — só tokens:
 - um botão **"Mostrar para projetar"** que abre um `Dialog` (o componente do projeto) com `<QrCode ... className="qr qr--projetar" />` e a URL por extenso embaixo, para quem não conseguir ler o código;
 - o QR vive no mesmo estado em memória que a URL (`linkGerado`) — **nada em `localStorage`, `sessionStorage` ou rota**, pela mesma razão da URL.
 
-- [ ] **Step 6: Rodar e ver passar**
+- [x] **Step 6: Rodar e ver passar**
 
 `cd frontend && npx vitest run && npm run lint && npm run build && npm audit --audit-level=high`
 
-- [ ] **Step 7: Mutações**
+- [x] **Step 7: Mutações**
 
 1. No `QrCode`, troque `x={x} y={y}` por `x={y} y={x}` → o teste de decodificação falha. Restaure. (Há leitores que aceitam QR espelhado; se o `jsqr` decodificar mesmo assim, diga isso e use como mutação desenhar só os módulos das linhas pares — essa tem de derrubar o teste.)
 2. Em `Acompanhamentos.tsx`, passe `valor={linkGerado.url.split("/responder/")[0]}` → o teste da tela falha. Restaure.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 `feat(web): o QR code do link na tela do professor, pronto para projetar`
 
@@ -1358,7 +1358,7 @@ CSS, no arquivo de componentes do projeto — só tokens:
 - Consumes: serviço `web-lan` e variáveis `FIAS_ED_LAN_IP`/`FIAS_ED_LAN_PORT` (Task 1); `FIAS_ED_PUBLIC_URL` (Task 2); a palavra `funcionando` na página `/` da 8081 (Task 1).
 - Produces: `deploy/subir-coleta.sh [--ip <endereço> | --encerrar]`; funções `eh_privado`, `enderecos`, `candidatos`, carregáveis sem executar nada com `SUBIR_COLETA_SO_FUNCOES=1`.
 
-- [ ] **Step 1: O teste do filtro, que falha**
+- [x] **Step 1: O teste do filtro, que falha**
 
 `deploy/testes/filtro-de-rede.sh`:
 
@@ -1424,7 +1424,7 @@ if [ "$falhas" -eq 0 ]; then echo "todos os casos passaram"; else echo "$falhas 
 
 `sh deploy/testes/filtro-de-rede.sh` → falha (o script não existe).
 
-- [ ] **Step 2: O script**
+- [x] **Step 2: O script**
 
 `deploy/subir-coleta.sh`:
 
@@ -1549,11 +1549,11 @@ fi
 
 Marque os dois como executáveis no Git (`git update-index --chmod=+x`), porque o Windows não guarda o bit.
 
-- [ ] **Step 3: O teste do filtro passa**
+- [x] **Step 3: O teste do filtro passa**
 
 `sh deploy/testes/filtro-de-rede.sh` → `todos os casos passaram`. Rode também com `busybox sh`, se houver, ou dentro de um contêiner alpine: `docker run --rm -v "$(pwd -W):/w" -w /w alpine sh deploy/testes/filtro-de-rede.sh` (com `MSYS_NO_PATHCONV=1`).
 
-- [ ] **Step 4: Rodar de verdade nesta máquina**
+- [x] **Step 4: Rodar de verdade nesta máquina**
 
 ```sh
 deploy/subir-coleta.sh                       # sem --ip: cole a saída, seja qual for
@@ -1567,11 +1567,11 @@ docker compose exec -T api python -c "from app.core.config import get_settings a
 
 **Isto abre a 8081 na rede em que a máquina estiver agora, pelo tempo do teste** — só as rotas do estudante, e o `--encerrar` fecha. O Windows pode mostrar um aviso de firewall pedindo permissão para o Docker na rede; se aparecer, registre e **não** mexa no firewall por conta própria.
 
-- [ ] **Step 5: Mutação**
+- [x] **Step 5: Mutação**
 
 Tire `vEthernet*|` do `case` de `candidatos` → o caso "windows: só o Wi-Fi" falha. Restaure.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 `feat(deploy): um comando abre a coleta no IP da sala e outro a fecha`
 
@@ -1590,7 +1590,7 @@ Tire `vEthernet*|` do `case` de `candidatos` → o caso "windows: só o Wi-Fi" f
 
 Escrito para o pesquisador no dia da coleta, com a turma chegando — frases curtas, um comando por passo, o que se espera ver depois de cada um. Não é documento técnico.
 
-- [ ] **Step 1: Escrever `docs/deploy-local.md` com estas seções, nesta ordem**
+- [x] **Step 1: Escrever `docs/deploy-local.md` com estas seções, nesta ordem**
 
 1. **Para que serve** — duas frases: o sistema roda neste computador; os celulares respondem pela rede da sala; nada vai para a internet.
 2. **Antes do dia (com internet, na sua máquina)** — `deploy/empacotar.sh <pasta fora do repositório>`; o que sai (≈3 GB); levar a pasta inteira num pendrive **exFAT ou NTFS** (FAT32 recusa arquivo acima de 4 GB).
@@ -1618,19 +1618,19 @@ Escrito para o pesquisador no dia da coleta, com a turma chegando — frases cur
 
 Todo comando no runbook é **exatamente** o que as Tasks 6 e 8 definem; se uma delas mudar um nome ou uma opção, este arquivo muda junto.
 
-- [ ] **Step 2: `ESTADO_DE_VALIDACAO.md`**
+- [x] **Step 2: `ESTADO_DE_VALIDACAO.md`**
 
 Na subseção das limitações da coleta nativa (a que a W3b criou, com "aba anônima"), acrescente um parágrafo sobre o tráfego em claro na rede local, com as mesmas palavras do runbook, e a razão: não há gravação de áudio no navegador (verificado), então a spec aceita HTTP na rede local, declarado. **O `.docx` não é regerado nesta fatia** — é a próxima, decidida pelo pesquisador.
 
-- [ ] **Step 3: README**
+- [x] **Step 3: README**
 
 Em `fias-ed-web/README.md` §4, uma linha: coleta em sala sem internet → `docs/deploy-local.md`.
 
-- [ ] **Step 4: Conferir os comandos**
+- [x] **Step 4: Conferir os comandos**
 
 Cada comando do runbook que não dependa de celular, rode-o nesta máquina e confira que ele existe e aceita as opções escritas (`deploy/subir-coleta.sh --encerrar`, a linha do backup de áudio com `--entrypoint tar`, o `create-admin` com `--help`). Cole as saídas.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 `docs(deploy): o runbook do dia da coleta, e o HTTP em claro declarado à banca`
 
@@ -1646,7 +1646,7 @@ Cada comando do runbook que não dependa de celular, rode-o nesta máquina e con
 - Consumes: imagens `fias-ed-web-api:local`, `fias-ed-web-web:local`, `fias-ed-web-db:local` (Task 1); volume `fias-ed-web_models`; `docs/deploy-local.md` (Task 7); `deploy/subir-coleta.sh` (Task 6).
 - Produces: `deploy/empacotar.sh <destino fora do repositório>` → pasta com `SHA256SUMS`, `docker-compose.yml`, `.env.example`, `deploy/subir-coleta.sh`, `deploy/instalar.sh`, `docs/deploy-local.md`, `imagens/{api,web,db}.tar.gz`, `modelos.tar`. `deploy/instalar.sh`, rodado de dentro dessa pasta.
 
-- [ ] **Step 1: `empacotar.sh`**
+- [x] **Step 1: `empacotar.sh`**
 
 ```sh
 #!/bin/sh
@@ -1703,7 +1703,7 @@ du -sh "$destino"
 echo "Pacote pronto em $destino. Leve a pasta inteira; na outra máquina, de dentro dela: deploy/instalar.sh"
 ```
 
-- [ ] **Step 2: `instalar.sh`**
+- [x] **Step 2: `instalar.sh`**
 
 ```sh
 #!/bin/sh
@@ -1763,7 +1763,7 @@ echo "  docker compose run --rm api python -m app.cli create-admin --username <n
 
 Executáveis no Git (`git update-index --chmod=+x`).
 
-- [ ] **Step 3: Nenhum segredo nas imagens nem no pacote**
+- [x] **Step 3: Nenhum segredo nas imagens nem no pacote**
 
 ```sh
 for img in api web db; do
@@ -1786,7 +1786,7 @@ v3=$(grep '^FIAS_ED_APP_PASSWORD=' .env | cut -d= -f2-)
 
 Esperado: `0`. Se der mais que zero, descubra qual das três e onde — sem imprimir o valor. O token do Hugging Face **não** entra nesta varredura: ele vive só em `<scratchpad>/.hftoken`, e esta tarefa não o lê. O que o protege é o Step 3 acima (nenhum arquivo de token nas imagens) e o volume de modelos já ter sido conferido sem credencial na preparação da fatia.
 
-- [ ] **Step 4: Gerar o pacote, fora do repositório**
+- [x] **Step 4: Gerar o pacote, fora do repositório**
 
 ```sh
 PACOTE="<scratchpad>/pacote-fias-ed"
@@ -1795,7 +1795,7 @@ ls -la "$PACOTE" "$PACOTE/imagens"
 deploy/empacotar.sh "$(git rev-parse --show-toplevel)/pacote-teste" ; echo "saída: $?"   # tem de recusar, 2
 ```
 
-- [ ] **Step 5: A prova — instalar num Docker sem imagens e sem rede**
+- [x] **Step 5: A prova — instalar num Docker sem imagens e sem rede**
 
 ```sh
 docker pull docker:dind            # com internet, antes
@@ -1814,7 +1814,7 @@ docker rm -f -v fias-dind
 
 A imagem da API tem 3,7 GB: a cópia e o `load` levam minutos, e o conjunto ocupa ≈10 GB temporários no disco do Docker. O `docker rm -f -v` no fim devolve o espaço — confira com `docker system df` antes e depois.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 `feat(deploy): o pacote para a máquina sem internet, provado num Docker sem rede`
 
@@ -1826,7 +1826,7 @@ A imagem da API tem 3,7 GB: a cópia e o `load` levam minutos, e o conjunto ocup
 
 Esta tarefa não constrói nada. O produto é um relatório em que cada afirmação vem com o comando que a sustenta, e uma seção do que ficou por verificar e por quê.
 
-- [ ] **Step 1: A pilha no HEAD**
+- [x] **Step 1: A pilha no HEAD**
 
 A W3b terminou com a pilha em execução atrás do HEAD. Antes de qualquer coisa:
 
@@ -1835,11 +1835,11 @@ docker compose build && docker compose run --rm migrate && docker compose up -d 
 docker compose exec -T db psql -U postgres -d fias_ed_web -tAc "select version_num from alembic_version"   # 0012
 ```
 
-- [ ] **Step 2: As suítes e as auditorias**
+- [x] **Step 2: As suítes e as auditorias**
 
 Motor, backend (imagem de teste reconstruída **e** `db-test` recriado), frontend (vitest, lint, build), `sh deploy/testes/filtro-de-rede.sh`, `bandit -r app --severity-level high`, `pip-audit --skip-editable`, `npm audit --audit-level=high`. Os 8 CVEs de `transformers 4.57.6` são conhecidos e **não** se atualiza nada — relate o que aparecer, com versão e identificador.
 
-- [ ] **Step 3: O runbook de ponta a ponta nesta máquina**
+- [x] **Step 3: O runbook de ponta a ponta nesta máquina**
 
 Siga `docs/deploy-local.md` na ordem, exceto os passos de celular:
 
@@ -1853,7 +1853,7 @@ Siga `docs/deploy-local.md` na ordem, exceto os passos de celular:
    `FIAS_ED_LAN_IP=<IP> FIAS_ED_PUBLIC_URL=https://exemplo.invalido docker compose --profile coleta up -d --no-build` —, gere outro link (a `url` sai com `https://exemplo.invalido`; use só o token dela), e repita o fluxo pelo IP em HTTP com um cookie jar novo → o `curl` descarta o cookie, que agora é `Secure` (ele aplica a regra dos navegadores: não aceita cookie `Secure` vindo de `http://` fora de localhost), e o envio dá **409**. Volte a URL certa com `deploy/subir-coleta.sh --ip <IP>`, gere outro link → **201**. Se o `curl` desta máquina aceitar o cookie `Secure` em HTTP, **diga isso** — a prova vira só a do teste automatizado da Task 2, e o celular do pesquisador passa a ser a única prova de ponta a ponta;
 8. `deploy/subir-coleta.sh --encerrar` → a 8081 fecha; um link gerado depois aponta para `http://localhost:8080`.
 
-- [ ] **Step 4: Nenhum token nem IP em log**
+- [x] **Step 4: Nenhum token nem IP em log**
 
 Com os tokens reais usados no Step 3:
 
@@ -1864,22 +1864,22 @@ docker compose --profile coleta logs --no-log-prefix web-lan | wc -l
 
 E com a API derrubada de propósito (`docker compose stop api`, uma chamada a `/publico/qti/<token>` pelas duas portas, `docker compose start api`). Esperado: zero ocorrências.
 
-- [ ] **Step 5: Exposição**
+- [x] **Step 5: Exposição**
 
 Com a coleta aberta: pelo IP da rede, `8081` responde; `8080`, `8000` e `5432` recusam (`curl --max-time 3` ou `Test-NetConnection <IP> -Port <porta>` no PowerShell). `docker compose --profile coleta ps --format '{{.Service}} {{.Ports}}'`: só `web` em `127.0.0.1:8080` e `web-lan` em `<IP>:8081`.
 
-- [ ] **Step 6: Os critérios de aceite da spec §7**
+- [x] **Step 6: Os critérios de aceite da spec §7**
 
 Um por um, com a evidência. O critério 2 (segundo dispositivo, celular físico) **não é verificável daqui**: diga isso e o motivo — daqui não se entra na rede como um aparelho de fora, e o firewall do Windows nem é atravessado por uma conexão da própria máquina ao próprio IP. O 6 cita o Step 5 da Task 8.
 
-- [ ] **Step 7: O que fica para o pesquisador**
+- [x] **Step 7: O que fica para o pesquisador**
 
 Uma seção com: o teste com o celular físico (que é também o segundo dispositivo); o aviso de HTTP no navegador do celular, se houver; o aviso de firewall do Windows, se aparecer; o `create-admin` numa máquina Windows sem Git Bash; regenerar o `.docx`.
 
-- [ ] **Step 8: Arrumar o que a verificação deixou**
+- [x] **Step 8: Arrumar o que a verificação deixou**
 
 Desative a conta de verificação; feche a coleta (`deploy/subir-coleta.sh --encerrar`); apague o pacote de teste do scratchpad (≈3 GB) e cole o `docker system df` final. Nada de `down`, nada de apagar dado do banco de dev: o acompanhamento de verificação fica, e o relatório diz qual é.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Só se houver conserto. Uma verificação que não acha nada é resultado, desde que se veja o que foi verificado.
