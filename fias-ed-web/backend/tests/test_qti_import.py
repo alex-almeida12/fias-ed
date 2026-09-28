@@ -10,7 +10,10 @@ app/qti/service.py, no ponto onde a checagem de versão deixou de existir.
 import datetime as dt
 
 from fias_ed_engine.rules import load_rules
+from sqlalchemy import event
+from sqlalchemy.orm import Session
 
+from app.core.db import SessionLocal, get_engine
 from app.models import AcessoAdmin, Ciclo, ColetaQTI, Disciplina, Escola, RespostaQTI, Turma
 from tests.helpers import login, make_user
 
@@ -68,6 +71,38 @@ def test_reimportar_na_mesma_data_substitui_em_vez_de_duplicar(db, client, ciclo
     vivas = db.query(ColetaQTI).filter(ColetaQTI.deleted_at.is_(None)).all()
     assert len(vivas) == 1
     assert db.query(RespostaQTI).filter_by(coleta_id=vivas[0].id).count() == 12
+
+
+def test_importacao_que_perde_a_corrida_devolve_409_e_nao_500(db, client, ciclo):
+    disparou = []
+
+    def outra_importacao_chega_antes(sessao, contexto, instancias):
+        # Só no flush que vai inserir a coleta. A rota faz outros flushes antes (a
+        # sessão do professor atualiza `last_seen_at`); disparar num deles criaria a
+        # coleta concorrente cedo demais, a importação a acharia como "anterior", e o
+        # teste passaria sem corrida nenhuma.
+        if disparou or not any(isinstance(o, ColetaQTI) for o in sessao.new):
+            return
+        disparou.append(True)
+        with SessionLocal(bind=get_engine()) as outra:
+            outra.add(ColetaQTI(ciclo_id=ciclo.id, coletado_em=dt.date(2026, 9, 1),
+                                origem="IMPORTACAO_EXTERNA", response_count=12, displayable=True,
+                                qti_config_version="1.0.0"))
+            outra.commit()
+
+    login(client, "professora-ciclo")
+    # A rota usa a própria sessão, não a `db` do teste: escute na classe Session —
+    # depois do login, e removendo no fim para não vazar para os outros testes.
+    event.listen(Session, "before_flush", outra_importacao_chega_antes)
+    try:
+        r = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                        data={"coletado_em": "2026-09-01"},
+                        files={"arquivo": ("export.csv", _csv(12), "text/csv")})
+    finally:
+        event.remove(Session, "before_flush", outra_importacao_chega_antes)
+    assert disparou, "a corrida não foi montada: o flush da coleta não aconteceu"
+    assert r.status_code == 409
+    assert r.json()["error_code"] == "COLETA_CONCORRENTE"
 
 
 def test_menos_de_dez_respostas_nao_e_erro_mas_nao_e_exibivel(db, client, ciclo):

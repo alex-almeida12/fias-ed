@@ -244,6 +244,10 @@ ORIGEM_QTI = ("COLETA_NATIVA", "IMPORTACAO_EXTERNA")
 
 class ColetaQTI(EntityMixin, Base):
     __tablename__ = "coleta_qti"
+    __table_args__ = (
+        Index("uq_coleta_qti_ciclo_data_viva", "ciclo_id", "coletado_em", unique=True,
+              postgresql_where=text("deleted_at IS NULL")),
+    )
     ciclo_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("ciclo.id"), index=True, nullable=False)
     coletado_em: Mapped[date] = mapped_column(Date, nullable=False)
     origem: Mapped[str] = mapped_column(_enum(ORIGEM_QTI, "origem_qti"), nullable=False)

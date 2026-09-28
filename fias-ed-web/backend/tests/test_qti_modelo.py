@@ -1,10 +1,17 @@
 import datetime as dt
 
 import pytest
-from sqlalchemy import inspect
+from sqlalchemy import event, inspect
 from sqlalchemy.exc import IntegrityError
 
+from app.core.db import SessionLocal, get_engine
 from app.models import ColetaQTI, ResultadoQTI, RespostaQTI
+from app.qti.service import coleta_nativa_do_dia
+
+
+def _coleta(ciclo, data, **extra):
+    return ColetaQTI(ciclo_id=ciclo.id, coletado_em=data, origem="COLETA_NATIVA", response_count=0,
+                     displayable=False, qti_config_version="1.0.0", **extra)
 
 
 def test_resposta_nao_tem_nenhuma_coluna_de_identidade(db):
@@ -41,3 +48,46 @@ def test_resultado_qti_recusa_duas_linhas_para_a_mesma_coleta(db, coleta_nativa)
     with pytest.raises(IntegrityError):
         db.commit()
     db.rollback()
+
+
+def test_o_banco_recusa_duas_coletas_vivas_na_mesma_data(db, ciclo):
+    db.add(_coleta(ciclo, dt.date(2026, 9, 1)))
+    db.add(_coleta(ciclo, dt.date(2026, 9, 1)))
+    with pytest.raises(IntegrityError):
+        db.commit()
+    db.rollback()
+
+
+def test_uma_coleta_apagada_nao_impede_outra_na_mesma_data(db, ciclo):
+    """O índice é parcial — é o que mantém a reimportação funcionando."""
+    db.add(_coleta(ciclo, dt.date(2026, 9, 1), deleted_at=dt.datetime.now(dt.timezone.utc)))
+    db.add(_coleta(ciclo, dt.date(2026, 9, 1)))
+    db.commit()
+
+
+def test_dois_pedidos_simultaneos_de_link_reusam_a_mesma_coleta(db, ciclo):
+    """Dois cliques em "gerar link": os dois procuram a coleta do dia, não acham, e os
+    dois tentam criá-la. Aqui a corrida é reproduzida sem thread: logo antes do INSERT
+    desta sessão, outra sessão cria e comita a mesma coleta. O índice recusa a segunda;
+    coleta_nativa_do_dia tem de reler e devolver a que ganhou, sem erro 500."""
+    disparou = []
+
+    def outra_sessao_chega_antes(sessao, contexto, instancias):
+        # Só no flush que vai inserir a coleta — nunca num flush anterior qualquer.
+        if disparou or not any(isinstance(o, ColetaQTI) for o in sessao.new):
+            return
+        disparou.append(True)
+        with SessionLocal(bind=get_engine()) as outra:
+            outra.add(_coleta(ciclo, dt.date(2026, 9, 1)))
+            outra.commit()
+
+    event.listen(db, "before_flush", outra_sessao_chega_antes)
+    try:
+        coleta = coleta_nativa_do_dia(db, ciclo, dt.date(2026, 9, 1))
+    finally:
+        event.remove(db, "before_flush", outra_sessao_chega_antes)
+    assert disparou, "a corrida não foi montada: o flush da coleta não aconteceu"
+    db.commit()
+    vivas = db.query(ColetaQTI).filter(ColetaQTI.deleted_at.is_(None)).all()
+    assert len(vivas) == 1
+    assert coleta.id == vivas[0].id

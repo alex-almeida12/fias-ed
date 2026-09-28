@@ -50,5 +50,7 @@ def error_message(code: str | None) -> str | None:
                                 "sem abrir e salvar no Excel antes."),
         "QTI_ARQUIVO_GRANDE": ("Este arquivo é grande demais para um relatório de questionário. "
                               "Confira se é o arquivo certo."),
+        "COLETA_CONCORRENTE": ("Outra importação para esta data terminou agora. Recarregue a página "
+                              "e confira qual relatório ficou."),
     }
     return messages.get(code, "Algo deu errado. Tente novamente.")

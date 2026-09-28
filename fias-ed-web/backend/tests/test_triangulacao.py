@@ -31,32 +31,6 @@ def test_usa_a_coleta_mais_recente_anterior_a_aula(db, ciclo, aula_em, coleta_em
     assert coleta_vigente(db, aula).id == marco.id
 
 
-def test_duas_coletas_na_mesma_data_escolhem_sempre_a_criada_por_ultimo(db, ciclo, aula_em, coleta_em):
-    """Determinismo. Sem o desempate explícito, a escolha ficaria por conta da ordem
-    de varredura do banco, que pode mudar entre execuções sem ninguém tocar no código."""
-    coleta_em(ciclo, "2026-03-01")
-    ultima = coleta_em(ciclo, "2026-03-01")
-    aula = aula_em(ciclo, "2026-04-01")
-    for _ in range(5):
-        assert coleta_vigente(db, aula).id == ultima.id
-
-
-def test_duas_coletas_com_created_at_empatado_escolhem_sempre_a_de_maior_id(db, ciclo, aula_em, coleta_em):
-    """`created_at` é `default=utcnow` do lado do Python, não do banco: duas
-    chamadas sequenciais de `coleta_em` nunca colidem nele de verdade, então o
-    teste acima passa pelo `created_at` e o desempate por `id` em
-    `coleta_vigente` fica sem cobertura. Aqui o `created_at` é forçado a ser
-    exatamente o mesmo nas duas coletas — só o `id` pode decidir."""
-    mesmo_instante = datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
-    primeira = coleta_em(ciclo, "2026-03-01", created_at=mesmo_instante)
-    segunda = coleta_em(ciclo, "2026-03-01", created_at=mesmo_instante)
-    assert primeira.created_at == segunda.created_at
-    maior_id = max(primeira, segunda, key=lambda c: c.id)
-    aula = aula_em(ciclo, "2026-04-01")
-    for _ in range(5):
-        assert coleta_vigente(db, aula).id == maior_id.id
-
-
 def test_sem_coleta_a_triangulacao_traz_a_pergunta_sem_os_valores(db, aula_classificada):
     """Sem QTI o professor ainda recebe a pergunta de reflexão; só não recebe o
     número ao lado. Uma triangulação vazia não teria por que existir."""

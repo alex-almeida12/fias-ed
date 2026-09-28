@@ -41,12 +41,29 @@ import datetime as dt
 from fias_ed_engine.qti import QtiImportError, aggregate, parse_export_csv
 from fias_ed_engine.rules import load_rules
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.messages import error_message
 from app.models import Aula, Ciclo, ColetaQTI, RespostaQTI, ResultadoQTI, utcnow
 from app.pipeline.estados import avancar
+
+
+def _coleta_viva_da_data(db: Session, ciclo: Ciclo, data: dt.date) -> ColetaQTI | None:
+    return db.execute(
+        select(ColetaQTI).where(ColetaQTI.ciclo_id == ciclo.id,
+                                ColetaQTI.coletado_em == data,
+                                ColetaQTI.deleted_at.is_(None))
+    ).scalars().first()
+
+
+def _reusar_ou_recusar(existente: ColetaQTI) -> ColetaQTI:
+    if existente.origem == "COLETA_NATIVA":
+        return existente
+    raise AppError(409, "COLETA_JA_EXISTE",
+                   "Já existe um relatório importado para esta data. Use outra data, "
+                   "ou apague a coleta importada antes de gerar o link.")
 
 
 def coleta_nativa_do_dia(db: Session, ciclo: Ciclo, data: dt.date) -> ColetaQTI:
@@ -63,24 +80,25 @@ def coleta_nativa_do_dia(db: Session, ciclo: Ciclo, data: dt.date) -> ColetaQTI:
     pede isso — ao contrário de reimportar, que traz dado novo e substituir
     é razoável. Por isso o sentido inverso (`importar_relatorio`) segue sem
     filtrar por origem: as duas funções olham a mesma linha, cada uma decide
-    o que fazer com o que acha."""
-    existente = db.execute(
-        select(ColetaQTI).where(ColetaQTI.ciclo_id == ciclo.id,
-                                ColetaQTI.coletado_em == data,
-                                ColetaQTI.deleted_at.is_(None))
-    ).scalars().first()
+    o que fazer com o que acha.
+
+    A restrição uq_coleta_qti_ciclo_data_viva (migração 0012) é quem decide a
+    corrida entre dois pedidos simultâneos; aqui só se relê o que ganhou e se
+    aplica a mesma regra."""
+    existente = _coleta_viva_da_data(db, ciclo, data)
     if existente is not None:
-        if existente.origem == "COLETA_NATIVA":
-            return existente
-        raise AppError(409, "COLETA_JA_EXISTE",
-                       "Já existe um relatório importado para esta data. Use outra data, "
-                       "ou apague a coleta importada antes de gerar o link.")
+        return _reusar_ou_recusar(existente)
     cfg = load_rules("qti_config")
     coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=data, origem="COLETA_NATIVA",
                        response_count=0, displayable=False,
                        qti_config_version=cfg["rules_version"], cabecalho_recebido=None)
-    db.add(coleta)
-    db.flush()
+    try:
+        with db.begin_nested():
+            db.add(coleta)
+            db.flush()
+    except IntegrityError:
+        # Outro pedido criou a coleta desta data entre a consulta e o INSERT.
+        return _reusar_ou_recusar(_coleta_viva_da_data(db, ciclo, data))
     return coleta
 
 
@@ -101,14 +119,20 @@ def importar_relatorio(db: Session, ciclo: Ciclo, texto: str, coletado_em: dt.da
         ColetaQTI.deleted_at.is_(None))).scalars().first()
     if anterior is not None:
         anterior.deleted_at = utcnow()
+        db.flush()
 
     agregado = aggregate(respostas, cfg)
     cabecalho = texto.splitlines()[0] if texto else ""
     coleta = ColetaQTI(ciclo_id=ciclo.id, coletado_em=coletado_em, origem="IMPORTACAO_EXTERNA",
                        response_count=agregado["response_count"], displayable=agregado["displayable"],
                        qti_config_version=cfg["rules_version"], cabecalho_recebido=cabecalho)
-    db.add(coleta)
-    db.flush()
+    try:
+        with db.begin_nested():
+            db.add(coleta)
+            db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise AppError(409, "COLETA_CONCORRENTE", error_message("COLETA_CONCORRENTE")) from exc
     for i, r in enumerate(respostas):
         db.add(RespostaQTI(coleta_id=coleta.id, response_index=i,
                            respostas={str(k): v for k, v in r.items()}))
