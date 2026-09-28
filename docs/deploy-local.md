@@ -96,7 +96,11 @@ Em ordem:
    link para a mesma data, um diálogo avisa que gerar outro desativa o
    anterior.
 7. Clique em **"Mostrar para projetar"** e deixe o QR code na tela.
-8. Acompanhe a contagem de respostas na mesma tela.
+8. Para ver quantas respostas já chegaram, abra **"Ver o acompanhamento"**
+   numa **nova aba** (botão direito → "Abrir link em nova aba"). **Não saia
+   de "Meus acompanhamentos" nesta aba** enquanto a turma responde: ao sair,
+   o QR code some e só volta gerando outro link — o que desativa o link que
+   a turma está usando.
 
 ## 5. Encerrar
 
