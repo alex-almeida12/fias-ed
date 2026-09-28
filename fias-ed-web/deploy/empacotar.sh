@@ -18,10 +18,14 @@ destino="${1:-}"
 if [ -z "$destino" ]; then echo "Uso: deploy/empacotar.sh <pasta de destino, fora do repositório>" >&2; exit 2; fi
 cd "$(dirname "$0")/.."                                   # fias-ed-web/
 raiz=$(cd "$(git rev-parse --show-toplevel)" && pwd)      # mesmo formato do `pwd` abaixo
+if [ -e "$destino" ]; then criada=nao; else criada=sim; fi
 mkdir -p "$destino"
 destino=$(cd "$destino" && pwd)
 case "$destino/" in
-  "$raiz"/*) echo "Recusado: $destino fica dentro do repositório. O pacote tem gigabytes e não pode virar commit por engano." >&2; exit 2 ;;
+  "$raiz"/*)
+    # A pasta só foi criada para normalizar o caminho; recusada, não fica para trás no repositório.
+    if [ "$criada" = sim ]; then rmdir "$destino"; fi
+    echo "Recusado: $destino fica dentro do repositório. O pacote tem gigabytes e não pode virar commit por engano." >&2; exit 2 ;;
 esac
 if [ -n "$(ls -A "$destino")" ]; then echo "Recusado: $destino não está vazia." >&2; exit 2; fi
 
