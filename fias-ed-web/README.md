@@ -369,6 +369,8 @@ docker compose logs -f api worker
 `healthy`, e `migrate` como `Exited (0)`: o `migrate` roda o Alembic uma vez e
 sai, por isso é o único serviço sem healthcheck.
 
+Coleta em sala, sem internet: [`docs/deploy-local.md`](../docs/deploy-local.md).
+
 ## 5. Testes
 
 ```bash
