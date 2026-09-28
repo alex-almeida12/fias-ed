@@ -87,13 +87,13 @@ Origem de cada arquivo e o SHA-256 conferido estão em
 
 ## 4. Frontend (`fias-ed-web/frontend`)
 
-232 pacotes em `node_modules`, contando as dependências transitivas.
-Distribuição por licença:
+234 pacotes em `node_modules`, contando as dependências transitivas (atualizado
+na Task 5, que acrescentou `uqr` e `jsqr`). Distribuição por licença:
 
 | Licença | Pacotes |
 |---|---|
-| MIT | 186 |
-| Apache-2.0 | 17 |
+| MIT | 187 |
+| Apache-2.0 | 18 |
 | ISC | 11 |
 | BSD-2-Clause | 8 |
 | BSD-3-Clause | 3 |
@@ -104,12 +104,18 @@ Distribuição por licença:
 | BlueOak-1.0.0 | 1 |
 
 **O que de fato é distribuído.** Só o que entra no pacote compilado (`dist/`)
-cria obrigação de aviso para quem recebe o sistema: `react`, `react-dom` e
-`react-router`, os três **MIT**. O MIT exige que o aviso de copyright acompanhe
-a distribuição — o build do Vite preserva os avisos dos pacotes incluídos.
+cria obrigação de aviso para quem recebe o sistema: `react`, `react-dom`,
+`react-router` e, desde a Task 5, `uqr` (gera o QR code do link em `<QrCode>`,
+`frontend/src/design/components/QrCode.tsx`) — os quatro **MIT**, sem
+`dependencies` próprias. O MIT exige que o aviso de copyright acompanhe a
+distribuição — o build do Vite preserva os avisos dos pacotes incluídos.
+`jsqr` (**Apache-2.0**, sem `dependencies`) só decodifica QR em
+`devDependencies`, para o teste provar que o desenho é lido por um leitor
+independente (`lerQr` em `frontend/src/test-utils.tsx`) — não entra no
+`dist/`.
 
-**Os casos que não são MIT são todos de tempo de build**, não chegam ao
-navegador do professor:
+**Os demais casos que não são MIT são de tempo de build ou (o `jsqr` acima) de
+teste**, não chegam ao navegador do professor:
 
 | Pacote | Licença | Papel |
 |---|---|---|

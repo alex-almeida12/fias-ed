@@ -8,6 +8,7 @@ import { Button } from "../design/components/Button";
 import { Dialog } from "../design/components/Dialog";
 import { EmptyState } from "../design/components/EmptyState";
 import { TextField } from "../design/components/Field";
+import { QrCode } from "../design/components/QrCode";
 
 type LinkGerado = LinkQtiGerado & { cicloId: string };
 type Revogando = { cicloId: string; linkId: string };
@@ -27,6 +28,7 @@ export function Acompanhamentos() {
   const [gerarErro, setGerarErro] = useState<string | null>(null);
   const [gerando, setGerando] = useState(false);
   const [linkGerado, setLinkGerado] = useState<LinkGerado | null>(null);
+  const [projetando, setProjetando] = useState(false);
 
   const [revogando, setRevogando] = useState<Revogando | null>(null);
 
@@ -78,6 +80,7 @@ export function Acompanhamentos() {
         json: { n_estudantes: Number(nEstudantes), dias: Number(dias), coletado_em: coletadoEm },
       });
       setLinkGerado({ ...resultado, cicloId: alvo.id });
+      setProjetando(false);
       setGerandoPara(null);
       await carregar();
     } catch (err) {
@@ -164,8 +167,11 @@ export function Acompanhamentos() {
                 )}
                 {linkGerado && linkGerado.cicloId === c.id && (
                   <Banner kind="success">
+                    <QrCode valor={linkGerado.url} rotulo="QR code do link para os estudantes" />
+                    <p>Aponte a câmera do celular para o código.</p>
                     <p>{linkGerado.url}</p>
                     <Button variant="tertiary" onClick={() => void copiarLink(linkGerado.url)}>Copiar link</Button>
+                    <Button variant="tertiary" onClick={() => setProjetando(true)}>Mostrar para projetar</Button>
                     <p>Guarde-o agora: não será possível vê-lo de novo.</p>
                   </Banner>
                 )}
@@ -203,6 +209,13 @@ export function Acompanhamentos() {
               value={dias} onChange={(e) => setDias(e.target.value)} />
           </div>
           {gerarErro && <Banner kind="error">{gerarErro}</Banner>}
+        </Dialog>
+      )}
+      {projetando && linkGerado && (
+        <Dialog title="Link para os estudantes" onClose={() => setProjetando(false)}
+          actions={<Button variant="tertiary" onClick={() => setProjetando(false)}>Fechar</Button>}>
+          <QrCode valor={linkGerado.url} rotulo="QR code do link para os estudantes" className="qr qr--projetar" />
+          <p>Para quem não conseguir ler o código: {linkGerado.url}</p>
         </Dialog>
       )}
       {revogando && (

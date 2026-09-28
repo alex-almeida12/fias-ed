@@ -274,6 +274,16 @@ progress { width: 100%; max-width: 32rem; display: block; accent-color: var(--co
   border-radius: var(--radius-sm); cursor: pointer; }
 .likert__opcao input { width: 20px; height: 20px; margin: 0; accent-color: var(--color-action-secondary); cursor: pointer; }
 
+/* QR code do link do questionário (Task 5): SVG puro, módulo a módulo, para caber na
+   CSP (nada de canvas/data: URL). --color-navy sobre --color-white é o mesmo par que
+   já mede 10,44:1 em contraste-telas.test.ts ("navy x branco") — de sobra para o piso
+   de 3:1 que um elemento gráfico exige (WCAG 1.4.11), e o produto não tem tema escuro
+   para inverter. */
+.qr { display: block; width: 100%; max-width: 16rem; height: auto; }
+.qr--projetar { max-width: min(80vh, 90vw); margin-inline: auto; }
+.qr__fundo { fill: var(--color-white); }
+.qr__modulos { fill: var(--color-navy); }
+
 /* A matriz de transições é o único conteúdo do produto que não quebra em linha:
    são 10 colunas numéricas, e esconder ou truncar coluna seria perder dado. Em
    360px ela mede 400px dentro de uma coluna de 328px e empurrava o scroll

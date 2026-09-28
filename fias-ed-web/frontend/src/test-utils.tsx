@@ -1,6 +1,28 @@
+import jsQR from "jsqr";
 import { vi } from "vitest";
 import { render } from "@testing-library/react";
 import { App } from "./app/App";
+
+/** Rasteriza o SVG do <QrCode> (módulos escuros sobre fundo claro) e o decodifica com
+ * um leitor independente. É o que prova que o desenho é um QR de verdade e que ele
+ * carrega exatamente o texto pedido — e não só que o componente recebeu o texto. */
+export function lerQr(svg: SVGSVGElement): string | null {
+  const lado = Number(svg.getAttribute("viewBox")!.split(" ")[2]);
+  const escala = 8;
+  const px = lado * escala;
+  const rgba = new Uint8ClampedArray(px * px * 4).fill(255);
+  svg.querySelectorAll(".qr__modulos rect").forEach((r) => {
+    const x = Number(r.getAttribute("x"));
+    const y = Number(r.getAttribute("y"));
+    for (let dy = 0; dy < escala; dy++) {
+      for (let dx = 0; dx < escala; dx++) {
+        const i = ((y * escala + dy) * px + (x * escala + dx)) * 4;
+        rgba[i] = rgba[i + 1] = rgba[i + 2] = 0;
+      }
+    }
+  });
+  return jsQR(rgba, px, px)?.data ?? null;
+}
 
 export function jsonResponse(body: unknown, status = 200): Response {
   if (status === 204) return new Response(null, { status });

@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test } from "vitest";
-import { jsonResponse, mockApi, PROFESSORA, renderApp } from "../test-utils";
+import { jsonResponse, lerQr, mockApi, PROFESSORA, renderApp } from "../test-utils";
 
 const ACOMPANHAMENTO = {
   id: "c1", turma: { id: "t1", name: "9º B" }, disciplina: { id: "d1", name: "História" },
@@ -152,7 +152,7 @@ test("falha ao encerrar mostra a mensagem do servidor, e o acompanhamento contin
 // A partir daqui: Task 6 (w3b) — o professor gera e revoga o link do questionário nativo
 // pela própria tela, sem passar pelo Postman. O teste seguinte depende de rodar logo depois
 // deste (nenhum localStorage.clear() entre os dois, de propósito — veja o comentário nele).
-test("gerar o link mostra a url uma vez, com aviso de que não se recupera", async () => {
+async function gerarLink() {
   mockApi({
     "GET /api/auth/me": () => jsonResponse(PROFESSORA),
     "GET /api/ciclos": () => jsonResponse([ACOMPANHAMENTO]),
@@ -164,8 +164,27 @@ test("gerar o link mostra a url uma vez, com aviso de que não se recupera", asy
   const dialog = screen.getByRole("dialog");
   await userEvent.type(within(dialog).getByLabelText(/quantos estudantes/i), "30");
   await userEvent.click(within(dialog).getByRole("button", { name: /^gerar$/i }));
-  expect(await screen.findByText(/responder\/tok123/)).toBeInTheDocument();
+  await screen.findByText(/responder\/tok123/);
+}
+
+test("gerar o link mostra a url uma vez, com aviso de que não se recupera", async () => {
+  await gerarLink();
+  expect(screen.getByText(/responder\/tok123/)).toBeInTheDocument();
   expect(screen.getByText(/não será possível vê-lo de novo/i)).toBeInTheDocument();
+});
+
+test("gerar o link mostra o QR code, que decodifica para a url devolvida", async () => {
+  await gerarLink();
+  const qr = screen.getByRole("img", { name: /qr code do link/i });
+  expect(lerQr(qr as unknown as SVGSVGElement)).toBe("http://x/responder/tok123");
+});
+
+test("mostrar para projetar abre o QR grande num diálogo", async () => {
+  await gerarLink();
+  await userEvent.click(screen.getByRole("button", { name: /mostrar para projetar/i }));
+  const dialogo = screen.getByRole("dialog");
+  const qr = within(dialogo).getByRole("img", { name: /qr code do link/i });
+  expect(lerQr(qr as unknown as SVGSVGElement)).toBe("http://x/responder/tok123");
 });
 
 test("a tela não mostra o link antigo ao reabrir a lista", async () => {
@@ -180,6 +199,7 @@ test("a tela não mostra o link antigo ao reabrir a lista", async () => {
   renderApp("/ciclos");
   await screen.findByRole("heading", { name: /meus acompanhamentos/i });
   expect(screen.queryByText(/responder\//)).not.toBeInTheDocument();
+  expect(screen.queryByRole("img", { name: /qr code/i })).not.toBeInTheDocument();
 });
 
 test("o diálogo de gerar manda os três campos no corpo", async () => {
