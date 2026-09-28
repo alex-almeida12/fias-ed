@@ -104,6 +104,17 @@ disputa, as duas versões esperam; só em momentos diferentes, que só se distin
 olhando as travas internas do Postgres. A garantia pelo banco tem teste
 determinístico, e o resultado para quem usa é o mesmo.
 
+**Errata (2026-09-28, revisão final da fatia):** o parágrafo acima ficou desatualizado
+por uma correção posterior, na mesma fatia. `responder` (`backend/app/publico/routes.py`)
+passou a travar a linha da coleta **antes** da do link — `FOR NO KEY UPDATE` em
+`ColetaQTI`, na mesma ordem que `criar_link` já usava —, para fechar um ciclo de
+espera entre as duas transações que a trava só no link abria (achado da rodada de
+conserto 1 da revisão, regressão desta mesma tarefa). Diferente do que o texto acima
+previa, esse caminho **tem** teste determinístico:
+`test_responder_e_criar_link_nao_dao_deadlock_entre_si`, em
+`backend/tests/test_rotas_publicas.py`. O texto acima permanece como registro da
+decisão original; esta errata só atualiza o que, de fato, existe hoje no código.
+
 ### 3.6 Uma coleta viva por (acompanhamento, data)
 
 `UNIQUE (ciclo_id, coletado_em) WHERE deleted_at IS NULL` — **parcial**: uma UNIQUE
