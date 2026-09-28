@@ -17,7 +17,7 @@ Com este repositório e internet, monte o pacote que vai para a sala:
 deploy/empacotar.sh <pasta fora do repositório>
 ```
 
-**O que sai:** uma pasta de aproximadamente 3 GB, com as imagens Docker
+**O que sai:** uma pasta de aproximadamente 2 GB, com as imagens Docker
 (`imagens/`), os modelos (`modelos.tar`), a conferência de integridade
 (`SHA256SUMS`), o arquivo do Compose, os dois scripts (`instalar.sh` e
 `subir-coleta.sh`) e este runbook.
