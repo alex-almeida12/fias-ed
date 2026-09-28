@@ -58,7 +58,14 @@ def _coleta_viva_da_data(db: Session, ciclo: Ciclo, data: dt.date) -> ColetaQTI 
     ).scalars().first()
 
 
-def _reusar_ou_recusar(existente: ColetaQTI) -> ColetaQTI:
+def _reusar_ou_recusar(existente: ColetaQTI | None) -> ColetaQTI:
+    if existente is None:
+        # A releitura, depois do IntegrityError, não achou ninguém: a coleta concorrente
+        # que causou o erro deixou de estar viva entre o erro e esta releitura (outra
+        # requisição a apagou logicamente nesse intervalo). Sem coleta para reusar ou
+        # recusar, a única resposta honesta é pedir para tentar de novo — não uma
+        # segunda tentativa de INSERT em laço, nem um AttributeError virando 500.
+        raise AppError(409, "COLETA_CONCORRENTE", error_message("COLETA_CONCORRENTE"))
     if existente.origem == "COLETA_NATIVA":
         return existente
     raise AppError(409, "COLETA_JA_EXISTE",

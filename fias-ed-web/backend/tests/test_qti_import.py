@@ -62,15 +62,31 @@ def test_valor_adulterado_recusa_o_arquivo_inteiro(db, client, ciclo):
 
 
 def test_reimportar_na_mesma_data_substitui_em_vez_de_duplicar(db, client, ciclo):
-    """Review Focus 1: o professor clica duas vezes."""
+    """Review Focus 1: o professor clica duas vezes (ou importa de novo depois de um
+    ajuste na planilha). Os dois envios têm de ser aceitos (201, 201) — conteúdos
+    DIFERENTES (12 respostas, depois 15), para que o teste prove substituição, não só
+    ausência de duplicata: um regressão que passasse a recusar toda reimportação (ex.:
+    tratando a segunda chamada como corrida) passaria por um teste que só olhasse o
+    estado final com o mesmo conteúdo duas vezes — foi exatamente o ponto cego que a
+    mutação 1 da Task 4 revelou."""
     login(client, "professora-ciclo")
-    for _ in range(2):
-        client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
-                    files={"arquivo": ("export.csv", _csv(12), "text/csv")},
-                    data={"coletado_em": "2026-03-01"})
+    r1 = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                     files={"arquivo": ("export.csv", _csv(12), "text/csv")},
+                     data={"coletado_em": "2026-03-01"})
+    assert r1.status_code == 201
+    r2 = client.post(f"/api/ciclos/{ciclo.id}/qti/importar",
+                     files={"arquivo": ("export.csv", _csv(15), "text/csv")},
+                     data={"coletado_em": "2026-03-01"})
+    assert r2.status_code == 201
+
     vivas = db.query(ColetaQTI).filter(ColetaQTI.deleted_at.is_(None)).all()
     assert len(vivas) == 1
-    assert db.query(RespostaQTI).filter_by(coleta_id=vivas[0].id).count() == 12
+    assert vivas[0].response_count == 15
+    assert db.query(RespostaQTI).filter_by(coleta_id=vivas[0].id).count() == 15
+
+    apagadas = db.query(ColetaQTI).filter(ColetaQTI.deleted_at.isnot(None)).all()
+    assert len(apagadas) == 1
+    assert apagadas[0].response_count == 12
 
 
 def test_importacao_que_perde_a_corrida_devolve_409_e_nao_500(db, client, ciclo):

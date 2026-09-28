@@ -5,8 +5,10 @@ from sqlalchemy import event, inspect
 from sqlalchemy.exc import IntegrityError
 
 from app.core.db import SessionLocal, get_engine
+from app.core.errors import AppError
 from app.models import ColetaQTI, ResultadoQTI, RespostaQTI
 from app.qti.service import coleta_nativa_do_dia
+import app.qti.service as qti_service
 
 
 def _coleta(ciclo, data, **extra):
@@ -91,3 +93,57 @@ def test_dois_pedidos_simultaneos_de_link_reusam_a_mesma_coleta(db, ciclo):
     vivas = db.query(ColetaQTI).filter(ColetaQTI.deleted_at.is_(None)).all()
     assert len(vivas) == 1
     assert coleta.id == vivas[0].id
+
+
+def test_concorrente_apagada_entre_o_erro_e_a_releitura_vira_409_nao_500(db, ciclo, monkeypatch):
+    """Recorte mais fino da mesma corrida. O IntegrityError do INSERT perdedor só prova
+    que havia uma coleta concorrente viva NAQUELE instante — nada garante que ela
+    continue viva até a releitura, uma linha depois: outra requisição pode apagá-la
+    logicamente (e comitar) nesse intervalo curtíssimo. _reusar_ou_recusar não pode
+    presumir que a releitura sempre encontra alguém: sem essa checagem, `existente` vem
+    None, `existente.origem` explode em AttributeError, e o professor que perdeu a
+    corrida por uma fração de segundo ainda vê 500 — exatamente o que esta tarefa existe
+    para eliminar.
+
+    Monkeypatch em `_coleta_viva_da_data`, e não mais um `before_flush`: o ponto que
+    importa aqui não é o INSERT que colide (já coberto pelo teste acima), é o instante
+    ENTRE a exceção e a releitura, que nenhum evento de flush alcança — só interceptando
+    a própria função de releitura dá para encaixar uma escrita ali. A 1ª chamada (antes
+    do INSERT) passa direto; a 2ª (a releitura, após o IntegrityError) primeiro apaga a
+    concorrente noutra sessão e comita, depois delega para a implementação real."""
+    disparou = []
+
+    def outra_sessao_chega_antes(sessao, contexto, instancias):
+        if disparou or not any(isinstance(o, ColetaQTI) for o in sessao.new):
+            return
+        disparou.append(True)
+        with SessionLocal(bind=get_engine()) as outra:
+            outra.add(_coleta(ciclo, dt.date(2026, 9, 1)))
+            outra.commit()
+
+    original = qti_service._coleta_viva_da_data
+    chamadas = []
+
+    def releitura_acha_a_concorrente_ja_apagada(db_, ciclo_, data_):
+        chamadas.append(True)
+        if len(chamadas) == 2:
+            with SessionLocal(bind=get_engine()) as terceira:
+                concorrente = terceira.query(ColetaQTI).filter(
+                    ColetaQTI.ciclo_id == ciclo_.id, ColetaQTI.coletado_em == data_,
+                    ColetaQTI.deleted_at.is_(None)).one()
+                concorrente.deleted_at = dt.datetime.now(dt.timezone.utc)
+                terceira.commit()
+        return original(db_, ciclo_, data_)
+
+    monkeypatch.setattr(qti_service, "_coleta_viva_da_data", releitura_acha_a_concorrente_ja_apagada)
+    event.listen(db, "before_flush", outra_sessao_chega_antes)
+    try:
+        with pytest.raises(AppError) as exc_info:
+            coleta_nativa_do_dia(db, ciclo, dt.date(2026, 9, 1))
+    finally:
+        event.remove(db, "before_flush", outra_sessao_chega_antes)
+    assert disparou, "a corrida não foi montada: o flush da coleta não aconteceu"
+    assert len(chamadas) == 2, "a releitura não aconteceu: a mutação não foi exercida"
+    assert exc_info.value.status == 409
+    assert exc_info.value.code == "COLETA_CONCORRENTE"
+    db.rollback()
