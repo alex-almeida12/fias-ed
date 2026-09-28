@@ -158,7 +158,11 @@ def responder(token: str, body: ResponderIn, request: Request, db: Session = Dep
     # FOR NO KEY UPDATE (key_share=True): conflita com o FOR UPDATE de `criar_link` e
     # com outro envio vivo desta coleta, mas NÃO com o FOR KEY SHARE que a FK do INSERT
     # de `consentir` (em consentimento_qti) pede — consentir continua livre.
-    db.execute(select(ColetaQTI.id).where(ColetaQTI.id == link.coleta_id).with_for_update(key_share=True))
+    # Lê `deleted_at` pela COLUNA, não pela entidade: um SELECT da entidade devolveria o
+    # objeto que já está no mapa de identidade desta sessão (possivelmente carregado antes
+    # da importação concorrente apagar a coleta), sem refletir a trava recém-tomada.
+    coleta_apagada = db.execute(select(ColetaQTI.deleted_at).where(ColetaQTI.id == link.coleta_id)
+                                .with_for_update(key_share=True)).scalar_one()
     # O limite é conferido sob FOR UPDATE do LinkQTI, na mesma transação do INSERT.
     # `populate_existing` é obrigatório: sem ele o SELECT devolve o objeto que
     # `link_valido` já carregou nesta sessão, com os atributos de antes.
@@ -166,10 +170,12 @@ def responder(token: str, body: ResponderIn, request: Request, db: Session = Dep
                               .with_for_update()
                               .execution_options(populate_existing=True)).scalar_one()
     # Revalida com a trava na mão: entre `link_valido` e aqui o professor pode ter
-    # gerado outro link para a mesma data — o que revoga este — ou revogado à mão.
+    # gerado outro link para a mesma data — o que revoga este — ou revogado à mão; ou uma
+    # reimportação concorrente pode ter apagado a COLETA (achado da revisão final,
+    # 2026-09-26: `importar_relatorio` apaga logicamente a coleta velha da mesma data).
     agora = dt.datetime.now(timezone.utc)
     if (link_travado.revogado_em is not None or link_travado.deleted_at is not None
-            or link_travado.expira_em <= agora):
+            or link_travado.expira_em <= agora or coleta_apagada is not None):
         db.rollback()
         raise _link_invalido()
     atual = db.scalar(select(func.count()).select_from(RespostaQTI)

@@ -12,7 +12,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.core.config import get_settings
 from app.core.db import SessionLocal, get_engine
-from app.models import ColetaQTI, ConsentimentoQTI, LinkQTI, RespostaQTI
+from app.models import ColetaQTI, ConsentimentoQTI, LinkQTI, RespostaQTI, utcnow
 from app.publico.routes import COOKIE_CONSENTIMENTO, _valor_consentimento
 from app.qti.links import criar_link, revogar
 
@@ -416,6 +416,34 @@ def test_link_substituido_entre_a_validacao_e_a_trava_nao_grava(db, client_publi
         return vivo
 
     monkeypatch.setattr(rotas, "link_valido", valido_e_logo_substituido)
+    r = client_publico.post(f"/publico/qti/{token}/responder", json={"respostas": RESPOSTAS})
+    assert r.status_code == 404
+    assert db.query(RespostaQTI).count() == 0
+
+
+def test_coleta_apagada_entre_a_validacao_e_a_trava_nao_grava(db, client_publico, coleta_nativa,
+                                                               monkeypatch):
+    """A mesma janela do teste acima, mas do lado da COLETA: `link_valido` viu o link
+    vivo (a coleta ainda existia) e, antes de a trava ser tomada, uma reimportação
+    concorrente apagou logicamente a coleta (`importar_relatorio`, "reimportar
+    substitui" — a mesma data pode ser reimportada). Sem revalidar a coleta com a trava
+    na mão, a resposta entraria numa coleta que ninguém mais lê. Achado da revisão
+    final da fatia (2026-09-26)."""
+    _, token = criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    assert client_publico.post(f"/publico/qti/{token}/consentir",
+                               json={"documento_versao": "1.0.0"}).status_code == 201
+    import app.publico.routes as rotas
+    original = rotas.link_valido
+
+    def valido_e_logo_a_coleta_apagada(sessao, tok):
+        vivo = original(sessao, tok)
+        with SessionLocal(bind=get_engine()) as outra:
+            coleta = outra.get(ColetaQTI, coleta_nativa.id)
+            coleta.deleted_at = utcnow()
+            outra.commit()
+        return vivo
+
+    monkeypatch.setattr(rotas, "link_valido", valido_e_logo_a_coleta_apagada)
     r = client_publico.post(f"/publico/qti/{token}/responder", json={"respostas": RESPOSTAS})
     assert r.status_code == 404
     assert db.query(RespostaQTI).count() == 0

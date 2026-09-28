@@ -14,6 +14,8 @@ from datetime import timezone
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError
+from app.core.messages import error_message
 from app.models import ColetaQTI, LinkQTI
 
 # O professor informa o tamanho da turma; a folga cobre quem entrou depois da
@@ -31,7 +33,17 @@ def criar_link(db: Session, coleta: ColetaQTI, *, n_estudantes: int, dias: int) 
     # Um link vivo por coleta (índice uq_link_qti_um_vivo_por_coleta, migração 0011).
     # A trava na coleta serializa dois pedidos simultâneos: quem chega depois espera,
     # enxerga o link que o primeiro criou e o revoga — em vez de esbarrar no índice.
-    db.execute(select(ColetaQTI.id).where(ColetaQTI.id == coleta.id).with_for_update())
+    # Lê `deleted_at` pela COLUNA, não pela entidade: um SELECT da entidade devolveria o
+    # objeto `coleta` que o chamador já tinha em mãos (possivelmente carregado antes de
+    # uma reimportação concorrente apagar a coleta), sem refletir a trava recém-tomada.
+    coleta_apagada = db.execute(select(ColetaQTI.deleted_at).where(ColetaQTI.id == coleta.id)
+                                .with_for_update()).scalar_one()
+    # Achado da revisão final (2026-09-26): `importar_relatorio` ("reimportar substitui")
+    # pode apagar logicamente esta coleta entre o chamador carregá-la e aqui. Sem esta
+    # checagem, o link nasceria morto — `link_valido` já filtra coleta apagada — e o
+    # professor projetaria um QR que não funciona nunca.
+    if coleta_apagada is not None:
+        raise AppError(409, "COLETA_CONCORRENTE", error_message("COLETA_CONCORRENTE"))
     db.execute(update(LinkQTI)
                .where(LinkQTI.coleta_id == coleta.id,
                       LinkQTI.revogado_em.is_(None),

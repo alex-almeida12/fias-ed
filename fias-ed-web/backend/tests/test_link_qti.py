@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.core.db import SessionLocal, get_engine
+from app.core.errors import AppError
 from app.models import Base, ColetaQTI, LinkQTI
 from app.qti.links import criar_link, link_valido, revogar
 
@@ -74,6 +75,26 @@ def test_link_de_coleta_apagada_nao_vale(db, coleta_nativa):
     coleta_nativa.deleted_at = utcnow()
     db.commit()
     assert link_valido(db, token) is None
+
+
+def test_criar_link_recusa_coleta_apagada_por_reimportacao_concorrente(db, coleta_nativa):
+    """Achado da revisão final (2026-09-26): a coleta pode ser apagada logicamente por
+    uma reimportação concorrente na mesma data (`importar_relatorio`, "reimportar
+    substitui") entre o chamador carregar `coleta_nativa` e `criar_link` travá-la. Sem
+    revalidar `deleted_at` com a trava na mão, o link nasceria morto — `link_valido` já
+    filtra coleta apagada — e o professor projetaria um QR que nunca funciona."""
+    from app.models import utcnow
+    with SessionLocal(bind=get_engine()) as outra:
+        concorrente = outra.get(ColetaQTI, coleta_nativa.id)
+        concorrente.deleted_at = utcnow()
+        outra.commit()
+
+    with pytest.raises(AppError) as exc_info:
+        criar_link(db, coleta_nativa, n_estudantes=30, dias=7)
+    assert exc_info.value.status == 409
+    assert exc_info.value.code == "COLETA_CONCORRENTE"
+    db.rollback()
+    assert db.query(LinkQTI).count() == 0
 
 
 def test_link_qti_e_a_base_nao_definem_repr_nem_str_proprios():
